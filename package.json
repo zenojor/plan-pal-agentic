@@ -1,0 +1,24 @@
+{
+  "name": "plan-pal-agentic",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:web": "pnpm --dir apps/web dev",
+    "dev:api": "pnpm --dir apps/api dev",
+    "build:web": "pnpm --dir apps/web build",
+    "build:api": "pnpm --dir apps/api build",
+    "build:domain": "pnpm --dir packages/domain build",
+    "build:agent": "pnpm --dir packages/agent build",
+    "build:db": "pnpm --dir packages/db build",
+    "build:new": "pnpm build:domain && pnpm build:db && pnpm build:agent && pnpm build:api && pnpm build:web",
+    "test:new": "pnpm --dir packages/domain test && pnpm --dir packages/db test && pnpm --dir packages/agent test && pnpm --dir apps/api test && pnpm --dir apps/web test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.3",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.2",
+    "vitest": "^4.0.15"
+  }
+}
+

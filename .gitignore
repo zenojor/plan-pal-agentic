@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm-cache/
+
+# Build output
+dist/
+dist-ssr/
+build/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# Local runtime data
+.planpal-data/
+logs/
+*.log
+*.err.log
+api-dev.log
+api-dev.err.log
+web-dev.log
+web-dev.err.log
+.codex-vite-*.log
+.codex-vite-*.err.log
+
+# Browser QA profiles and screenshots
+.edge-*/
+edge-*/
+playwright-report/
+test-results/
+/*.png
+/*.webm
+/*.mp4
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+application-local.yml
+
+# Editor and OS files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store
+Thumbs.db
+
+# Agent/local assistant state
+.agents/
+.claude/
+.codex/
+.codex-remote-attachments/
+CLAUDE.md
+AGENT_HANDOFF.md
+zenolocal.md
+
+# Scratch
+scratch/
+tmp/
+temp/
+.tmp/
+_tmp_*
