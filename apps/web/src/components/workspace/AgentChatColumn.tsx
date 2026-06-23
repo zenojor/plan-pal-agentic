@@ -1,13 +1,18 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import type { CandidateOption, PendingAction, Plan, PlanVariantOption, PlanVariantSelection } from '@planpal/domain'
+import type { CandidateOption, MerchantOffering, PendingAction, Plan, PlanVariantOption, PlanVariantSelection } from '@planpal/domain'
+import { appClasses } from '../../lib/appClasses'
 import type { StoredModelConfig } from '../../lib/modelConfig'
+import { agentChatClasses } from './agentChatClasses'
+import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import {
+  activePlanVariantSelectionFromAction,
   deriveCandidateCardDisplay,
   deriveVariantTicketDisplay,
   getAgentChatDisabledReason,
   getChatExecutionPathLabel,
+  lastAttachedActionMessageIndex,
   type AgentProgressItem,
   type ChatMessage,
 } from './workspaceModel'
@@ -30,6 +35,7 @@ type AgentChatColumnProps = {
   onDraftChange: (draft: string) => void
   onPendingActionDismiss: (actionId: string) => void
   onSend: () => void
+  onServiceOfferingSelect: (action: Extract<PendingAction, { kind: 'service-item-selection' }>, offering: MerchantOffering, quantity: number) => void
   onVariantSelect: (actionId: string, variant: PlanVariantOption) => void
 }
 
@@ -51,6 +57,7 @@ export function AgentChatColumn({
   onDraftChange,
   onPendingActionDismiss,
   onSend,
+  onServiceOfferingSelect,
   onVariantSelect,
 }: AgentChatColumnProps) {
   const [candidateRequirement, setCandidateRequirement] = useState('')
@@ -63,6 +70,8 @@ export function AgentChatColumn({
   const disabledReason = getAgentChatDisabledReason(config, draft, isStreaming)
   const pathLabel = getChatExecutionPathLabel(config, draft)
   const contextLabel = selectedSegment ? selectedSegment.title : '全局计划'
+  const attachedActionIndex = lastAttachedActionMessageIndex(messages, pendingAction)
+  const statusLabel = pendingAction ? '等待选择' : isStreaming ? '处理中' : '可对话'
 
   useEffect(() => {
     if (pendingAction?.kind === 'candidate-selection') setCandidateRequirement('')
@@ -91,103 +100,143 @@ export function AgentChatColumn({
     setContextMenuOpen(false)
   }
 
+  function renderPendingActionTicket(action: PendingAction) {
+    if (action.kind === 'plan-variant-selection') {
+      const selection = activePlanVariantSelectionFromAction(action, variantSelection)
+      if (!selection) return null
+      return (
+        <VariantDecisionTicket
+          busy={isStreaming || commandBusy}
+          selection={selection}
+          onDismiss={onPendingActionDismiss}
+          onVariantSelect={onVariantSelect}
+        />
+      )
+    }
+    if (action.kind === 'candidate-selection') {
+      return (
+        <CandidateDecisionTicket
+          action={action}
+          busy={isStreaming || commandBusy}
+          candidateRequirement={candidateRequirement}
+          plan={plan}
+          onCandidateRequirementChange={setCandidateRequirement}
+          onCandidateDismiss={onPendingActionDismiss}
+          onCandidateRefresh={onCandidateRefresh}
+          onCandidateSelect={onCandidateSelect}
+        />
+      )
+    }
+    if (action.kind === 'service-item-selection') {
+      return (
+        <ServiceItemDecisionTicket
+          action={action}
+          busy={isStreaming || commandBusy}
+          plan={plan}
+          onDismiss={onPendingActionDismiss}
+          onServiceOfferingSelect={onServiceOfferingSelect}
+        />
+      )
+    }
+    return null
+  }
+
   return (
-    <div className="agent-chat-column">
-      <div className="column-content-scroll chat-scroll">
-        <section className="chat-status-strip" aria-label="Agent 状态">
-          <div className="chat-status-main">
-            <span className="column-icon-pill compact" aria-hidden="true">
+    <div className={agentChatClasses.root}>
+      <div className={agentChatClasses.scroll}>
+        <section className={agentChatClasses.statusStrip} aria-label="Agent 状态">
+          <div className={agentChatClasses.statusMain}>
+            <span className={agentChatClasses.statusIcon} aria-hidden="true">
               <Icon name="icon-chat" size={22} bounce />
             </span>
             <div>
-              <span className="eyebrow">Agent</span>
-              <strong>{config ? `已连接 ${config.model}` : '需要模型配置'}</strong>
+              <span className={appClasses.eyebrow}>PlanPal Agent</span>
+              <strong className={agentChatClasses.statusTitle}>{config ? `已连接 ${config.model}` : '需要模型配置'}</strong>
+              <small className={agentChatClasses.statusMeta}>当前上下文：{contextLabel}</small>
             </div>
           </div>
-          <div className="chat-status-chips">
-            <span>{pathLabel}</span>
-            {config?.resolvedBaseURL && <span title={`已验证端点：${config.resolvedBaseURL}`}>端点已验证</span>}
+          <div className={agentChatClasses.statusChips}>
+            <span className={agentChatClasses.statusChip(true)}>{statusLabel}</span>
+            <span className={agentChatClasses.statusChip()}>{pathLabel}</span>
+            {config?.resolvedBaseURL && <span className={agentChatClasses.statusChip()} title={`已验证端点：${config.resolvedBaseURL}`}>端点已验证</span>}
           </div>
         </section>
 
-        {messages.length === 0 && !variantSelection && pendingAction?.kind !== 'candidate-selection' && (
-          <div className="empty-message chat-empty-state">
+        {messages.length === 0 && !pendingAction && (
+          <div className={agentChatClasses.emptyState}>
             <Icon name="icon-miles" size={28} />
-            <span>可以直接说“把晚饭换近一点”。输入栏旁的 @ 可以切换活动，也可以保持全局计划。</span>
+            <div>
+              <strong className={agentChatClasses.emptyTitle}>还没有对话</strong>
+              <span className={agentChatClasses.emptyMeta}>{contextLabel} · 等待输入</span>
+            </div>
           </div>
         )}
 
-        <div className="chat-thread" aria-live="polite">
-          {messages.map((message, index) => (
-            <div
-              className={`chat-bubble ${message.role} ${message.streaming ? 'streaming' : ''} ${message.receipt ? 'receipt' : ''}`}
-              key={`${message.role}-${index}`}
-            >
-              {!message.receipt && (
-                <span className="chat-bubble-avatar" aria-hidden="true">
-                  {message.role === 'user' ? '你' : 'P'}
-                </span>
-              )}
-              <p>{message.content}</p>
-            </div>
-          ))}
+        <div className={agentChatClasses.thread} aria-live="polite">
+          {messages.map((message, index) => {
+            const activeAction = index === attachedActionIndex ? pendingAction : undefined
+            return (
+              <div
+                className={agentChatClasses.turn({ role: message.role, receipt: message.receipt, hasAction: Boolean(activeAction) })}
+                key={`${message.role}-${index}`}
+              >
+                <div
+                  className={agentChatClasses.bubble({ role: message.role, streaming: message.streaming, receipt: message.receipt })}
+                >
+                  {!message.receipt && (
+                    <span className={agentChatClasses.bubbleAvatar(message.role === 'user')} aria-hidden="true">
+                      {message.role === 'user' ? '你' : 'P'}
+                    </span>
+                  )}
+                  <p className={agentChatClasses.bubbleText}>{message.content}</p>
+                </div>
+                {activeAction && (
+                  <div className={agentChatClasses.actionAttachment()}>
+                    {renderPendingActionTicket(activeAction)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        {variantSelection && (
-          <VariantDecisionTicket
-            busy={isStreaming || commandBusy}
-            selection={variantSelection}
-            onDismiss={pendingAction?.kind === 'plan-variant-selection' && pendingAction.id === variantSelection.actionId
-              ? onPendingActionDismiss
-              : undefined}
-            onVariantSelect={onVariantSelect}
-          />
-        )}
-
-        {pendingAction?.kind === 'candidate-selection' && (
-          <CandidateDecisionTicket
-            action={pendingAction}
-            busy={isStreaming || commandBusy}
-            candidateRequirement={candidateRequirement}
-            plan={plan}
-            onCandidateRequirementChange={setCandidateRequirement}
-            onCandidateDismiss={onPendingActionDismiss}
-            onCandidateRefresh={onCandidateRefresh}
-            onCandidateSelect={onCandidateSelect}
-          />
+        {attachedActionIndex < 0 && pendingAction && (
+          <div className={agentChatClasses.actionAttachment(true)}>
+            {renderPendingActionTicket(pendingAction)}
+          </div>
         )}
 
         {isStreaming && progressItems.length > 0 && (
-          <div className="agent-progress-card" aria-live="polite">
+          <div className={agentChatClasses.progressCard} aria-live="polite">
             {progressItems.map((item) => (
-              <div className={`agent-progress-item ${item.state}`} key={item.id}>
-                <span />
+              <div className={agentChatClasses.progressItem} key={item.id}>
+                <span className={agentChatClasses.progressDot(item.state)} />
                 <div>
-                  <strong>{item.label}</strong>
-                  <small>{item.detail}</small>
+                  <strong className={agentChatClasses.progressTitle}>{item.label}</strong>
+                  <small className={agentChatClasses.progressMeta}>{item.detail}</small>
                 </div>
               </div>
             ))}
           </div>
         )}
-        {isStreaming && progressItems.length === 0 && <div className="streaming-pill">PlanPal 正在处理...</div>}
+        {isStreaming && progressItems.length === 0 && <div className={agentChatClasses.streamingPill}>PlanPal 正在处理...</div>}
       </div>
-      <div className="chat-composer">
-        <div className="chat-context-anchor" ref={contextMenuRef}>
+      <div className={agentChatClasses.composer}>
+        <div className={agentChatClasses.contextAnchor} ref={contextMenuRef}>
           <button
-            className={`chat-context-trigger ${selectedSegment ? 'active' : ''}`}
+            className={agentChatClasses.contextTrigger(Boolean(selectedSegment))}
             type="button"
             title={`当前上下文：${contextLabel}`}
             aria-expanded={contextMenuOpen}
             aria-haspopup="menu"
             onClick={() => setContextMenuOpen((open) => !open)}
           >
-            <span aria-hidden="true">@</span>
-            <strong>{contextLabel}</strong>
+            <span className={agentChatClasses.contextTriggerIcon} aria-hidden="true">@</span>
+            <strong className={agentChatClasses.contextTriggerText}>{contextLabel}</strong>
           </button>
           {selectedSegment && (
             <button
-              className="chat-context-clear"
+              className={agentChatClasses.contextClear}
               type="button"
               aria-label="取消活动上下文，切回全局计划"
               title="切回全局计划"
@@ -197,47 +246,123 @@ export function AgentChatColumn({
             </button>
           )}
           {contextMenuOpen && (
-            <div className="chat-context-menu" role="menu" aria-label="选择消息上下文">
+            <div className={agentChatClasses.contextMenu} role="menu" aria-label="选择消息上下文">
               <button
-                className={!selectedSegment ? 'active' : ''}
+                className={agentChatClasses.contextMenuItem(!selectedSegment)}
                 role="menuitem"
                 type="button"
                 onClick={() => selectContext(undefined)}
               >
-                <strong>全局计划</strong>
-                <small>让 Agent 自己判断要改哪里</small>
+                <strong className={agentChatClasses.cardTitle}>全局计划</strong>
+                <small className={agentChatClasses.cardMeta}>让 Agent 自己判断要改哪里</small>
               </button>
               {executableSegments.map((segment, index) => (
                 <button
-                  className={selectedSegment?.id === segment.id ? 'active' : ''}
+                  className={agentChatClasses.contextMenuItem(selectedSegment?.id === segment.id)}
                   key={segment.id}
                   role="menuitem"
                   title={segment.title}
                   type="button"
                   onClick={() => selectContext(segment.id)}
                 >
-                  <strong>{index + 1}. {segment.title}</strong>
-                  <small>{segment.place}</small>
+                  <strong className={agentChatClasses.cardTitle}>{index + 1}. {segment.title}</strong>
+                  <small className={agentChatClasses.cardMeta}>{segment.place}</small>
                 </button>
               ))}
             </div>
           )}
         </div>
-        <Input
-          allowClear
-          shadow
-          value={draft}
-          placeholder="告诉 PlanPal 想怎么改..."
-          onChange={(event) => onDraftChange(event.target.value)}
-          onClear={() => onDraftChange('')}
-          onKeyDown={handleKeyDown}
-        />
-        <Button type="primary" disabled={!canSend} loading={isStreaming} title={disabledReason} onClick={onSend}>
-          发送
-        </Button>
-        {disabledReason && <p className="chat-disabled-reason">{disabledReason}</p>}
+        <div className={agentChatClasses.inputShell}>
+          <Input
+            allowClear
+            shadow
+            value={draft}
+            placeholder="告诉 PlanPal 想怎么改..."
+            onChange={(event) => onDraftChange(event.target.value)}
+            onClear={() => onDraftChange('')}
+            onKeyDown={handleKeyDown}
+          />
+          <Button type="primary" disabled={!canSend} loading={isStreaming} title={disabledReason} onClick={onSend}>
+            发送
+          </Button>
+        </div>
+        {disabledReason && <p className={agentChatClasses.disabledReason}>{disabledReason}</p>}
       </div>
     </div>
+  )
+}
+
+function ServiceItemDecisionTicket({
+  action,
+  busy,
+  plan,
+  onDismiss,
+  onServiceOfferingSelect,
+}: {
+  action: Extract<PendingAction, { kind: 'service-item-selection' }>
+  busy: boolean
+  plan: Plan
+  onDismiss: (actionId: string) => void
+  onServiceOfferingSelect: (action: Extract<PendingAction, { kind: 'service-item-selection' }>, offering: MerchantOffering, quantity: number) => void
+}) {
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const selections = plan.serviceSelections ?? []
+
+  function quantityFor(offering: MerchantOffering) {
+    const selected = selections.find((item) => item.segmentId === action.segmentId && item.offeringId === offering.id)
+    return quantities[offering.id] ?? selected?.quantity ?? defaultTicketQuantity(offering)
+  }
+
+  function setQuantity(offering: MerchantOffering, quantity: number) {
+    setQuantities((current) => ({
+      ...current,
+      [offering.id]: Math.max(1, Math.min(99, quantity)),
+    }))
+  }
+
+  return (
+    <Card className={agentChatClasses.decisionTicket} color="app-teal">
+      <DecisionTicketHeader title={action.title} description={action.description} />
+      {action.query && <p className={agentChatClasses.activeQuery}>当前需求：{action.query}</p>}
+      <div className={agentChatClasses.choiceList}>
+        {action.offerings.map((offering) => {
+          const quantity = quantityFor(offering)
+          const selected = selections.some((item) => item.segmentId === action.segmentId && item.offeringId === offering.id)
+          return (
+            <article className={agentChatClasses.serviceCard(selected)} key={offering.id}>
+              <header>
+                <strong className={agentChatClasses.cardTitle} title={offering.title}>{offering.title}</strong>
+                <small className={agentChatClasses.cardMeta}>{offeringCategoryLine(offering)}</small>
+              </header>
+              <p className={agentChatClasses.cardText}>{offering.description}</p>
+              <div className={workspacePrimitives.chipRow}>
+                <span className={chipClassName(0)}>CNY {offering.priceCny}/{offering.unit}</span>
+                <span className={chipClassName(1)}>{offering.showtime ?? offering.availabilitySlots[0] ?? '时段待定'}</span>
+                <span className={chipClassName(2)}>{fulfillmentText(offering.fulfillment)}</span>
+              </div>
+              <div className={agentChatClasses.serviceActions}>
+                <button className={agentChatClasses.serviceActionButton} type="button" disabled={busy || quantity <= 1} onClick={() => setQuantity(offering, quantity - 1)}>-</button>
+                <strong className={agentChatClasses.quantity}>{quantity}</strong>
+                <button className={agentChatClasses.serviceActionButton} type="button" disabled={busy} onClick={() => setQuantity(offering, quantity + 1)}>+</button>
+                <Button
+                  size="small"
+                  type="primary"
+                  disabled={busy}
+                  onClick={() => onServiceOfferingSelect(action, offering, quantity)}
+                >
+                  {selected ? '更新选择' : '模拟选择'}
+                </Button>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+      <div className={agentChatClasses.footer}>
+        <Button size="small" type="dashed" disabled={busy} onClick={() => onDismiss(action.id)}>
+          暂不选择
+        </Button>
+      </div>
+    </Card>
   )
 }
 
@@ -260,49 +385,49 @@ function VariantDecisionTicket({
   }, [selection.selectedVariantId])
 
   return (
-    <Card className="decision-ticket variant-decision-ticket" color="app-teal">
+    <Card className={agentChatClasses.decisionTicket} color="app-teal">
       <button
-        className="variant-ticket-summary"
+        className={agentChatClasses.variantSummary}
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="column-icon-pill compact" aria-hidden="true">
+        <span className={workspacePrimitives.iconPillCompact} aria-hidden="true">
           <Icon name="icon-variant" size={22} bounce />
         </span>
-        <span>
-          <em>方案方向</em>
-          <strong>{display.title}</strong>
-          <small>{display.subtitle}</small>
+        <span className={agentChatClasses.variantSummaryCopy}>
+          <em className={agentChatClasses.variantKicker}>方案方向</em>
+          <strong className={agentChatClasses.cardTitle}>{display.title}</strong>
+          <small className={agentChatClasses.cardMeta}>{display.subtitle}</small>
         </span>
-        <b>{open ? '收起' : '展开'}</b>
+        <b className={agentChatClasses.variantToggle}>{open ? '收起' : '展开'}</b>
       </button>
       {open && (
-        <div className="variant-ticket-list">
+        <div className={agentChatClasses.variantList}>
           {selection.variants.map((variant) => {
             const variantDisplay = display.variants.find((item) => item.id === variant.id)
             if (!variantDisplay) return null
             return (
               <button
-                className={variantDisplay.active ? 'active' : ''}
+                className={agentChatClasses.variantOption(variantDisplay.active)}
                 disabled={busy || variantDisplay.active}
                 key={variant.id}
                 type="button"
                 onClick={() => onVariantSelect(selection.actionId, variant)}
               >
-                <strong>{variantDisplay.title}</strong>
-                <small>{variantDisplay.summary}</small>
-                <div className="ticket-chip-row">
-                  {variantDisplay.badges.map((badge) => <span key={badge}>{badge}</span>)}
+                <strong className={agentChatClasses.cardTitle}>{variantDisplay.title}</strong>
+                <small className={agentChatClasses.cardMeta}>{variantDisplay.summary}</small>
+                <div className={workspacePrimitives.chipRow}>
+                  {variantDisplay.badges.map((badge, index) => <span className={chipClassName(index)} key={badge}>{badge}</span>)}
                 </div>
-                <em>{variantDisplay.active ? '当前方案' : variantDisplay.writeLabel}</em>
+                <em className={workspacePrimitives.primaryActionPill}>{variantDisplay.active ? '当前方案' : variantDisplay.writeLabel}</em>
               </button>
             )
           })}
         </div>
       )}
       {onDismiss && !selection.selectedVariantId && (
-        <div className="decision-ticket-footer">
+        <div className={agentChatClasses.footer}>
           <Button
             size="small"
             type="dashed"
@@ -352,42 +477,42 @@ function CandidateDecisionTicket({
   }
 
   return (
-    <Card className="decision-ticket candidate-ticket" color="app-yellow">
+    <Card className={agentChatClasses.decisionTicket} color="app-yellow">
       <DecisionTicketHeader title={action.title} description={action.description} />
       {activeRequirement && (
-        <p className="candidate-active-query">
+        <p className={agentChatClasses.activeQuery}>
           当前需求：{activeRequirement}
         </p>
       )}
-      <div className="candidate-list action-choice-list">
+      <div className={agentChatClasses.choiceList}>
         {action.candidates.map((candidate) => {
           const display = deriveCandidateCardDisplay(action, candidate, plan)
           return (
             <button
-              className="action-choice-card"
+              className={agentChatClasses.choiceCard}
               key={candidate.id}
               type="button"
               disabled={busy}
               onClick={() => onCandidateSelect(action.id, candidate)}
             >
               <header>
-                <strong className="action-choice-title" title={display.title}>{display.title}</strong>
-                <small>{display.subtitle}</small>
+                <strong className={agentChatClasses.cardTitle} title={display.title}>{display.title}</strong>
+                <small className={agentChatClasses.cardMeta}>{display.subtitle}</small>
               </header>
-              <p>{display.description}</p>
-              <small className="action-card-placement">{display.placementLabel}</small>
-              <div className="ticket-chip-row">
-                {display.badges.map((badge) => <span key={badge}>{badge}</span>)}
+              <p className={agentChatClasses.cardText}>{display.description}</p>
+              <small className={agentChatClasses.placement}>{display.placementLabel}</small>
+              <div className={workspacePrimitives.chipRow}>
+                {display.badges.map((badge, index) => <span className={chipClassName(index)} key={badge}>{badge}</span>)}
               </div>
-              <ul className="action-card-reasons">
-                {display.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+              <ul className={agentChatClasses.reasons}>
+                {display.reasons.map((reason) => <li className={agentChatClasses.reason} key={reason}>{reason}</li>)}
               </ul>
-              <em className="primary-action-pill">{display.writeLabel}</em>
+              <em className={workspacePrimitives.primaryActionPill}>{display.writeLabel}</em>
             </button>
           )
         })}
       </div>
-      <div className="candidate-control-row">
+      <div className={agentChatClasses.candidateControl}>
         <Button
           size="small"
           type="dashed"
@@ -426,16 +551,42 @@ function CandidateDecisionTicket({
   )
 }
 
+function defaultTicketQuantity(offering: MerchantOffering) {
+  if (offering.category === 'hotel' || offering.priceCny <= 0) return 1
+  if (offering.category === 'movie' || offering.category === 'ticket') return 2
+  return 1
+}
+
+function offeringCategoryLine(offering: MerchantOffering) {
+  if (offering.category === 'hotel') {
+    return [offering.roomType, offering.bedType, offering.occupancy ? `${offering.occupancy} 人` : ''].filter(Boolean).join(' · ')
+  }
+  if (offering.category === 'movie') {
+    return [offering.filmTitle, offering.screenType, offering.seatClass, offering.runtimeMinutes ? `${offering.runtimeMinutes} 分钟` : ''].filter(Boolean).join(' · ')
+  }
+  return [offering.category, offering.durationMinutes ? `${offering.durationMinutes} 分钟` : ''].filter(Boolean).join(' · ')
+}
+
+function fulfillmentText(value: MerchantOffering['fulfillment']) {
+  if (value === 'room-night') return '模拟入住'
+  if (value === 'e-ticket') return '模拟电子票'
+  if (value === 'pickup') return '到店自提'
+  if (value === 'service-slot') return '模拟时段'
+  if (value === 'reservation') return '模拟预约'
+  if (value === 'onsite') return '到店消费'
+  return '仅 mock'
+}
+
 function DecisionTicketHeader({ title, description }: { title: string; description: string }) {
   return (
-    <div className="decision-ticket-header">
-      <span className="column-icon-pill compact" aria-hidden="true">
+    <div className={agentChatClasses.decisionHeader}>
+      <span className={workspacePrimitives.iconPillCompact} aria-hidden="true">
         <Icon name="icon-miles" size={24} bounce />
       </span>
       <div>
-        <span className="eyebrow">决策票据</span>
-        <strong>{title}</strong>
-        <p>{description}</p>
+        <span className={appClasses.eyebrow}>决策票据</span>
+        <strong className={agentChatClasses.decisionHeaderTitle}>{title}</strong>
+        <p className={agentChatClasses.decisionHeaderText}>{description}</p>
       </div>
     </div>
   )

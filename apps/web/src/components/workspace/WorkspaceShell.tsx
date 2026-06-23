@@ -10,6 +10,12 @@ import {
   type PlanExecutionBrief,
   type WorkspaceColumnId,
 } from './workspaceModel'
+import {
+  workspaceColumnPanelClassName,
+  workspaceColumnSlotClassName,
+  workspaceMobileColumnSlotClassName,
+  workspaceShellClasses,
+} from './workspaceShellClasses'
 
 type WorkspaceShellProps = {
   activeMobileColumn: MobileWorkspaceColumnId
@@ -83,7 +89,7 @@ export function WorkspaceShell({
   const mobileActiveColumn = mobileColumns.includes(activeMobileColumn) ? activeMobileColumn : 'puzzle'
 
   return (
-    <main className="workspace-redesign" style={getWorkspaceBoardStyle(columns.length) as CSSProperties}>
+    <main className={workspaceShellClasses.root} style={getWorkspaceBoardStyle(columns.length) as CSSProperties}>
       <WorkspaceHeader
         commandBusy={commandBusy}
         confirmDisabled={confirmDisabled}
@@ -95,25 +101,23 @@ export function WorkspaceShell({
         planVersion={planVersion}
         onConfirm={onConfirm}
       />
-      {notice && <div className="workspace-notice">{notice}</div>}
+      {notice && <div className={workspaceShellClasses.notice}>{notice}</div>}
       {columns.includes('chat') && (
-        <section className="workspace-mobile-chat" aria-label="PlanPal chat">
+        <section className={workspaceShellClasses.mobileChat} aria-label="PlanPal chat">
           {childrenByColumn.chat}
         </section>
       )}
       <section
-        className="workspace-board workspace-board-desktop"
+        className={workspaceShellClasses.desktopBoard}
         aria-label="PlanPal workspace columns"
       >
         {columns.map((column) => {
+          const isDragging = draggingColumn === column
+          const isDragOver = dragOverColumn === column && draggingColumn !== column
           return (
             <section
               data-column-id={column}
-              className={[
-                'workspace-column-slot',
-                draggingColumn === column ? 'is-dragging' : '',
-                dragOverColumn === column && draggingColumn !== column ? 'is-drag-over' : '',
-              ].filter(Boolean).join(' ')}
+              className={workspaceColumnSlotClassName({ isDragging, isDragOver })}
               key={column}
               onDragEnter={() => {
                 if (draggingColumn && draggingColumn !== column) onDragOverColumn(column)
@@ -135,19 +139,16 @@ export function WorkspaceShell({
                 onDragStart={() => onDragStart(column)}
                 onRemove={() => onRemoveColumn(column)}
               />
-              <div className="workspace-column-panel">{childrenByColumn[column]}</div>
+              <div className={workspaceColumnPanelClassName(isDragOver)}>{childrenByColumn[column]}</div>
             </section>
           )
         })}
       </section>
-      <section className="workspace-board workspace-board-mobile" aria-label="PlanPal mobile workspace">
+      <section className={workspaceShellClasses.mobileBoard} aria-label="PlanPal mobile workspace">
         {mobileColumns.map((column) => (
           <section
             data-column-id={column}
-            className={[
-              'workspace-column-slot',
-              mobileActiveColumn === column ? 'is-mobile-active' : '',
-            ].filter(Boolean).join(' ')}
+            className={workspaceMobileColumnSlotClassName(mobileActiveColumn === column)}
             key={column}
           >
             <ColumnHeader
@@ -156,7 +157,7 @@ export function WorkspaceShell({
               onDragStart={() => onDragStart(column)}
               onRemove={() => onRemoveColumn(column)}
             />
-            <div className="workspace-column-panel">{childrenByColumn[column]}</div>
+            <div className={workspaceColumnPanelClassName()}>{childrenByColumn[column]}</div>
           </section>
         ))}
       </section>
@@ -167,14 +168,11 @@ export function WorkspaceShell({
         onAddColumn={onAddColumn}
         onToggle={onToggleColumnMenu}
       />
-      <nav className="workspace-mobile-tabs" aria-label="Workspace sections">
+      <nav className={workspaceShellClasses.mobileTabs} aria-label="Workspace sections">
         {mobileWorkspaceColumns.map((column) => (
           <button
             aria-current={mobileActiveColumn === column ? 'page' : undefined}
-            className={[
-              mobileActiveColumn === column ? 'active' : '',
-              !columns.includes(column) ? 'closed' : '',
-            ].filter(Boolean).join(' ')}
+            className={workspaceShellClasses.mobileTab(mobileActiveColumn === column, !columns.includes(column))}
             key={column}
             type="button"
             onClick={() => onMobileColumnChange(column)}
@@ -184,7 +182,7 @@ export function WorkspaceShell({
           </button>
         ))}
       </nav>
-      <footer className="workspace-desktop-footer">
+      <footer className={`${workspaceShellClasses.desktopFooter} ${workspaceShellClasses.desktopConfirmButton}`}>
         <Button
           type="primary"
           size="large"
@@ -217,11 +215,12 @@ function ColumnPicker({
   if (closedColumns.length === 0) return null
 
   return (
-    <div className="workspace-column-picker" ref={containerRef}>
+    <div className={workspaceShellClasses.columnPicker} ref={containerRef}>
       {isOpen && (
-        <div className="workspace-column-picker-menu">
+        <div className={workspaceShellClasses.columnPickerMenu}>
           {closedColumns.map((column) => (
             <button
+              className={workspaceShellClasses.columnPickerMenuButton}
               key={column}
               type="button"
               onClick={() => onAddColumn(column)}
@@ -235,7 +234,7 @@ function ColumnPicker({
       <button
         aria-expanded={isOpen}
         aria-label="添加列"
-        className="workspace-column-picker-trigger"
+        className={workspaceShellClasses.columnPickerTrigger}
         type="button"
         onClick={onToggle}
       >
@@ -267,26 +266,26 @@ function WorkspaceHeader({
   onConfirm: () => void
 }) {
   return (
-    <header className="workspace-planning-header">
-      <Link className="workspace-home-link" to="/" aria-label="返回首页">
-        <span aria-hidden="true">←</span>
-        <strong>首页</strong>
+    <header className={workspaceShellClasses.planningHeader}>
+      <Link className={workspaceShellClasses.homeLink} to="/" aria-label="返回首页">
+        <span className={workspaceShellClasses.homeLinkArrow} aria-hidden="true">←</span>
+        <strong className={workspaceShellClasses.homeLinkText}>首页</strong>
       </Link>
-      <div className="workspace-header-copy">
-        <span className="eyebrow">PlanPal Board</span>
-        <strong>{planTitle || '为你推荐'}</strong>
-        <small>{planSummary || '选一个方向后，拼图主轴会变成可编辑计划。'}</small>
+      <div className={workspaceShellClasses.headerCopy}>
+        <span className="text-[0.72rem] font-[950] uppercase tracking-[0.08em] text-[var(--animal-primary-active)]">PlanPal Board</span>
+        <strong className={workspaceShellClasses.headerTitle}>{planTitle || '为你推荐'}</strong>
+        <small className={workspaceShellClasses.headerSummary}>{planSummary || '选一个方向后，拼图主轴会变成可编辑计划。'}</small>
       </div>
-      <div className="workspace-header-meta" aria-label="Plan status">
-        <span>V{planVersion}</span>
-        <span>{planStatus}</span>
-        <span>{executionBrief.nodeCountLabel}</span>
-        <span className={executionBrief.confirmBlockedReason ? 'blocked' : 'ready'}>
+      <div className={workspaceShellClasses.headerMeta} aria-label="Plan status">
+        <span className={workspaceShellClasses.headerMetaPill()}>V{planVersion}</span>
+        <span className={workspaceShellClasses.headerMetaPill()}>{planStatus}</span>
+        <span className={workspaceShellClasses.headerMetaPill()}>{executionBrief.nodeCountLabel}</span>
+        <span className={workspaceShellClasses.headerMetaPill(executionBrief.confirmBlockedReason ? 'blocked' : 'ready')}>
           {executionBrief.confirmBlockedReason || executionBrief.checkSummary}
         </span>
       </div>
       <button
-        className="workspace-header-confirm"
+        className={workspaceShellClasses.headerConfirm}
         type="button"
         disabled={confirmDisabled || commandBusy}
         title={confirmLabel}
@@ -312,25 +311,30 @@ function ColumnHeader({
   const meta = workspaceColumnMeta[column]
   return (
     <header
-      className="workspace-column-header"
+      className={workspaceShellClasses.columnHeader}
       draggable
       onDragEnd={onDragEnd}
-      onDragStart={onDragStart}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', meta.title)
+        setColumnDragImage(event, meta.title)
+        onDragStart()
+      }}
     >
-      <div className="column-title-lockup">
-        <span className="column-icon-pill" aria-hidden="true">
+      <div className={workspaceShellClasses.columnTitleLockup}>
+        <span className={workspaceShellClasses.columnIconPill} aria-hidden="true">
           <Icon name={columnIconName[column]} size={28} bounce />
         </span>
         <div>
-          <span className="column-drag-pill">拖拽排序</span>
-          <h2>{meta.title}</h2>
-          <p>{meta.hint}</p>
+          <span className={workspaceShellClasses.columnDragPill}>拖拽排序</span>
+          <h2 className={workspaceShellClasses.columnTitle}>{meta.title}</h2>
+          <p className={workspaceShellClasses.columnHint}>{meta.hint}</p>
         </div>
       </div>
       {column !== 'puzzle' && (
         <button
           aria-label={`关闭${meta.title}列`}
-          className="workspace-column-close"
+          className={workspaceShellClasses.columnClose}
           title="关闭"
           type="button"
           onClick={(event) => {
@@ -343,4 +347,20 @@ function ColumnHeader({
       )}
     </header>
   )
+}
+
+function setColumnDragImage(event: DragEvent<HTMLElement>, title: string) {
+  if (typeof document === 'undefined') return
+
+  const dragImage = document.createElement('div')
+  dragImage.className = workspaceShellClasses.columnDragImage
+  dragImage.textContent = `移动 ${title}`
+  document.body.appendChild(dragImage)
+
+  const rect = dragImage.getBoundingClientRect()
+  event.dataTransfer.setDragImage(dragImage, Math.min(32, rect.width / 2), Math.min(18, rect.height / 2))
+
+  window.setTimeout(() => {
+    dragImage.remove()
+  }, 0)
 }

@@ -3,7 +3,9 @@ import { applyPlanCommand, attachPlanVariants, createPlanFromPrompt, createRepla
 import type { AgentEvent } from '@planpal/domain'
 import {
   addWorkspaceColumn,
+  activePlanVariantSelectionFromAction,
   appendAssistantDeltaMessage,
+  attachPendingActionToLatestPlanpalMessage,
   assistantDeltaFromAgentEvent,
   buildClearRouteChoiceCommand,
   buildRouteEstimates,
@@ -13,15 +15,21 @@ import {
   buildPlanVariantCommand,
   buildRouteChoiceCommand,
   buildSegmentReorderCommand,
+  buildSandboxOrderCommand,
+  buildSelectServiceItemCommand,
+  buildRemoveServiceItemCommand,
+  buildUpdateServiceItemQuantityCommand,
   canSendAgentChat,
   chatMessageFromAgentEvent,
   chatMessageFromAgentFailure,
   chatMessageFromCommandError,
   chatMessageFromCommandResult,
+  chatMessageFromPendingAction,
   compactUiText,
   deriveCandidateCardDisplay,
   deriveItineraryTicketDisplay,
   deriveMerchantReference,
+  deriveMerchantOfferingDisplays,
   derivePlanExecutionBrief,
   derivePlanVariantCardDisplay,
   derivePlanReceiptDisplay,
@@ -40,6 +48,7 @@ import {
   getDefaultWorkspaceLayout,
   getDefaultWorkspaceColumns,
   initialChatMessagesFromPlanEvents,
+  lastAttachedActionMessageIndex,
   getSegmentActionState,
   getWorkspaceBoardStyle,
   moveWorkspaceColumn,
@@ -182,6 +191,7 @@ describe('workspace model helpers', () => {
     expect(getChatExecutionPathLabel(null, '你好')).toBe('离线 fallback')
     expect(getChatExecutionPathLabel(config, '你是什么模型')).toBe('模型回答')
     expect(getChatExecutionPathLabel(config, '把晚饭换近一点')).toBe('模型意图理解 + 确定性拼图命令')
+    expect(getChatExecutionPathLabel(config, '中间再加个咖啡休息')).toBe('模型意图理解 + 确定性拼图命令')
   })
 
   it('keeps model error events out of chat bubbles and renders terminal agent results', () => {
@@ -262,6 +272,61 @@ describe('workspace model helpers', () => {
     expect(reference.constraints.length).toBeGreaterThan(0)
     expect(reference.address).toContain('坐标')
     expect(reference.contact).toContain('虚构电话')
+    expect(reference.sourceLabel).toBe('fictional-local-mock-v2')
+    expect(reference.mockItems.length).toBeGreaterThan(0)
+  })
+
+  it('derives merchant offering displays and service item commands', () => {
+    const plan = createPlanFromPrompt('晚上两个人看电影')
+    const movieSegment = {
+      ...plan.segments[0]!,
+      id: 'seg_movie_web',
+      phase: 'activity' as const,
+      serviceCategory: 'movie' as const,
+      poiId: 'poi_orbit_cinema',
+      place: '轨道影厅',
+      title: '电影场次',
+    }
+    const withMovie = { ...plan, segments: [movieSegment, ...plan.segments.slice(1)] }
+    const displays = derivePlanSegmentDisplays(withMovie.segments, [])
+    const offerings = deriveMerchantOfferingDisplays(displays[0]!, [])
+
+    expect(displays[0]?.serviceCategory).toBe('movie')
+    expect(deriveItineraryTicketDisplay(displays[0]!, 0).phaseLabel).toBe('电影')
+    expect(offerings).toHaveLength(3)
+    expect(offerings[0]).toMatchObject({
+      category: 'movie',
+      categoryLabel: '电影',
+      selected: false,
+    })
+
+    const selectCommand = buildSelectServiceItemCommand({
+      segmentId: movieSegment.id,
+      merchantId: offerings[0]!.merchantId,
+      offeringId: offerings[0]!.id,
+      quantity: 2,
+    })
+    expect(selectCommand).toEqual({
+      type: 'SELECT_SERVICE_ITEM',
+      source: 'action-card',
+      segmentId: movieSegment.id,
+      merchantId: offerings[0]!.merchantId,
+      offeringId: offerings[0]!.id,
+      quantity: 2,
+    })
+    const selected = applyPlanCommand(withMovie, selectCommand).plan
+    const selectedDisplays = derivePlanSegmentDisplays(selected.segments, selected.serviceSelections)
+    const selectedOfferings = deriveMerchantOfferingDisplays(selectedDisplays[0]!, selected.serviceSelections)
+    expect(selectedDisplays[0]?.serviceSelectionCount).toBe(1)
+    expect(selectedOfferings[0]?.selected).toBe(true)
+    expect(buildUpdateServiceItemQuantityCommand(selected.serviceSelections![0]!.id, 3)).toMatchObject({
+      type: 'UPDATE_SERVICE_ITEM_QUANTITY',
+      quantity: 3,
+    })
+    expect(buildRemoveServiceItemCommand(selected.serviceSelections![0]!.id)).toMatchObject({
+      type: 'REMOVE_SERVICE_ITEM',
+      selectionId: selected.serviceSelections![0]!.id,
+    })
   })
 
   it('derives explainable action-card display text without changing domain payloads', () => {
@@ -304,8 +369,9 @@ describe('workspace model helpers', () => {
     if (candidateAction?.kind !== 'candidate-selection') throw new Error('expected candidate action')
     const candidateDisplay = deriveCandidateCardDisplay(candidateAction, candidateAction.candidates[0]!, plan)
 
-    expect(candidateDisplay.badges).toContain('匹配 92%')
+    expect(candidateDisplay.badges.some((badge) => badge.startsWith('匹配 '))).toBe(true)
     expect(candidateDisplay.badges).toContain('用餐')
+    expect(candidateDisplay.badges).toContain('Mock POI')
     expect(candidateDisplay.title.length).toBeGreaterThan(2)
     expect(candidateDisplay.title).not.toBe('风味餐厅')
     expect(candidateDisplay.subtitle).toBe(candidateAction.candidates[0]!.segment.title)
@@ -501,6 +567,57 @@ describe('workspace model helpers', () => {
     expect(shouldOpenChatForAgentEvent({ ...eventBase, type: 'agent.finished' })).toBe(true)
   })
 
+  it('anchors active decision tickets to the message that created them', () => {
+    const plan = createPlanFromPrompt('晚上两个人吃饭')
+    const dining = plan.segments.find((segment) => segment.phase === 'dining')!
+    const action = applyPlanCommand(plan, {
+      type: 'REPLACE_SEGMENT',
+      source: 'agent',
+      segmentId: dining.id,
+      searchQuery: '近一点',
+    }).plan.pendingAction
+    if (action?.kind !== 'candidate-selection') throw new Error('expected candidate action')
+
+    const anchored = attachPendingActionToLatestPlanpalMessage([
+      { role: 'user', content: '把晚饭换近一点' },
+      { role: 'planpal', content: '我找到几个更近的选择。' },
+    ], action)
+
+    expect(anchored).toHaveLength(2)
+    expect(anchored[1]?.action).toBe(action)
+    expect(lastAttachedActionMessageIndex(anchored, action)).toBe(1)
+    expect(chatMessageFromPendingAction(action)).toMatchObject({
+      role: 'planpal',
+      receipt: true,
+      action,
+    })
+
+    const appended = attachPendingActionToLatestPlanpalMessage([
+      { role: 'planpal', content: '上一轮回答' },
+      { role: 'user', content: '直接换一批' },
+    ], action)
+    expect(appended).toHaveLength(3)
+    expect(appended[1]?.role).toBe('user')
+    expect(appended[2]).toMatchObject({
+      role: 'planpal',
+      receipt: true,
+      action,
+    })
+
+    const planWithVariants = attachPlanVariants(createPlanFromPrompt('下午两个人附近轻松玩'))
+    const variantAction = planWithVariants.pendingAction
+    if (variantAction?.kind !== 'plan-variant-selection') throw new Error('expected variant action')
+    const selectedPlan = applyPlanCommand(
+      planWithVariants,
+      buildPlanVariantCommand(variantAction.id, variantAction.variants[0]!),
+    ).plan
+
+    expect(activePlanVariantSelectionFromAction(variantAction, planWithVariants.variantSelection)).toMatchObject({
+      actionId: variantAction.id,
+    })
+    expect(activePlanVariantSelectionFromAction(undefined, selectedPlan.variantSelection)).toBeUndefined()
+  })
+
   it('keeps generated plan variant receipts out of the chat thread', () => {
     const plan = attachPlanVariants(createPlanFromPrompt('下午两个人附近轻松玩'))
     const eventBase = {
@@ -528,14 +645,18 @@ describe('workspace model helpers', () => {
 
   it('derives a confirmed itinerary receipt without implying real booking', () => {
     const plan = createPlanFromPrompt('下午两个人附近轻松玩')
-    const confirmed = applyPlanCommand(plan, {
-      type: 'CONFIRM_PLAN',
+    expect(buildSandboxOrderCommand()).toEqual({
+      type: 'CREATE_SANDBOX_ORDER',
       source: 'puzzle',
-    }).plan
+    })
+    const confirmed = applyPlanCommand(plan, buildSandboxOrderCommand()).plan
     const receipt = derivePlanReceiptDisplay(confirmed)
 
-    expect(receipt.statusLabel).toBe('已确认')
+    expect(receipt.statusLabel).toBe('模拟确认')
     expect(receipt.versionLabel).toBe(`Version ${confirmed.currentVersion}`)
+    expect(receipt.receiptId).toBe(confirmed.sandboxOrder?.receiptId)
+    expect(receipt.totalEstimateLabel).toContain('CNY')
+    expect(receipt.itemLines.length).toBeGreaterThan(0)
     expect(receipt.segments).toHaveLength(confirmed.segments.filter((segment) => !segment.isTransit).length)
     expect(receipt.segments[0]).toMatchObject({
       index: 1,
@@ -543,10 +664,10 @@ describe('workspace model helpers', () => {
       time: '14:00-16:00',
       title: confirmed.segments[0]?.title,
     })
-    expect(receipt.text).toContain('PlanPal 确认摘要')
-    expect(receipt.text).toContain('这是 PlanPal 本地确认摘要')
-    expect(receipt.text).not.toContain('订单')
+    expect(receipt.text).toContain('PlanPal Sandbox 模拟确认单')
+    expect(receipt.text).toContain('不代表真实预订')
     expect(receipt.text).not.toContain('预订成功')
+    expect(receipt.text).not.toContain('支付成功')
   })
   it('turns deterministic command results into short chat receipts', () => {
     const planWithVariants = attachPlanVariants(createPlanFromPrompt('下午两个人附近轻松玩'))
@@ -711,10 +832,11 @@ describe('workspace model helpers', () => {
 
     const routes = buildRouteEstimates(derivePlanSegmentDisplays(plan.segments))
     const route = routes[0]!
-    expect(deriveRouteLegDisplay(route).statusLabel).toBe('推荐')
+    expect(deriveRouteLegDisplay(route).statusLabel).toBe('推荐 · Mock')
+    expect(deriveRouteLegDisplay(route).sourceLabel).toBe('mock-route estimated')
     expect(deriveRouteLegDisplay(route, { [route.id]: 'taxi' })).toMatchObject({
       modeLabel: '打车',
-      statusLabel: '已选',
+      statusLabel: '已选 · Mock',
     })
   })
 

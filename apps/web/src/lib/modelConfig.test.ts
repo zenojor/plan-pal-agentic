@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MODEL_PROVIDER_PRESETS,
+  applyModelProviderPreset,
   isCompleteModelConfig,
   loadModelConfig,
   maskApiKey,
@@ -108,5 +110,26 @@ describe('model config storage', () => {
     expect(modelConfigsEqual({ ...saved, model: 'other' }, saved)).toBe(false)
     expect(modelConfigsEqual({ ...saved, resolvedBaseURL: 'https://other.example.com' }, saved)).toBe(false)
     expect(modelConfigsEqual(null, saved)).toBe(false)
+  })
+
+  it('applies provider presets without touching the browser-only API key', () => {
+    const deepseek = MODEL_PROVIDER_PRESETS.find((preset) => preset.id === 'deepseek')
+    expect(deepseek).toBeTruthy()
+
+    expect(applyModelProviderPreset({
+      baseURL: 'https://api.example.com/v1',
+      apiKey: 'sk-demo',
+      model: 'demo',
+      providerMode: 'auto',
+      resolvedBaseURL: 'https://api.example.com',
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
+    }, deepseek!)).toEqual({
+      baseURL: 'https://api.deepseek.com',
+      apiKey: 'sk-demo',
+      model: 'deepseek-chat',
+      providerMode: 'openai-compatible',
+      resolvedBaseURL: undefined,
+      lastTestedAt: undefined,
+    })
   })
 })

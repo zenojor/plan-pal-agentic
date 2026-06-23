@@ -3,6 +3,7 @@ import type { AgentEvent } from '@planpal/domain'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { deletePlan, listPlans, streamCreatePlan } from '../lib/api'
+import { appClasses, homeClasses } from '../lib/appClasses'
 import { maskApiKey } from '../lib/modelConfig'
 import { buildQuickPlanPrompt, formatHourLabel, type QuickPlanState } from '../lib/quickPlan'
 import { useStoredModelConfig } from '../lib/useStoredModelConfig'
@@ -92,50 +93,51 @@ export function HomePage() {
   }
 
   return (
-    <main className="home-launch">
-      <header className="home-launch-topbar">
-        <Link className="home-launch-brand" to="/">
-          <span aria-hidden="true">P</span>
+    <main className={homeClasses.root}>
+      <header className={homeClasses.topbar}>
+        <Link className={homeClasses.brand} to="/">
+          <span className={homeClasses.brandMark} aria-hidden="true">P</span>
           <strong>PlanPal</strong>
         </Link>
-        <Link className={`home-launch-model ${config ? 'is-ready' : 'is-offline'}`} to="/settings/model">
+        <Link className={homeClasses.modelLink(Boolean(config))} to="/settings/model">
           {config ? `${config.model} · ${maskApiKey(config.apiKey)}` : '离线 fallback 可用'}
         </Link>
       </header>
 
-      <section className="launch-pad" aria-label="创建计划">
-        <div className="launch-copy">
-          <span className="eyebrow">Start</span>
-          <h1>今天想怎么安排？</h1>
-          <p>把时间、人数和偏好说清楚。PlanPal 会先给 3 个方向，选定后进入多列工作台继续改。</p>
+      <section className={homeClasses.launchPad} aria-label="创建计划">
+        <div className={homeClasses.launchCopy}>
+          <span className={appClasses.eyebrow}>Start</span>
+          <h1 className={homeClasses.launchTitle}>今天想怎么安排？</h1>
+          <p className={homeClasses.launchText}>把时间、人数和偏好说清楚。PlanPal 会先给 3 个方向，选定后进入多列工作台继续改。</p>
         </div>
 
-        <div className="launch-input-stack">
+        <div className={homeClasses.inputStack}>
           <textarea
+            className={homeClasses.textarea}
             aria-label="计划开局要求"
             value={prompt}
             placeholder="比如：明天下午 2 个人，附近轻松玩到晚上，晚饭别太远..."
             onChange={(event) => setPrompt(event.target.value)}
           />
 
-          <section className={`launch-quick-panel ${quickOpen ? 'is-open' : ''}`} aria-label="快速参数生成">
+          <section className={homeClasses.quickPanel(quickOpen)} aria-label="快速参数生成">
             <button
-              className="launch-quick-toggle"
+              className={homeClasses.quickToggle}
               type="button"
               aria-expanded={quickOpen}
               onClick={() => setQuickOpen((open) => !open)}
             >
-              <span>
-                <strong>快速参数生成</strong>
-                <small>可选辅助：用结构化参数拼一条完整开局描述。</small>
+              <span className={homeClasses.quickToggleCopy}>
+                <strong className={homeClasses.quickToggleTitle}>快速参数生成</strong>
+                <small className={homeClasses.quickToggleHint}>可选辅助：用结构化参数拼一条完整开局描述。</small>
               </span>
-              <em>{quickOpen ? '收起' : '展开'}</em>
+              <em className={homeClasses.quickToggleState}>{quickOpen ? '收起' : '展开'}</em>
             </button>
 
             {quickOpen && (
-              <div className="launch-quick-body">
-                <section className="launch-control-strip" aria-label="快速补充">
-                  <label className="launch-range">
+              <div className={homeClasses.quickBody}>
+                <section className={homeClasses.controlStrip} aria-label="快速补充">
+                  <label className={homeClasses.range}>
                     <span>开始 {formatHourLabel(quickPlan.startHour)}</span>
                     <input
                       max={23}
@@ -146,7 +148,7 @@ export function HomePage() {
                       onChange={(event) => updateQuickPlan('startHour', Math.min(Number(event.target.value), quickPlan.endHour - 0.5))}
                     />
                   </label>
-                  <label className="launch-range">
+                  <label className={homeClasses.range}>
                     <span>结束 {formatHourLabel(quickPlan.endHour)}</span>
                     <input
                       max={24}
@@ -189,13 +191,13 @@ export function HomePage() {
                     onChange={(value) => updateQuickPlan('pace', value as QuickPlanState['pace'])}
                   />
                   <input
-                    className="launch-inline-input topic"
+                    className={homeClasses.inlineInput(true)}
                     value={quickPlan.topic}
                     placeholder="想做什么"
                     onChange={(event) => updateQuickPlan('topic', event.target.value)}
                   />
                   <input
-                    className="launch-inline-input"
+                    className={homeClasses.inlineInput()}
                     value={quickPlan.extra}
                     placeholder="补充：室内优先、别太贵..."
                     onChange={(event) => updateQuickPlan('extra', event.target.value)}
@@ -203,7 +205,7 @@ export function HomePage() {
                 </section>
                 <button
                   type="button"
-                  className="launch-quick-submit"
+                  className={homeClasses.quickSubmit}
                   onClick={submitQuickPlan}
                   disabled={isSubmitting}
                 >
@@ -213,8 +215,8 @@ export function HomePage() {
             )}
           </section>
 
-          <div className="launch-action-row">
-            <button type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
+          <div className={homeClasses.actionRow}>
+            <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
               {isSubmitting ? '创建中' : '创建计划'}
             </button>
           </div>
@@ -223,34 +225,35 @@ export function HomePage() {
         {(isSubmitting || creationEvents.length > 0) && (
           <CreationProgress events={creationEvents} hasModelConfig={Boolean(config)} />
         )}
-        {error && <p className="error-text launch-error">{error}</p>}
+        {error && <p className={homeClasses.launchError}>{error}</p>}
       </section>
 
-      <section className="prompt-chip-rail" aria-label="复杂任务示例">
-        <span>试试</span>
+      <section className={homeClasses.promptRail} aria-label="复杂任务示例">
+        <span className={homeClasses.promptRailLabel}>试试</span>
         {demoPromptExamples.map((preset) => (
-          <button key={preset.title} type="button" onClick={() => setPrompt(preset.prompt)}>
-            <strong>{preset.title}</strong>
-            <small>{preset.summary}</small>
+          <button className={homeClasses.promptButton} key={preset.title} type="button" onClick={() => setPrompt(preset.prompt)}>
+            <strong className={homeClasses.promptButtonTitle}>{preset.title}</strong>
+            <small className={homeClasses.promptButtonSummary}>{preset.summary}</small>
           </button>
         ))}
       </section>
 
-      <section className="recent-line-rail" aria-label="最近计划">
-        <div className="recent-line-heading">
-          <strong>最近计划</strong>
-          <small>{recentPlans.length > 0 ? `${recentPlans.length} 条` : '暂无历史'}</small>
+      <section className={homeClasses.recentRail} aria-label="最近计划">
+        <div className={homeClasses.recentHeading}>
+          <strong className={homeClasses.recentHeadingTitle}>最近计划</strong>
+          <small className={homeClasses.recentHeadingMeta}>{recentPlans.length > 0 ? `${recentPlans.length} 条` : '暂无历史'}</small>
         </div>
         {recentPlans.length > 0 ? (
-          <div className="recent-line-list">
+          <div className={homeClasses.recentList}>
             {recentPlans.map((plan) => (
-              <article className="recent-line-item" key={plan.id}>
-                <Link to="/plans/$planId" params={{ planId: plan.id }}>
-                  <strong>{plan.title}</strong>
-                  <span>{formatPlanStatus(plan.status)} · V{plan.currentVersion} · {plan.segments.length} 节点</span>
-                  <time dateTime={plan.updatedAt}>{formatRecentPlanTime(plan.updatedAt)}</time>
+              <article className={homeClasses.recentItem} key={plan.id}>
+                <Link className={homeClasses.recentLink} to="/plans/$planId" params={{ planId: plan.id }}>
+                  <strong className={homeClasses.recentTitle}>{plan.title}</strong>
+                  <span className={homeClasses.recentMeta}>{formatPlanStatus(plan.status)} · V{plan.currentVersion} · {plan.segments.length} 节点</span>
+                  <time className={homeClasses.recentMeta} dateTime={plan.updatedAt}>{formatRecentPlanTime(plan.updatedAt)}</time>
                 </Link>
                 <button
+                  className={homeClasses.recentDelete}
                   type="button"
                   disabled={deletePlanMutation.isPending}
                   onClick={() => deletePlanMutation.mutate(plan.id)}
@@ -261,13 +264,13 @@ export function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="recent-plan-note">创建第一个计划后，这里会保留最近工作台入口。</p>
+          <p className={homeClasses.note}>创建第一个计划后，这里会保留最近工作台入口。</p>
         )}
         {deletePlanMutation.isError && (
-          <p className="recent-plan-note error-text">{deletePlanMutation.error.message}</p>
+          <p className={appClasses.errorText}>{deletePlanMutation.error.message}</p>
         )}
         {recentPlansQuery.isError && (
-          <p className="recent-plan-note">最近计划暂时不可用；仍然可以直接创建新计划。</p>
+          <p className={homeClasses.note}>最近计划暂时不可用；仍然可以直接创建新计划。</p>
         )}
       </section>
     </main>
@@ -286,12 +289,12 @@ function QuickOptionGroup({
   value: string
 }) {
   return (
-    <div className="launch-segmented-group">
-      <span>{label}</span>
-      <div>
+    <div className={homeClasses.segmentedGroup}>
+      <span className={homeClasses.segmentedLabel}>{label}</span>
+      <div className={homeClasses.segmentedOptions}>
         {options.map(([optionValue, optionLabel]) => (
           <button
-            className={value === optionValue ? 'active' : ''}
+            className={homeClasses.segmentedButton(value === optionValue)}
             key={optionValue}
             type="button"
             onClick={() => onChange(optionValue)}
@@ -323,18 +326,18 @@ function CreationProgress({ events, hasModelConfig }: { events: AgentEvent[]; ha
   ]
 
   return (
-    <section className="creation-progress" aria-live="polite">
-      <span className="eyebrow">Creating</span>
-      <strong>{message}</strong>
-      <ol>
+    <section className={homeClasses.progress} aria-live="polite">
+      <span className={appClasses.eyebrow}>Creating</span>
+      <strong className={homeClasses.progressTitle}>{message}</strong>
+      <ol className={homeClasses.progressList}>
         {steps.map((step) => (
-          <li className={step.state} key={step.key}>
-            <span />
+          <li className={homeClasses.progressStep(step.state)} key={step.key}>
+            <span className={homeClasses.progressDot(step.state)} />
             {step.label}
           </li>
         ))}
       </ol>
-      <small>
+      <small className={homeClasses.progressHint}>
         {hasModelConfig
           ? '模型只生成候选方向；进入拼图后仍由确定性命令修改计划。'
           : '当前没有保存模型配置，会使用本地 fallback 方案。'}

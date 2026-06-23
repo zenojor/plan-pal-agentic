@@ -1,6 +1,6 @@
-import type { CandidateOption, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
+import type { CandidateOption, MerchantServiceCategory, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
 import { createId, nowIso } from './ids'
-import { fictionalPoiCatalog, pickFictionalPoi, segmentFromPoi, type FictionalPoi } from './poiCatalog'
+import { fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type FictionalPoi } from './poiCatalog'
 
 
 export function createPlanFromPrompt(prompt: string): Plan {
@@ -148,7 +148,7 @@ export function createReplacementCandidates(
     startTime: target.startTime,
     endTime: target.endTime,
     status: '待确认',
-  } : {})
+  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory)
 }
 
 export function createAddSegmentCandidates(
@@ -160,7 +160,12 @@ export function createAddSegmentCandidates(
   const after = afterSegmentId ? plan.segments.find((segmentItem) => segmentItem.id === afterSegmentId) : undefined
   const next = after ? plan.segments[plan.segments.findIndex((segmentItem) => segmentItem.id === after.id) + 1] : undefined
   const normalized = query.toLowerCase()
-  const phase: SegmentPhase = query.includes('吃') || query.includes('饭') || wantsHotpot(query)
+  const serviceCategory = inferServiceCategoryFromQuery(query)
+  const phase: SegmentPhase = serviceCategory === 'hotel'
+    ? 'leisure'
+    : serviceCategory === 'movie'
+      ? 'activity'
+      : query.includes('吃') || query.includes('饭') || wantsHotpot(query)
     ? 'dining'
     : query.includes('喝') || query.includes('酒') || normalized.includes('drink')
       ? 'drinks'
@@ -171,7 +176,7 @@ export function createAddSegmentCandidates(
     startTime,
     endTime,
     status: '待确认',
-  })
+  }, serviceCategory)
 }
 
 function createCandidatesForPhase(
@@ -179,6 +184,7 @@ function createCandidatesForPhase(
   query = '',
   excludeCandidateIds: string[] = [],
   defaults: Partial<PlanSegment> = {},
+  serviceCategory?: MerchantServiceCategory,
 ): CandidateOption[] {
   const normalized = query.toLowerCase()
   const near = query.includes('近') || normalized.includes('near')
@@ -187,15 +193,20 @@ function createCandidatesForPhase(
   const family = query.includes('亲子') || query.includes('孩子') || normalized.includes('family')
   const business = query.includes('客户') || query.includes('商务') || normalized.includes('client')
   const hotpot = wantsHotpot(query)
-  const pool = rankPoisForQuery(phase, { near, quiet, indoor, family, business, hotpot })
-  const available = pool.filter((poi) => !excludeCandidateIds.includes(poi.id))
-  const selected = (available.length > 0 ? available : pool).slice(0, 3)
+  const results = searchFictionalPois({
+    phase,
+    query,
+    excludePoiIds: excludeCandidateIds,
+    limit: 3,
+    serviceCategory,
+  })
+  const fallbackResults = results.length > 0 ? results : searchFictionalPois({ phase, query, limit: 3, serviceCategory })
 
-  return selected.map((poi, index) => ({
+  return fallbackResults.map(({ poi, score, reasons }, index) => ({
     id: poi.id,
     label: poi.name,
     description: poi.description,
-    score: Math.max(0.62, 0.92 - index * 0.07),
+    score: normalizeCandidateScore(score, index),
     reasons: uniqueReasons([
       poi.description,
       near ? '匹配近距离偏好' : '匹配当前阶段',
@@ -204,6 +215,7 @@ function createCandidatesForPhase(
       family ? '考虑亲子友好' : '',
       business ? '考虑商务确定性' : '',
       hotpot && isHotpotPoi(poi) ? '匹配火锅需求' : '',
+      ...reasons,
     ]),
     segment: {
       ...defaults,
@@ -214,28 +226,10 @@ function createCandidatesForPhase(
       budget: poi.budget,
       notes: poi.notes,
       poiId: poi.id,
+      serviceCategory: poi.serviceCategory,
       lnglat: poi.lnglat,
     },
   }))
-}
-
-function rankPoisForQuery(
-  phase: SegmentPhase,
-  flags: { business: boolean; family: boolean; hotpot: boolean; indoor: boolean; near: boolean; quiet: boolean },
-) {
-  const normalizedPhase = phase === 'transit' ? 'leisure' : phase
-  const pool = fictionalPoiCatalog.filter((poi) => poi.phase === normalizedPhase)
-  const scored = pool.map((poi, index) => {
-    let score = 100 - index
-    if (flags.near && ['poi_fern_mall_diner', 'poi_ripple_cafe', 'poi_roost_dessert'].includes(poi.id)) score += 20
-    if (flags.quiet && ['poi_linden_bookshop', 'poi_camellia_tea'].includes(poi.id)) score += 20
-    if (flags.indoor && poi.tags.some((tag) => tag.includes('室内') || tag.includes('天气'))) score += 20
-    if (flags.business && ['poi_pearl_private_kitchen', 'poi_paperkite_board'].includes(poi.id)) score += 24
-    if (flags.family && ['poi_mint_studio', 'poi_cloud_gallery', 'poi_laurel_roundtable'].includes(poi.id)) score += 16
-    if (flags.hotpot && isHotpotPoi(poi)) score += 40
-    return { poi, score }
-  })
-  return scored.sort((left, right) => right.score - left.score).map((item) => item.poi)
 }
 
 function buildVariantSegments(intent: PlanIntent, pois: FictionalPoi[], durations: number[]) {
@@ -313,6 +307,11 @@ function uniqueReasons(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
+function normalizeCandidateScore(score: number, index: number) {
+  const normalized = 0.62 + Math.min(0.35, Math.max(0, score - 80) / 140)
+  return Math.max(0.62, Math.min(0.97, normalized - index * 0.015))
+}
+
 function wantsHotpot(value: string) {
   const normalized = value.toLowerCase()
   return value.includes('火锅')
@@ -327,6 +326,16 @@ function isHotpotPoi(poi: FictionalPoi) {
     || poi.name.includes('火锅')
     || poi.activityTitle.includes('火锅')
     || poi.description.includes('火锅')
+}
+
+function inferServiceCategoryFromQuery(value: string): MerchantServiceCategory | undefined {
+  const normalized = value.toLowerCase()
+  if (value.includes('酒店') || value.includes('住宿') || value.includes('住一晚') || value.includes('住一夜') || normalized.includes('hotel')) return 'hotel'
+  if (value.includes('电影') || value.includes('影院') || normalized.includes('movie') || normalized.includes('cinema') || normalized.includes('imax')) return 'movie'
+  if (value.includes('spa') || value.includes('按摩') || value.includes('瑜伽') || value.includes('放松')) return 'wellness'
+  if (value.includes('票') || normalized.includes('ticket')) return 'ticket'
+  if (value.includes('花') || value.includes('礼物') || value.includes('写真')) return 'retail'
+  return undefined
 }
 
 function inferHeadcount(prompt: string) {

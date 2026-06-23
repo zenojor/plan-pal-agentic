@@ -92,27 +92,38 @@ export class PlanPalAgentRuntime {
     const route = routed.route
 
     if (route.kind === 'candidate-search') {
-      await emit('tool.called', 'Searching replacement candidates', {
+      const isAddAfter = route.mode === 'add-after'
+      await emit('tool.called', isAddAfter ? 'Searching add-after candidates' : 'Searching replacement candidates', {
         toolName: 'poi.search',
         effect: 'read-only',
       })
       const call = await this.tools.run(run.id, 'poi.search', {
         plan,
-        segmentId: route.segmentId,
+        mode: route.mode,
+        segmentId: route.mode === 'replace' ? route.segmentId : undefined,
+        afterSegmentId: route.mode === 'add-after' ? route.afterSegmentId : undefined,
         query: route.query,
       }, ['read-only'])
       await this.stores.agents.appendToolCall(call)
-      await emit('tool.result', 'Replacement candidates ready', call)
+      await emit('tool.result', isAddAfter ? 'Add-after candidates ready' : 'Replacement candidates ready', call)
 
-      const command: PlanCommand = {
-        type: 'REPLACE_SEGMENT',
-        source: 'agent',
-        segmentId: route.segmentId,
-        searchQuery: route.query,
-      }
+      const command: PlanCommand = isAddAfter
+        ? {
+            type: 'REFRESH_CANDIDATES',
+            source: 'agent',
+            mode: 'add-after',
+            afterSegmentId: route.afterSegmentId,
+            searchQuery: route.query,
+          }
+        : {
+            type: 'REPLACE_SEGMENT',
+            source: 'agent',
+            segmentId: route.segmentId,
+            searchQuery: route.query,
+          }
       const result = applyPlanCommand(plan, command, run.id)
       await this.stores.plans.savePlan(result.plan, 'agent')
-      await emit('plan.patch.proposed', 'Agent proposed a replacement workflow', {
+      await emit('plan.patch.proposed', isAddAfter ? 'Agent proposed an add-after workflow' : 'Agent proposed a replacement workflow', {
         patch: result.patch,
         model,
         routeSource: routed.source,
@@ -134,7 +145,61 @@ export class PlanPalAgentRuntime {
       return { runId: run.id, status: 'waiting_for_user' as const }
     }
 
+    if (route.kind === 'service-item-search') {
+      await emit('tool.called', 'Searching merchant offerings', {
+        toolName: 'offering.search',
+        effect: 'read-only',
+      })
+      const call = await this.tools.run(run.id, 'offering.search', {
+        category: route.category,
+        merchantId: route.merchantId,
+        query: route.query,
+      }, ['read-only'])
+      await this.stores.agents.appendToolCall(call)
+      await emit('tool.result', 'Merchant offerings ready', call)
+
+      const command: PlanCommand = {
+        type: 'REFRESH_SERVICE_ITEMS',
+        source: 'agent',
+        segmentId: route.segmentId,
+        merchantId: route.merchantId,
+        category: route.category,
+        query: route.query,
+      }
+      const result = applyPlanCommand(plan, command, run.id)
+      await this.stores.plans.savePlan(result.plan, 'agent')
+      await emit('plan.patch.proposed', route.reason, {
+        patch: result.patch,
+        model,
+        routeSource: routed.source,
+        usedModel: routed.source === 'model',
+        fallbackUsed: routed.source !== 'model',
+        error: routed.modelError,
+        attemptedEndpoints,
+      })
+      await emit('action.required', result.plan.pendingAction?.title ?? 'Choose a service item', {
+        action: result.plan.pendingAction,
+        model,
+        routeSource: routed.source,
+        usedModel: routed.source === 'model',
+        fallbackUsed: routed.source !== 'model',
+        error: routed.modelError,
+        attemptedEndpoints,
+      })
+      await this.stores.agents.saveRun({ ...run, status: 'waiting_for_user' })
+      return { runId: run.id, status: 'waiting_for_user' as const }
+    }
+
     if (route.kind === 'command') {
+      if (route.command.type === 'CREATE_SANDBOX_ORDER' || route.command.type === 'CONFIRM_PLAN') {
+        await emit('tool.called', 'Previewing sandbox receipt', {
+          toolName: 'order.preview',
+          effect: 'read-only',
+        })
+        const call = await this.tools.run(run.id, 'order.preview', { plan }, ['read-only'])
+        await this.stores.agents.appendToolCall(call)
+        await emit('tool.result', 'Sandbox receipt preview ready', call)
+      }
       const result = applyPlanCommand(plan, route.command, run.id)
       await this.stores.plans.savePlan(result.plan, 'agent')
       await emit('plan.patch.proposed', route.reason, {
@@ -329,15 +394,35 @@ export class PlanPalAgentRuntime {
   async resume(input: AgentResumeInput, sink: AgentEventSink) {
     const plan = await this.stores.plans.getPlan(input.planId)
     if (!plan) throw new Error('Plan not found')
-    const candidateId = typeof input.payload === 'object' && input.payload && 'candidateId' in input.payload
-      ? String(input.payload.candidateId)
-      : ''
-    const result = applyPlanCommand(plan, {
-      type: 'CHOOSE_CANDIDATE',
-      source: 'action-card',
-      actionId: input.actionId,
-      candidateId,
-    }, input.runId)
+    const activeAction = plan.pendingAction?.id === input.actionId ? plan.pendingAction : undefined
+    let command: PlanCommand
+    if (activeAction?.kind === 'service-item-selection') {
+      const offeringId = typeof input.payload === 'object' && input.payload && 'offeringId' in input.payload
+        ? String(input.payload.offeringId)
+        : ''
+      const quantityValue = typeof input.payload === 'object' && input.payload && 'quantity' in input.payload
+        ? Number((input.payload as { quantity?: unknown }).quantity)
+        : undefined
+      command = {
+        type: 'SELECT_SERVICE_ITEM',
+        source: 'action-card',
+        segmentId: activeAction.segmentId,
+        merchantId: activeAction.merchantId,
+        offeringId,
+        quantity: Number.isFinite(quantityValue) ? quantityValue : undefined,
+      }
+    } else {
+      const candidateId = typeof input.payload === 'object' && input.payload && 'candidateId' in input.payload
+        ? String(input.payload.candidateId)
+        : ''
+      command = {
+        type: 'CHOOSE_CANDIDATE',
+        source: 'action-card',
+        actionId: input.actionId,
+        candidateId,
+      }
+    }
+    const result = applyPlanCommand(plan, command, input.runId)
     await this.stores.plans.savePlan(result.plan, 'agent')
     const event: AgentEvent = {
       id: createId('evt'),
@@ -345,7 +430,7 @@ export class PlanPalAgentRuntime {
       planId: input.planId,
       type: 'plan.updated',
       sequence: 1,
-      message: 'Candidate applied',
+      message: command.type === 'SELECT_SERVICE_ITEM' ? 'Service item selected' : 'Candidate applied',
       payload: { plan: result.plan, version: result.version },
       createdAt: nowIso(),
     }
@@ -379,6 +464,33 @@ function containsAny(value: string, needles: string[]) {
 }
 
 const commandLikeKeywords = [
+  '加一个',
+  '加个',
+  '加一段',
+  '加点别的',
+  '再加',
+  '添加',
+  '加入',
+  '安排一个',
+  '安排个',
+  '空档',
+  '空隙',
+  '咖啡',
+  '甜品',
+  '拍照',
+  '散步',
+  '酒店',
+  '住宿',
+  '住一晚',
+  '电影',
+  '影院',
+  'imax',
+  '房型',
+  '双床',
+  '大床',
+  '电影票',
+  '买票',
+  '套餐',
   '换',
   '替换',
   'replace',
@@ -430,6 +542,7 @@ function buildIntentMessages(model: PublicModelConfig, message: string, plan: Pl
   const segments = plan.segments.map((segment) => ({
     id: segment.id,
     phase: segment.phase,
+    serviceCategory: segment.serviceCategory,
     title: segment.title,
     place: segment.place,
     time: `${segment.startTime}-${segment.endTime}`,
@@ -443,7 +556,7 @@ function buildIntentMessages(model: PublicModelConfig, message: string, plan: Pl
         'You are PlanPal intent interpreter.',
         `The current configured model is ${model.model} via ${model.baseURL}.`,
         'Return only one JSON object. No markdown.',
-        'Schema: {"action":"qa|replace|rewrite|delete|confirm","targetSegmentId":"optional segment id","targetPhase":"activity|dining|drinks|leisure|transit optional","query":"optional rewrite/search text","answer":"optional answer for qa","reason":"short reason"}.',
+        'Schema: {"action":"qa|replace|add|rewrite|delete|confirm|service","targetSegmentId":"optional segment id","targetPhase":"activity|dining|drinks|leisure|transit optional","category":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other for service item search","query":"optional rewrite/search text","answer":"optional answer for qa","reason":"short reason"}. Use add when the user wants another stop inserted into the plan instead of replacing an existing stop. Use service when the user wants to choose a room type, movie ticket, package, or merchant service item for an existing segment.',
         'Do not include secrets or API keys.',
       ].join(' '),
     },

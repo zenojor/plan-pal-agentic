@@ -7,6 +7,7 @@ import {
   nowIso,
   pickFictionalPoi,
   type AgentEvent,
+  type MerchantServiceCategory,
   type Plan,
   type PlanSegment,
   type PlanVariantOption,
@@ -150,7 +151,7 @@ function buildPlanVariantMessages(prompt: string, basePlan: Plan): CoreMessage[]
       content: [
         'You are PlanPal plan variant generator.',
         'Return only JSON. No markdown.',
-        'Schema: {"variants":[{"title":"string","summary":"string","tags":["string"],"reasons":["string"],"segments":[{"phase":"activity|dining|drinks|leisure","title":"string","place":"string","startTime":"HH:mm","endTime":"HH:mm","reason":"string","budget":"string","notes":"optional execution constraints/checklist","locked":false,"lnglat":[121.47,31.23]}]}]}.',
+        'Schema: {"variants":[{"title":"string","summary":"string","tags":["string"],"reasons":["string"],"segments":[{"phase":"activity|dining|drinks|leisure","serviceCategory":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other","title":"string","place":"string","startTime":"HH:mm","endTime":"HH:mm","reason":"string","budget":"string","notes":"optional execution constraints/checklist","locked":false,"lnglat":[121.47,31.23]}]}]}.',
         'Return 3 variants. Infer the task structure from userPrompt; do not choose from predefined plan branches. Every place must be fictional but specific, like a named shop/studio/restaurant; never use real merchant names and never use generic category names such as 展览, 餐厅, 咖啡店, 小馆, 附近可选地点. Do not collapse distinct user goals into one segment. If the prompt contains more than two goals, dependencies, participants, or constraints, each variant must include 4-7 executable segments with at least one buffer/checkpoint segment. Use notes for risks, dependencies, pre-checks, and fallback rules. Do not include secrets or API keys.',
       ].join(' '),
     },
@@ -249,6 +250,9 @@ function coerceSegment(value: unknown, fallback: PlanSegment | undefined, basePl
   const input = value as Partial<Record<keyof PlanSegment, unknown>>
   const phase = isSegmentPhase(input.phase) ? input.phase : fallback?.phase ?? 'leisure'
   const fallbackPoi = pickFictionalPoi(phase, segmentIndex)
+  const serviceCategory = isMerchantServiceCategory(input.serviceCategory)
+    ? input.serviceCategory
+    : fallback?.serviceCategory ?? fallbackPoi.serviceCategory
   const startTime = readClockTime(input.startTime)
     || readClockTime(fallback?.startTime)
     || readClockTime(basePlan.intent.startTime)
@@ -276,6 +280,7 @@ function coerceSegment(value: unknown, fallback: PlanSegment | undefined, basePl
     budget: readModelString(input.budget) || fallback?.budget || fallbackPoi.budget,
     notes: readModelString(input.notes) || fallback?.notes || fallbackPoi.notes,
     poiId: readModelString(input.poiId) || fallback?.poiId || (place === fallbackPoi.name ? fallbackPoi.id : ['model', phase, segmentIndex + 1].join('-')),
+    serviceCategory,
     locked: typeof input.locked === 'boolean' ? input.locked : fallback?.locked,
     lnglat,
   }
@@ -295,6 +300,18 @@ function isSegmentPhase(value: unknown): value is SegmentPhase {
     || value === 'dining'
     || value === 'drinks'
     || value === 'leisure'
+}
+
+function isMerchantServiceCategory(value: unknown): value is MerchantServiceCategory {
+  return value === 'dining'
+    || value === 'drinks'
+    || value === 'activity'
+    || value === 'hotel'
+    || value === 'movie'
+    || value === 'retail'
+    || value === 'wellness'
+    || value === 'ticket'
+    || value === 'other'
 }
 
 function readLngLat(value: unknown): [number, number] | undefined {

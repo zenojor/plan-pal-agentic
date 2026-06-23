@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createInMemoryStores } from '@planpal/db'
-import { createPlanFromPrompt, type AgentEvent, type PendingAction } from '@planpal/domain'
+import { applyPlanCommand, createPlanFromPrompt, getFictionalPoiById, type AgentEvent, type PendingAction } from '@planpal/domain'
 import { createDefaultToolRegistry, PlanPalAgentRuntime, type AgentModelGateway } from '../src'
 
 const config = {
@@ -143,6 +143,31 @@ describe('agent runtime model transparency', () => {
     })
   })
 
+  it('previews a sandbox receipt before applying an order command', async () => {
+    const { plan, runtime, stores } = await createRuntime({
+      generateAssistantReply: async () => {
+        throw new Error('no model call expected')
+      },
+    })
+    const events: AgentEvent[] = []
+
+    const result = await runtime.run({ planId: plan.id, message: '可以模拟下单了' }, (event) => {
+      events.push(event)
+    })
+
+    expect(result.status).toBe('completed')
+    expect(events.map((event) => event.type)).toContain('tool.called')
+    expect(events.map((event) => event.type)).toContain('tool.result')
+    expect(events.find((event) => event.type === 'tool.called')?.payload).toMatchObject({
+      toolName: 'order.preview',
+      effect: 'read-only',
+    })
+    const updated = await stores.plans.getPlan(plan.id)
+    expect(updated?.status).toBe('confirmed')
+    expect(updated?.sandboxOrder?.status).toBe('sandbox_generated')
+    expect(updated?.sandboxOrder?.disclaimer).toContain('不代表真实预订')
+  })
+
   it('resumes candidate selection and persists the chosen segment through commands', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => JSON.stringify({
@@ -187,6 +212,106 @@ describe('agent runtime model transparency', () => {
     expect(persistedEvents.some((event) => event.type === 'agent.finished')).toBe(true)
     expect(JSON.stringify(persistedEvents)).not.toContain(config.apiKey)
   })
+
+  it('uses model add intent to create an add-after candidate workflow', async () => {
+    const { plan, runtime, stores } = await createRuntime({
+      generateAssistantReply: async () => JSON.stringify({
+        action: 'add',
+        targetSegmentId: plan.segments[0]!.id,
+        query: '加一个咖啡休息点',
+        reason: 'extra coffee stop request',
+      }),
+    })
+    const events: AgentEvent[] = []
+
+    const run = await runtime.run({ planId: plan.id, message: '中间再加个咖啡休息', modelConfig: config }, (event) => {
+      events.push(event)
+    })
+
+    expect(run.status).toBe('waiting_for_user')
+    const action = candidateActionFromEvent(events.find((event) => event.type === 'action.required'))
+    expect(action.mode).toBe('add-after')
+    expect(action.afterSegmentId).toBe(plan.segments[0]!.id)
+    expect(action.candidates.length).toBeGreaterThan(1)
+
+    const candidate = action.candidates[0]!
+    await runtime.resume({
+      planId: plan.id,
+      runId: run.runId,
+      actionId: action.id,
+      payload: { candidateId: candidate.id },
+    }, () => undefined)
+
+    const updated = await stores.plans.getPlan(plan.id)
+    expect(updated?.segments).toHaveLength(plan.segments.length + 1)
+    const anchorIndex = updated?.segments.findIndex((segment) => segment.id === plan.segments[0]!.id) ?? -1
+    expect(updated?.segments[anchorIndex + 1]?.title).toBe(candidate.segment.title)
+    expect(JSON.stringify(events)).not.toContain(config.apiKey)
+  })
+
+  it('uses offering.search and command-gated resume for service item selection', async () => {
+    const stores = createInMemoryStores()
+    const basePlan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const moviePoi = getFictionalPoiById('poi_orbit_cinema')!
+    const moviePlan = applyPlanCommand(basePlan, {
+      type: 'ADD_SEGMENT',
+      source: 'puzzle',
+      afterSegmentId: basePlan.segments[0]!.id,
+      segment: {
+        id: 'seg_movie_runtime',
+        phase: 'activity',
+        serviceCategory: 'movie',
+        title: moviePoi.activityTitle,
+        place: moviePoi.name,
+        startTime: '16:00',
+        endTime: '18:00',
+        durationMinutes: 120,
+        status: '待确认',
+        reason: moviePoi.description,
+        budget: moviePoi.budget,
+        poiId: moviePoi.id,
+        lnglat: moviePoi.lnglat,
+      },
+    }).plan
+    const plan = await stores.plans.createPlan(moviePlan)
+    const runtime = new PlanPalAgentRuntime(stores, createDefaultToolRegistry(), {
+      generateAssistantReply: async () => {
+        throw new Error('no model call expected')
+      },
+    })
+    const events: AgentEvent[] = []
+
+    const run = await runtime.run({ planId: plan.id, message: '买两张电影票' }, (event) => {
+      events.push(event)
+    })
+
+    expect(run.status).toBe('waiting_for_user')
+    expect(events.find((event) => event.type === 'tool.called')?.payload).toMatchObject({
+      toolName: 'offering.search',
+      effect: 'read-only',
+    })
+    const action = serviceActionFromEvent(events.find((event) => event.type === 'action.required'))
+    expect(action.segmentId).toBe('seg_movie_runtime')
+    expect(action.offerings.every((offering) => offering.category === 'movie')).toBe(true)
+
+    const resumeEvents: AgentEvent[] = []
+    await runtime.resume({
+      planId: plan.id,
+      runId: run.runId,
+      actionId: action.id,
+      payload: { offeringId: action.offerings[0]!.id, quantity: 2 },
+    }, (event) => {
+      resumeEvents.push(event)
+    })
+
+    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
+    const updated = await stores.plans.getPlan(plan.id)
+    expect(updated?.serviceSelections).toEqual([expect.objectContaining({
+      offeringId: action.offerings[0]!.id,
+      quantity: 2,
+      segmentId: 'seg_movie_runtime',
+    })])
+  })
 })
 
 function modelEventPhases(events: AgentEvent[], type: AgentEvent['type']) {
@@ -206,6 +331,20 @@ function candidateActionFromEvent(event: AgentEvent | undefined) {
   expect(action?.kind).toBe('candidate-selection')
   if (!action || action.kind !== 'candidate-selection') {
     throw new Error('expected candidate-selection action')
+  }
+  return action
+}
+
+function serviceActionFromEvent(event: AgentEvent | undefined) {
+  expect(event?.type).toBe('action.required')
+  const payload = event?.payload
+  if (!payload || typeof payload !== 'object' || !('action' in payload)) {
+    throw new Error('action.required payload is missing action')
+  }
+  const action = (payload as { action?: PendingAction }).action
+  expect(action?.kind).toBe('service-item-selection')
+  if (!action || action.kind !== 'service-item-selection') {
+    throw new Error('expected service-item-selection action')
   }
   return action
 }

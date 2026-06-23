@@ -1,6 +1,9 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
 import { useState, type DragEvent } from 'react'
-import type { PlanCommand, PlanSegment } from '@planpal/domain'
+import type { PlanCommand, PlanSegment, PlanServiceSelection } from '@planpal/domain'
+import { appClasses } from '../../lib/appClasses'
+import { puzzleClasses } from './puzzleClasses'
+import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import {
   deriveItineraryTicketDisplay,
   deriveRouteLegDisplay,
@@ -19,6 +22,7 @@ type PuzzleColumnProps = {
   selectedRouteModes: SelectedRouteModes
   selectedSegmentId?: string
   segments: PlanSegment[]
+  serviceSelections?: PlanServiceSelection[]
   onCommand: (command: PlanCommand) => void
   onDragEnd: () => void
   onDragStart: (segmentId: string) => void
@@ -38,6 +42,7 @@ export function PuzzleColumn({
   selectedRouteModes,
   selectedSegmentId,
   segments,
+  serviceSelections = [],
   onCommand,
   onDragEnd,
   onDragStart,
@@ -54,7 +59,7 @@ export function PuzzleColumn({
 
   return (
     <div
-      className="puzzle-column column-content-scroll puzzle-timeline"
+      className={puzzleClasses.root}
       onDragOver={(event) => {
         if (draggingSegmentId) event.preventDefault()
       }}
@@ -65,13 +70,13 @@ export function PuzzleColumn({
       }}
     >
       {segments.length === 0 && (
-        <Card type="dashed" className="empty-puzzle-card">
-          <span className="column-icon-pill compact" aria-hidden="true">
+        <Card type="dashed" className={puzzleClasses.emptyCard}>
+          <span className={workspacePrimitives.iconPillCompact} aria-hidden="true">
             <Icon name="icon-diy" size={28} />
           </span>
-          <span className="eyebrow">等待计划</span>
-          <h3>还没有拼图节点</h3>
-          <p>创建计划后，活动、晚餐和收尾节点会出现在这里。</p>
+          <span className={appClasses.eyebrow}>等待计划</span>
+          <h3 className={puzzleClasses.emptyTitle}>还没有拼图节点</h3>
+          <p className={puzzleClasses.emptyText}>创建计划后，活动、晚餐和收尾节点会出现在这里。</p>
         </Card>
       )}
       {displayItems.map((item) => {
@@ -92,12 +97,12 @@ export function PuzzleColumn({
         }
         if (item.kind === 'free-slot') {
           return (
-            <section className="puzzle-free-slot" key={item.id}>
-              <span className="puzzle-free-line" aria-hidden="true" />
+            <section className={puzzleClasses.freeSlot} key={item.id}>
+              <span className={puzzleClasses.freeLine} aria-hidden="true" />
               <div>
-                <span className="eyebrow">空档</span>
-                <strong>{item.label}</strong>
-                <p>{item.durationMinutes} 分钟可休息，也可临时加一个轻量安排。</p>
+                <span className={appClasses.eyebrow}>空档</span>
+                <strong className={puzzleClasses.freeTitle}>{item.label}</strong>
+                <p className={puzzleClasses.freeText}>{item.durationMinutes} 分钟可休息，也可临时加一个轻量安排。</p>
               </div>
               <Button
                 type="primary"
@@ -127,6 +132,7 @@ export function PuzzleColumn({
             nextSegmentId={executableSegments[segmentIndex + 1]?.id}
             previousSegmentId={executableSegments[segmentIndex - 1]?.id}
             segment={item.segment}
+            serviceSelectionCount={serviceSelections.filter((selection) => selection.segmentId === item.segment.id).length}
             selected={selectedSegmentId === item.segment.id}
             onCommand={onCommand}
             onDragEnd={onDragEnd}
@@ -161,12 +167,12 @@ function RouteConnector({
 }) {
   if (!route) {
     return (
-      <div className="puzzle-route-connector">
-        <div className="puzzle-route-main">
-          <span className="puzzle-route-badge">路线</span>
-          <strong className="puzzle-route-title">{label}</strong>
+      <div className={puzzleClasses.routeConnector}>
+        <div className={puzzleClasses.routeMain}>
+          <span className={puzzleClasses.routeBadge}>路线</span>
+          <strong className={puzzleClasses.routeTitle}>{label}</strong>
         </div>
-        <small className="puzzle-route-detail">坐标不足 · 估计 {durationMinutes} 分钟</small>
+        <small className={puzzleClasses.routeDetail}>坐标不足 · 估计 {durationMinutes} 分钟</small>
       </div>
     )
   }
@@ -174,15 +180,15 @@ function RouteConnector({
   const selectedMode = selectedRouteModes[route.id] ?? route.defaultMode
   const display = deriveRouteLegDisplay(route, selectedRouteModes)
   return (
-    <div className="puzzle-route-connector">
-      <div className="puzzle-route-main">
-        <span className="puzzle-route-badge">{display.statusLabel}</span>
-        <strong className="puzzle-route-title">{display.title}</strong>
+    <div className={puzzleClasses.routeConnector}>
+      <div className={puzzleClasses.routeMain}>
+        <span className={puzzleClasses.routeBadge}>{display.statusLabel}</span>
+        <strong className={puzzleClasses.routeTitle}>{display.title}</strong>
       </div>
-      <small className="puzzle-route-detail">{display.detail}</small>
-      <div className="puzzle-route-modes" role="group" aria-label="拼图路线方式">
+      <small className={puzzleClasses.routeDetail}>{display.detail}</small>
+      <div className={puzzleClasses.routeModes} role="group" aria-label="拼图路线方式">
         <button
-          className={!hasExplicitChoice ? 'active' : ''}
+          className={puzzleClasses.routeModeButton(!hasExplicitChoice)}
           disabled={busy || !hasExplicitChoice}
           type="button"
           onClick={() => onRouteChoiceClear(route)}
@@ -191,7 +197,7 @@ function RouteConnector({
         </button>
         {route.options.map((option) => (
           <button
-            className={selectedMode === option.mode ? 'active' : ''}
+            className={puzzleClasses.routeModeButton(selectedMode === option.mode)}
             disabled={busy || selectedMode === option.mode}
             key={option.mode}
             type="button"
@@ -214,6 +220,7 @@ function SegmentCard({
   nextSegmentId,
   previousSegmentId,
   segment,
+  serviceSelectionCount,
   selected,
   onCommand,
   onDragEnd,
@@ -231,6 +238,7 @@ function SegmentCard({
   nextSegmentId?: string
   previousSegmentId?: string
   segment: PlanSegment
+  serviceSelectionCount: number
   selected: boolean
   onCommand: (command: PlanCommand) => void
   onDragEnd: () => void
@@ -244,7 +252,7 @@ function SegmentCard({
   const [draft, setDraft] = useState(segment.notes ?? '')
   const actions = getSegmentActionState(segment)
   const canDelete = actions.canDelete && executableCount > 1
-  const ticket = deriveItineraryTicketDisplay(segment, index)
+  const ticket = deriveItineraryTicketDisplay({ ...segment, serviceSelectionCount }, index)
 
   function stopAndCommand(command: PlanCommand) {
     onCommand(command)
@@ -252,13 +260,13 @@ function SegmentCard({
 
   return (
     <Card
-      className={[
-        'puzzle-ticket',
-        selected ? 'is-selected' : '',
-        actions.canReorder ? 'is-draggable' : 'is-locked',
-        draggingSegmentId === segment.id ? 'is-dragging' : '',
-        dragOverSegmentId === segment.id && draggingSegmentId !== segment.id ? 'is-drag-over' : '',
-      ].filter(Boolean).join(' ')}
+      className={puzzleClasses.ticket({
+        selected,
+        draggable: actions.canReorder,
+        locked: !actions.canReorder,
+        dragging: draggingSegmentId === segment.id,
+        dragOver: dragOverSegmentId === segment.id && draggingSegmentId !== segment.id,
+      })}
       draggable={actions.canReorder}
       onClick={() => onSelectSegment(segment.id)}
       onDragEnd={onDragEnd}
@@ -282,20 +290,20 @@ function SegmentCard({
         onDropSegment(segment.id)
       }}
     >
-      <aside className="puzzle-ticket-rail" aria-label={`节点 ${ticket.indexLabel}`}>
-        <span>{ticket.indexLabel}</span>
-        <strong>{ticket.time}</strong>
+      <aside className={puzzleClasses.rail} aria-label={`节点 ${ticket.indexLabel}`}>
+        <span className={puzzleClasses.railIndex}>{ticket.indexLabel}</span>
+        <strong className={puzzleClasses.railTime}>{ticket.time}</strong>
       </aside>
-      <article className="puzzle-ticket-body">
-        <header className="puzzle-ticket-heading">
+      <article className={puzzleClasses.body}>
+        <header className={puzzleClasses.heading}>
           <div>
-            <span>{ticket.phaseLabel}</span>
-            <h3 title={segment.title}>{ticket.title}</h3>
+            <span className={puzzleClasses.phase}>{ticket.phaseLabel}</span>
+            <h3 className={puzzleClasses.title} title={segment.title}>{ticket.title}</h3>
           </div>
-          <em>{ticket.lockLabel}</em>
+          <em className={puzzleClasses.lock}>{ticket.lockLabel}</em>
         </header>
         <button
-          className="puzzle-ticket-place"
+          className={puzzleClasses.place}
           type="button"
           title={segment.place}
           onClick={(event) => {
@@ -306,12 +314,12 @@ function SegmentCard({
           <Icon name="icon-map" size={18} />
           {ticket.place}
         </button>
-        <p className="puzzle-ticket-reason">{ticket.reason}</p>
-        <div className="puzzle-ticket-chips">
-          {ticket.chips.map((chip) => <span key={chip}>{chip}</span>)}
+        <p className={puzzleClasses.reason}>{ticket.reason}</p>
+        <div className={puzzleClasses.chips}>
+          {ticket.chips.map((chip, chipIndex) => <span className={chipIndex % 2 === 0 ? puzzleClasses.chip : chipClassName(chipIndex)} key={chip}>{chip}</span>)}
         </div>
         {rewriteOpen && (
-          <div className="puzzle-rewrite-row" onClick={(event) => event.stopPropagation()}>
+          <div className={puzzleClasses.rewriteRow} onClick={(event) => event.stopPropagation()}>
             <Input
               allowClear
               shadow
@@ -337,7 +345,7 @@ function SegmentCard({
             </Button>
           </div>
         )}
-        <div className="puzzle-ticket-actions" onClick={(event) => event.stopPropagation()}>
+        <div className={puzzleClasses.actions} onClick={(event) => event.stopPropagation()}>
           <Button
             size="small"
             type="primary"

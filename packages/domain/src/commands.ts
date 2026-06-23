@@ -1,7 +1,8 @@
-import type { AgentEvent, CommandResult, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
+import type { AgentEvent, CommandResult, MerchantOffering, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanServiceSelection, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
 import { createId, nowIso } from './ids'
 import { createAddSegmentCandidates, createReplacementCandidates } from './seed'
-import { pickFictionalPoi } from './poiCatalog'
+import { getFictionalPoiById, getFictionalPoiByName, getMerchantOfferingById, searchMerchantOfferings, pickFictionalPoi } from './poiCatalog'
+import { createSandboxOrderReceipt } from './mockServices'
 
 export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = createId('cmd')): CommandResult {
   const beforeVersion = plan.currentVersion
@@ -28,7 +29,11 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
     case 'REORDER_SEGMENT':
       return touch(plan, { segments: reorderPlanSegmentsWithTime(plan.segments, command.segmentId, command.anchorSegmentId, command.position) })
     case 'DELETE_SEGMENT':
-      return touch(plan, { segments: deleteSegment(plan.segments, command.segmentId), pendingAction: undefined })
+      return touch(plan, {
+        segments: deleteSegment(plan.segments, command.segmentId),
+        serviceSelections: (plan.serviceSelections ?? []).filter((selection) => selection.segmentId !== command.segmentId),
+        pendingAction: undefined,
+      })
     case 'REPLACE_SEGMENT':
       return replaceSegment(plan, command)
     case 'REWRITE_SEGMENT':
@@ -64,8 +69,32 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
       return setRouteChoice(plan, command)
     case 'CLEAR_ROUTE_CHOICE':
       return clearRouteChoice(plan, command)
+    case 'REFRESH_SERVICE_ITEMS':
+      return refreshServiceItems(plan, command)
+    case 'SELECT_SERVICE_ITEM':
+      return selectServiceItem(plan, command)
+    case 'REMOVE_SERVICE_ITEM':
+      return removeServiceItem(plan, command)
+    case 'UPDATE_SERVICE_ITEM_QUANTITY':
+      return updateServiceItemQuantity(plan, command)
     case 'CONFIRM_PLAN':
-      return touch(plan, { status: 'confirmed', pendingAction: undefined })
+      return touch(plan, {
+        status: 'confirmed',
+        pendingAction: undefined,
+        sandboxOrder: createSandboxOrderReceipt(plan, {
+          createdAt: nowIso(),
+          version: plan.currentVersion + 1,
+        }),
+      })
+    case 'CREATE_SANDBOX_ORDER':
+      return touch(plan, {
+        status: 'confirmed',
+        pendingAction: undefined,
+        sandboxOrder: createSandboxOrderReceipt(plan, {
+          createdAt: nowIso(),
+          version: plan.currentVersion + 1,
+        }),
+      })
     default:
       return assertNever(command)
   }
@@ -96,6 +125,7 @@ function replaceSegment(plan: Plan, command: Extract<PlanCommand, { type: 'REPLA
     segments: plan.segments.map((segment) =>
       segment.id === command.segmentId ? normalizeSegment({ ...segment, ...command.replacement }, segment) : segment,
     ),
+    serviceSelections: (plan.serviceSelections ?? []).filter((selection) => selection.segmentId !== command.segmentId),
     pendingAction: undefined,
   })
 }
@@ -138,6 +168,7 @@ function chooseCandidate(plan: Plan, actionId: string, candidateId: string) {
     segments: plan.segments.map((segment) =>
       segment.id === pending.targetSegmentId ? normalizeSegment({ ...segment, ...candidate.segment }, segment) : segment,
     ),
+    serviceSelections: (plan.serviceSelections ?? []).filter((selection) => selection.segmentId !== pending.targetSegmentId),
     pendingAction: undefined,
   })
 }
@@ -205,6 +236,7 @@ function choosePlanVariant(plan: Plan, actionId: string, variantId: string) {
     pendingAction: undefined,
     variantSelection,
     routeChoices: [],
+    serviceSelections: [],
   })
 }
 
@@ -299,6 +331,70 @@ function clearRouteChoice(plan: Plan, command: Extract<PlanCommand, { type: 'CLE
   })
 }
 
+function refreshServiceItems(plan: Plan, command: Extract<PlanCommand, { type: 'REFRESH_SERVICE_ITEMS' }>) {
+  const segment = requireExecutableSegment(plan.segments, command.segmentId)
+  const merchant = resolveSegmentMerchant(segment, command.merchantId)
+  const query = command.query?.trim() || serviceSearchQueryForSegment(segment)
+  const results = searchMerchantOfferings({
+    merchantId: merchant.id,
+    category: command.category ?? segment.serviceCategory,
+    query,
+    limit: command.limit ?? 6,
+  })
+  const offerings = results.length
+    ? results.map((result) => result.offering)
+    : merchant.offerings.slice(0, Math.max(1, Math.min(6, command.limit ?? 6)))
+  const action: PendingAction = {
+    id: command.actionId && plan.pendingAction?.id === command.actionId ? command.actionId : createId('action'),
+    kind: 'service-item-selection',
+    title: '选择商品/服务',
+    description: `${merchant.name} 的本地 sandbox 服务项，可选择后写入模拟确认单。`,
+    segmentId: segment.id,
+    merchantId: merchant.id,
+    query,
+    offerings,
+  }
+  return touch(plan, { pendingAction: action })
+}
+
+function selectServiceItem(plan: Plan, command: Extract<PlanCommand, { type: 'SELECT_SERVICE_ITEM' }>) {
+  const segment = requireExecutableSegment(plan.segments, command.segmentId)
+  const merchant = resolveSegmentMerchant(segment, command.merchantId)
+  const offering = getMerchantOfferingById(merchant.id, command.offeringId)
+  if (!offering) throw new Error('Service offering not found')
+  const quantity = normalizeQuantity(command.quantity ?? defaultServiceQuantity(plan, offering))
+  const selection = createServiceSelection(segment.id, merchant.id, offering, quantity)
+  const existing = plan.serviceSelections ?? []
+  return touch(plan, {
+    serviceSelections: [
+      ...existing.filter((item) => !(item.segmentId === segment.id && item.offeringId === offering.id)),
+      selection,
+    ],
+    pendingAction: plan.pendingAction?.kind === 'service-item-selection' && plan.pendingAction.segmentId === segment.id
+      ? undefined
+      : plan.pendingAction,
+  })
+}
+
+function removeServiceItem(plan: Plan, command: Extract<PlanCommand, { type: 'REMOVE_SERVICE_ITEM' }>) {
+  const before = plan.serviceSelections ?? []
+  const next = before.filter((selection) => !matchesServiceSelection(selection, command))
+  if (next.length === before.length) throw new Error('Service selection not found')
+  return touch(plan, { serviceSelections: next })
+}
+
+function updateServiceItemQuantity(plan: Plan, command: Extract<PlanCommand, { type: 'UPDATE_SERVICE_ITEM_QUANTITY' }>) {
+  const quantity = normalizeQuantity(command.quantity)
+  let found = false
+  const next = (plan.serviceSelections ?? []).map((selection) => {
+    if (!matchesServiceSelection(selection, command)) return selection
+    found = true
+    return { ...selection, quantity, selectedAt: nowIso() }
+  })
+  if (!found) throw new Error('Service selection not found')
+  return touch(plan, { serviceSelections: next })
+}
+
 function materializeCandidateSegment(
   plan: Plan,
   pending: Extract<PendingAction, { kind: 'candidate-selection' }>,
@@ -321,6 +417,7 @@ function materializeCandidateSegment(
     budget: partial.budget ?? fallbackPoi.budget,
     notes: partial.notes ?? fallbackPoi.notes,
     poiId: partial.poiId ?? fallbackPoi.id,
+    serviceCategory: partial.serviceCategory ?? fallbackPoi.serviceCategory,
     locked: partial.locked,
     isTransit: partial.isTransit,
     transportMode: partial.transportMode,
@@ -328,13 +425,82 @@ function materializeCandidateSegment(
   })
 }
 
+function requireExecutableSegment(segments: PlanSegment[], segmentId: string) {
+  const segment = segments.find((item) => item.id === segmentId)
+  if (!segment) throw new Error('Segment not found')
+  if (segment.isTransit) throw new Error('Service items require an executable segment')
+  return segment
+}
+
+function resolveSegmentMerchant(segment: PlanSegment, merchantId?: string) {
+  const merchant = getFictionalPoiById(merchantId ?? segment.poiId) ?? getFictionalPoiByName(segment.place)
+  if (!merchant) throw new Error('Mock merchant not found')
+  if (merchantId && merchant.id !== merchantId) throw new Error('Mock merchant mismatch')
+  if (segment.poiId && merchant.id !== segment.poiId) throw new Error('Service item merchant must match the segment merchant')
+  return merchant
+}
+
+function serviceSearchQueryForSegment(segment: PlanSegment) {
+  return [
+    segment.serviceCategory,
+    segment.title,
+    segment.place,
+    segment.reason,
+  ].filter(Boolean).join(' ')
+}
+
+function createServiceSelection(
+  segmentId: string,
+  merchantId: string,
+  offering: MerchantOffering,
+  quantity: number,
+): PlanServiceSelection {
+  return {
+    id: serviceSelectionId(segmentId, offering.id),
+    segmentId,
+    merchantId,
+    offeringId: offering.id,
+    quantity,
+    selectedAt: nowIso(),
+    offeringSnapshot: { ...offering },
+  }
+}
+
+function defaultServiceQuantity(plan: Plan, offering: MerchantOffering) {
+  const headcount = Math.max(1, plan.intent.headcount || 1)
+  if (offering.category === 'hotel') return 1
+  if (offering.category === 'movie' || offering.category === 'ticket') return headcount
+  if (offering.unit === '组' || offering.unit === '套') return Math.max(1, Math.ceil(headcount / 2))
+  return headcount
+}
+
+function normalizeQuantity(value: number) {
+  const quantity = Math.floor(value)
+  if (!Number.isFinite(quantity) || quantity < 1) throw new Error('Service item quantity must be at least 1')
+  return Math.min(99, quantity)
+}
+
+function serviceSelectionId(segmentId: string, offeringId: string) {
+  return `sel_${segmentId}_${offeringId}`.replace(/[^A-Za-z0-9_]/g, '_')
+}
+
+function matchesServiceSelection(
+  selection: PlanServiceSelection,
+  command: Pick<Extract<PlanCommand, { type: 'REMOVE_SERVICE_ITEM' | 'UPDATE_SERVICE_ITEM_QUANTITY' }>, 'selectionId' | 'segmentId' | 'offeringId'>,
+) {
+  if (command.selectionId) return selection.id === command.selectionId
+  return Boolean(command.segmentId && command.offeringId && selection.segmentId === command.segmentId && selection.offeringId === command.offeringId)
+}
+
 function touch(plan: Plan, patch: Partial<Plan>): Plan {
   const segments = patch.segments ?? plan.segments
   const routeChoices = reconcileRouteChoices(segments, patch.routeChoices ?? plan.routeChoices)
+  const serviceSelections = reconcileServiceSelections(segments, patch.serviceSelections ?? plan.serviceSelections)
   return {
     ...plan,
     ...patch,
     routeChoices: routeChoices.length ? routeChoices : undefined,
+    serviceSelections: serviceSelections.length ? serviceSelections : undefined,
     currentVersion: plan.currentVersion + 1,
     status: patch.status ?? 'ready',
     updatedAt: nowIso(),
@@ -426,8 +592,18 @@ export function summarizeCommand(command: PlanCommand) {
       return '已更新路线选择'
     case 'CLEAR_ROUTE_CHOICE':
       return '已恢复推荐路线'
+    case 'REFRESH_SERVICE_ITEMS':
+      return '已刷新商品/服务候选'
+    case 'SELECT_SERVICE_ITEM':
+      return '已选择商品/服务'
+    case 'REMOVE_SERVICE_ITEM':
+      return '已移除商品/服务'
+    case 'UPDATE_SERVICE_ITEM_QUANTITY':
+      return '已更新商品/服务数量'
     case 'CONFIRM_PLAN':
       return '计划已确认'
+    case 'CREATE_SANDBOX_ORDER':
+      return '已生成模拟确认单'
     default:
       return assertNever(command)
   }
@@ -450,6 +626,22 @@ function reconcileRouteChoices(segments: PlanSegment[], choices: PlanRouteChoice
     if (!allowedIds.has(choice.id) || seen.has(choice.id) || !isRouteMode(choice.mode)) continue
     seen.add(choice.id)
     next.push(choice)
+  }
+  return next
+}
+
+function reconcileServiceSelections(segments: PlanSegment[], selections: PlanServiceSelection[] | undefined) {
+  if (!selections?.length) return []
+  const segmentById = new Map(segments.filter((segment) => !segment.isTransit).map((segment) => [segment.id, segment]))
+  const seen = new Set<string>()
+  const next: PlanServiceSelection[] = []
+  for (const selection of selections) {
+    const segment = segmentById.get(selection.segmentId)
+    if (!segment || seen.has(selection.id)) continue
+    if (segment.poiId && segment.poiId !== selection.merchantId) continue
+    if (!getMerchantOfferingById(selection.merchantId, selection.offeringId)) continue
+    seen.add(selection.id)
+    next.push(selection)
   }
   return next
 }

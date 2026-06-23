@@ -12,6 +12,64 @@ export type ReorderPosition = 'BEFORE' | 'AFTER' | 'START' | 'END'
 
 export type ToolEffect = 'read-only' | 'external-write'
 
+export type MerchantServiceCategory =
+  | 'dining'
+  | 'drinks'
+  | 'activity'
+  | 'hotel'
+  | 'movie'
+  | 'retail'
+  | 'wellness'
+  | 'ticket'
+  | 'other'
+
+export type MerchantOfferingFulfillment =
+  | 'onsite'
+  | 'pickup'
+  | 'reservation'
+  | 'e-ticket'
+  | 'room-night'
+  | 'service-slot'
+  | 'mock-only'
+
+export type MerchantOffering = {
+  id: string
+  merchantId: string
+  category: MerchantServiceCategory
+  title: string
+  description: string
+  priceCny: number
+  unit: string
+  durationMinutes?: number
+  availabilitySlots: string[]
+  tags: string[]
+  fulfillment: MerchantOfferingFulfillment
+  refundPolicy: string
+  mockSource: 'fictional-local-mock-v2'
+  roomType?: string
+  bedType?: string
+  occupancy?: number
+  checkInTime?: string
+  checkOutTime?: string
+  amenities?: string[]
+  filmTitle?: string
+  showtime?: string
+  screenType?: string
+  seatClass?: string
+  language?: string
+  runtimeMinutes?: number
+}
+
+export type PlanServiceSelection = {
+  id: string
+  segmentId: string
+  merchantId: string
+  offeringId: string
+  quantity: number
+  selectedAt: string
+  offeringSnapshot: MerchantOffering
+}
+
 export type AgentEventType =
   | 'agent.started'
   | 'agent.model.started'
@@ -45,6 +103,16 @@ export type PendingAction =
       title: string
       description: string
       variants: PlanVariantOption[]
+    }
+  | {
+      id: string
+      kind: 'service-item-selection'
+      title: string
+      description: string
+      segmentId: string
+      merchantId: string
+      query?: string
+      offerings: MerchantOffering[]
     }
   | {
       id: string
@@ -95,6 +163,7 @@ export type PlanSegment = {
   budget: string
   notes?: string
   poiId?: string
+  serviceCategory?: MerchantServiceCategory
   locked?: boolean
   isTransit?: boolean
   transportMode?: RouteMode
@@ -107,6 +176,67 @@ export type PlanRouteChoice = {
   toSegmentId: string
   mode: RouteMode
   updatedAt: string
+}
+
+export type MockRouteOption = {
+  mode: RouteMode
+  label: string
+  durationMinutes: number
+  distanceKm: number
+  priceEstimate: string
+  reliability: 'steady' | 'variable'
+  source: 'mock-route'
+}
+
+export type MockRouteEstimate = {
+  id: string
+  fromSegmentId: string
+  toSegmentId: string
+  fromPlace: string
+  toPlace: string
+  distanceKm: number
+  defaultMode: RouteMode
+  options: MockRouteOption[]
+  riskNotes: string[]
+  source: 'mock-route'
+}
+
+export type SandboxOrderReceipt = {
+  receiptId: string
+  planId: string
+  createdAt: string
+  merchantRefs: Array<{
+    segmentId: string
+    poiId?: string
+    merchantName: string
+    phase: SegmentPhase
+    time: string
+    reservationMode: string
+    source: 'fictional-local-mock-v2'
+    serviceCategory?: MerchantServiceCategory
+  }>
+  items: Array<{
+    id: string
+    segmentId: string
+    offeringId?: string
+    merchantId?: string
+    merchantName: string
+    label: string
+    quantity: number
+    priceCny: number
+    unitPriceCny?: number
+    category: string
+    serviceCategory?: MerchantServiceCategory
+    scheduledFor?: string
+    fulfillment?: MerchantOfferingFulfillment
+  }>
+  totalEstimate: {
+    currency: 'CNY'
+    low: number
+    high: number
+  }
+  status: 'sandbox_generated'
+  disclaimer: string
 }
 
 export type PlanVariantSelection = {
@@ -127,6 +257,8 @@ export type Plan = {
   intent: PlanIntent
   segments: PlanSegment[]
   routeChoices?: PlanRouteChoice[]
+  serviceSelections?: PlanServiceSelection[]
+  sandboxOrder?: SandboxOrderReceipt
   summary: string
   pendingAction?: PendingAction
   variantSelection?: PlanVariantSelection
@@ -243,6 +375,10 @@ export type PlanCommand =
       source: CommandSource
     }
   | {
+      type: 'CREATE_SANDBOX_ORDER'
+      source: CommandSource
+    }
+  | {
       type: 'DISMISS_PENDING_ACTION'
       source: CommandSource
       actionId: string
@@ -259,6 +395,39 @@ export type PlanCommand =
       source: CommandSource
       fromSegmentId: string
       toSegmentId: string
+    }
+  | {
+      type: 'REFRESH_SERVICE_ITEMS'
+      source: CommandSource
+      actionId?: string
+      segmentId: string
+      merchantId?: string
+      category?: MerchantServiceCategory
+      query?: string
+      limit?: number
+    }
+  | {
+      type: 'SELECT_SERVICE_ITEM'
+      source: CommandSource
+      segmentId: string
+      merchantId: string
+      offeringId: string
+      quantity?: number
+    }
+  | {
+      type: 'REMOVE_SERVICE_ITEM'
+      source: CommandSource
+      selectionId?: string
+      segmentId?: string
+      offeringId?: string
+    }
+  | {
+      type: 'UPDATE_SERVICE_ITEM_QUANTITY'
+      source: CommandSource
+      selectionId?: string
+      segmentId?: string
+      offeringId?: string
+      quantity: number
     }
 
 export type CommandResult = {

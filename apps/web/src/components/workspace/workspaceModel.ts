@@ -1,4 +1,4 @@
-import { getFictionalPoiById, getFictionalPoiByName, getPlanRouteChoiceId, reorderPlanSegmentsWithTime, type AgentEvent, type CandidateOption, type CommandResult, type PendingAction, type Plan, type PlanCommand, type PlanSegment, type PlanVariantOption, type PlanVariantSelection, type ReorderPosition, type RouteMode } from '@planpal/domain'
+import { getFictionalPoiById, getFictionalPoiByName, getPlanRouteChoiceId, reorderPlanSegmentsWithTime, type AgentEvent, type CandidateOption, type CommandResult, type MerchantOffering, type MerchantServiceCategory, type PendingAction, type Plan, type PlanCommand, type PlanSegment, type PlanServiceSelection, type PlanVariantOption, type PlanVariantSelection, type ReorderPosition, type RouteMode } from '@planpal/domain'
 import { isCompleteModelConfig, type StoredModelConfig } from '../../lib/modelConfig'
 
 export type WorkspaceColumnId = 'chat' | 'puzzle' | 'merchant' | 'details' | 'map' | 'trace'
@@ -14,6 +14,7 @@ export type WorkspaceLayoutState = {
 export type ChatMessage = {
   role: 'user' | 'planpal'
   content: string
+  action?: PendingAction
   streaming?: boolean
   receipt?: boolean
 }
@@ -37,6 +38,9 @@ export type CandidateCardDisplay = {
 
 export type PlanReceiptDisplay = {
   disclaimer: string
+  itemLines: string[]
+  merchantCountLabel: string
+  receiptId?: string
   segments: Array<{
     budget: string
     id: string
@@ -50,6 +54,7 @@ export type PlanReceiptDisplay = {
   statusLabel: string
   text: string
   title: string
+  totalEstimateLabel?: string
   versionLabel: string
 }
 
@@ -100,10 +105,37 @@ export type MerchantReferenceDisplay = {
   confidence: string
   constraints: string[]
   contact: string
+  bestTime: string
   hours: string
+  mockItems: string[]
+  noiseLevel: string
+  priceLevel: string
   queue: string
+  queueRisk: string
+  rating: string
+  reservationMode: string
+  sourceLabel: string
   summary: string
+  suitableFor: string[]
   tags: string[]
+}
+
+export type MerchantOfferingDisplay = {
+  availabilityLabel: string
+  category: MerchantServiceCategory
+  categoryLabel: string
+  description: string
+  detailLabel: string
+  fulfillmentLabel: string
+  id: string
+  merchantId: string
+  priceLabel: string
+  quantity: number
+  refundPolicy: string
+  selected: boolean
+  selectionId?: string
+  tags: string[]
+  title: string
 }
 
 type MerchantReferenceTemplate = Omit<MerchantReferenceDisplay, 'address'>
@@ -129,6 +161,8 @@ export type PlanSegmentDisplay = {
   budget: string
   notes: string
   poiId?: string
+  serviceCategory?: MerchantServiceCategory
+  serviceSelectionCount: number
   locked: boolean
   isTransit: boolean
   transportMode: string
@@ -192,7 +226,11 @@ export type RouteEstimate = {
     durationMinutes: number
     distanceKm: number
     priceEstimate: string
+    reliability: string
+    source: 'mock-route'
   }>
+  riskNotes: string[]
+  sourceLabel: string
 }
 
 export type RouteLegDisplay = {
@@ -202,6 +240,8 @@ export type RouteLegDisplay = {
   fromLabel: string
   modeLabel: string
   priceLabel: string
+  reliabilityLabel: string
+  sourceLabel: string
   statusLabel: string
   title: string
   toLabel: string
@@ -354,7 +394,7 @@ export function getWorkspaceBoardStyle(columnCount: number): WorkspaceBoardStyle
   }
 }
 
-export function derivePlanSegmentDisplays(segments: PlanSegment[]): PlanSegmentDisplay[] {
+export function derivePlanSegmentDisplays(segments: PlanSegment[], serviceSelections: PlanServiceSelection[] = []): PlanSegmentDisplay[] {
   return segments.map((segment, index) => ({
     id: segment.id,
     segmentId: segment.id,
@@ -371,6 +411,8 @@ export function derivePlanSegmentDisplays(segments: PlanSegment[]): PlanSegmentD
     budget: segment.budget || '暂无预算',
     notes: segment.notes || '',
     poiId: segment.poiId,
+    serviceCategory: segment.serviceCategory,
+    serviceSelectionCount: serviceSelections.filter((selection) => selection.segmentId === segment.id).length,
     locked: Boolean(segment.locked),
     isTransit: Boolean(segment.isTransit),
     transportMode: segment.transportMode || '',
@@ -378,13 +420,14 @@ export function derivePlanSegmentDisplays(segments: PlanSegment[]): PlanSegmentD
   }))
 }
 
-export function deriveItineraryTicketDisplay(segment: PlanSegment | PlanSegmentDisplay, index: number): ItineraryTicketDisplay {
-  const phase = phaseLabel(segment.phase)
+export function deriveItineraryTicketDisplay(segment: (PlanSegment | PlanSegmentDisplay) & { serviceSelectionCount?: number }, index: number): ItineraryTicketDisplay {
+  const phase = segmentKindLabel(segment)
   const time = 'time' in segment ? segment.time : formatSegmentTime(segment)
   const duration = `${Math.max(0, segment.durationMinutes || 0)} 分钟`
   const budget = segment.budget || '预算待定'
   const status = segment.status || '待确认'
   const locked = Boolean(segment.locked)
+  const selectionCount = segment.serviceSelectionCount ?? 0
 
   return {
     budgetLabel: budget,
@@ -392,6 +435,7 @@ export function deriveItineraryTicketDisplay(segment: PlanSegment | PlanSegmentD
       phase,
       duration,
       budget,
+      selectionCount > 0 ? `已选 ${selectionCount} 个服务` : '',
       locked ? '已锁定' : '',
     ]).slice(0, 4),
     durationLabel: duration,
@@ -417,13 +461,15 @@ export function deriveRouteLegDisplay(
   const explicit = Boolean(selectedRouteModes[route.id])
 
   return {
-    detail: `${selectedOption.label} · ${selectedOption.durationMinutes} 分钟 · ${route.distanceKm.toFixed(1)} km · ${selectedOption.priceEstimate}`,
+    detail: `${selectedOption.label} · ${selectedOption.durationMinutes} 分钟 · ${route.distanceKm.toFixed(1)} km · ${selectedOption.priceEstimate} · ${route.sourceLabel}`,
     distanceLabel: `${route.distanceKm.toFixed(1)} km`,
     durationLabel: `${selectedOption.durationMinutes} 分钟`,
     fromLabel: compactUiText(route.fromPlace, 24),
     modeLabel: selectedOption.label,
     priceLabel: selectedOption.priceEstimate,
-    statusLabel: explicit ? '已选' : '推荐',
+    reliabilityLabel: selectedOption.reliability === 'steady' ? '稳定' : '波动',
+    sourceLabel: route.sourceLabel,
+    statusLabel: explicit ? '已选 · Mock' : '推荐 · Mock',
     title: `${compactUiText(route.fromPlace, 18)} 到 ${compactUiText(route.toPlace, 18)}`,
     toLabel: compactUiText(route.toPlace, 24),
   }
@@ -523,6 +569,8 @@ export function buildRouteEstimates(displays: PlanSegmentDisplay[]): RouteEstima
       to: to.lnglat,
       distanceKm: distance,
       defaultMode,
+      riskNotes: routeRiskNotes(from, to, distance),
+      sourceLabel: 'mock-route estimated',
       options: [
         {
           mode: 'walk',
@@ -530,6 +578,8 @@ export function buildRouteEstimates(displays: PlanSegmentDisplay[]): RouteEstima
           durationMinutes: walkMinutes,
           distanceKm: distance,
           priceEstimate: '免费',
+          reliability: distance <= 1.2 ? 'steady' : 'variable',
+          source: 'mock-route',
         },
         {
           mode: 'transit',
@@ -537,6 +587,8 @@ export function buildRouteEstimates(displays: PlanSegmentDisplay[]): RouteEstima
           durationMinutes: transitMinutes,
           distanceKm: distance,
           priceEstimate: 'CNY 2-8',
+          reliability: 'variable',
+          source: 'mock-route',
         },
         {
           mode: 'taxi',
@@ -544,6 +596,8 @@ export function buildRouteEstimates(displays: PlanSegmentDisplay[]): RouteEstima
           durationMinutes: taxiMinutes,
           distanceKm: distance,
           priceEstimate: estimateTaxiPrice(distance),
+          reliability: distance <= 3 ? 'steady' : 'variable',
+          source: 'mock-route',
         },
       ],
     })
@@ -572,6 +626,7 @@ export function deriveCandidateCardDisplay(
   const segment = candidate.segment
   const target = action.targetSegmentId ? plan?.segments.find((item) => item.id === action.targetSegmentId) : undefined
   const effectiveTime = segmentTimeLabel(segment) || (target ? segmentTimeLabel(target) : '')
+  const poi = getFictionalPoiById(segment.poiId)
   return {
     title: candidate.label,
     subtitle: segment.title || phaseLabel(segment.phase ?? target?.phase) || '备选节点',
@@ -580,9 +635,16 @@ export function deriveCandidateCardDisplay(
     writeLabel: action.mode === 'add-after' ? '选中后新增到这个空档' : '选中后替换当前节点',
     badges: uniqueCompact([
       `匹配 ${scorePercent(candidate.score)}`,
-      phaseLabel(segment.phase ?? target?.phase),
+      segmentKindLabel({
+        phase: segment.phase ?? target?.phase ?? 'leisure',
+        serviceCategory: segment.serviceCategory ?? target?.serviceCategory,
+      }),
       effectiveTime,
       segment.budget ?? target?.budget,
+      poi ? 'Mock POI' : undefined,
+      poi?.queueRisk ? queueRiskLabel(poi.queueRisk) : undefined,
+      ...(poi?.sceneTags ?? []).slice(0, 2),
+      ...(poi?.offerings ?? []).slice(0, 1).map((offering) => offering.title),
     ]),
     reasons: candidate.reasons.slice(0, 3),
   }
@@ -639,6 +701,7 @@ export function derivePlanExecutionBrief(plan: Plan): PlanExecutionBrief {
   const missingCoordinates = executable.filter((segment) => !segment.lnglat)
   const unlocked = executable.filter((segment) => !segment.locked)
   const missingBudget = executable.filter((segment) => !segment.budget)
+  const serviceSelectionCount = plan.serviceSelections?.length ?? 0
   const hasTimeWarnings = hasNonChronologicalSegments(executable)
   const blockedReason = plan.status === 'confirmed'
     ? '计划已确认'
@@ -688,6 +751,14 @@ export function derivePlanExecutionBrief(plan: Plan): PlanExecutionBrief {
       state: missingBudget.length > 0 ? 'warning' : 'ok',
       detail: missingBudget.length > 0 ? `${missingBudget.length} 个节点缺少预算` : '每个节点都有预算参考',
     },
+    {
+      id: 'service-selection',
+      label: '服务选择',
+      state: serviceSelectionCount > 0 ? 'ok' : 'warning',
+      detail: serviceSelectionCount > 0
+        ? `已选择 ${serviceSelectionCount} 个商品/服务项`
+        : '未选择商品/服务时，确认单会使用默认 mock item',
+    },
   ]
   const warningCount = checks.filter((check) => check.state === 'warning').length
   const blockedCount = checks.filter((check) => check.state === 'blocked').length
@@ -716,12 +787,21 @@ export function deriveMerchantReference(display: PlanSegmentDisplay): MerchantRe
       address: `${poi.address} · ${coordinate}`,
       booking: poi.booking,
       confidence: poi.confidence,
-      constraints: poi.tags,
+      bestTime: poi.bestTimeWindows.join(' / '),
+      constraints: uniqueCompact([...poi.avoidFor.map((item) => `避开：${item}`), ...poi.routeHints]).slice(0, 4),
       contact: poi.contact,
       hours: `${display.time} 计划到访 · ${poi.hours}`,
+      mockItems: poi.offerings.slice(0, 3).map((item) => `${item.title} CNY ${item.priceCny}`),
+      noiseLevel: noiseLevelLabel(poi.noiseLevel),
+      priceLevel: '¥'.repeat(poi.priceLevel),
       queue: poi.queue,
+      queueRisk: queueRiskLabel(poi.queueRisk),
+      rating: poi.mockRating.toFixed(1),
+      reservationMode: reservationModeLabel(poi.reservationMode),
+      sourceLabel: poi.mockSource,
       summary: display.reason || poi.description,
-      tags: uniqueCompact([phaseLabel(display.phase), ...poi.tags, display.budget]),
+      suitableFor: poi.suitableFor,
+      tags: uniqueCompact([segmentKindLabel(display), ...poi.tags, ...poi.sceneTags.slice(0, 3), display.budget]),
     }
   }
   const base = merchantReferenceByPhase[display.phase] ?? merchantReferenceByPhase.activity
@@ -730,59 +810,145 @@ export function deriveMerchantReference(display: PlanSegmentDisplay): MerchantRe
     address: `${display.place} · ${coordinate}`,
     hours: `${display.time} 计划到访 · ${base.hours}`,
     summary: display.reason || base.summary,
-    tags: uniqueCompact([phaseLabel(display.phase), ...base.tags, display.budget]),
+    tags: uniqueCompact([segmentKindLabel(display), ...base.tags, display.budget]),
   }
+}
+
+export function deriveMerchantOfferingDisplays(
+  segment: PlanSegment | PlanSegmentDisplay,
+  selections: PlanServiceSelection[] = [],
+): MerchantOfferingDisplay[] {
+  const poi = getFictionalPoiById(segment.poiId) ?? getFictionalPoiByName(segment.place)
+  if (!poi) return []
+  return poi.offerings.map((offering) => {
+    const selection = selections.find((item) => item.segmentId === segment.id && item.offeringId === offering.id)
+    return {
+      availabilityLabel: offering.showtime ?? (offering.availabilitySlots.slice(0, 2).join(' / ') || '时段待定'),
+      category: offering.category,
+      categoryLabel: serviceCategoryLabel(offering.category),
+      description: compactUiText(offering.description, 82),
+      detailLabel: offeringDetailLabel(offering),
+      fulfillmentLabel: fulfillmentLabel(offering.fulfillment),
+      id: offering.id,
+      merchantId: offering.merchantId,
+      priceLabel: `CNY ${offering.priceCny}/${offering.unit}`,
+      quantity: selection?.quantity ?? defaultOfferingUiQuantity(offering),
+      refundPolicy: offering.refundPolicy,
+      selected: Boolean(selection),
+      selectionId: selection?.id,
+      tags: uniqueCompact([offering.unit, ...offering.tags, offering.mockSource]).slice(0, 5),
+      title: offering.title,
+    }
+  })
+}
+
+export function groupMerchantOfferingsByCategory(offerings: MerchantOfferingDisplay[]) {
+  const groups: Array<{ category: MerchantServiceCategory; label: string; offerings: MerchantOfferingDisplay[] }> = []
+  for (const offering of offerings) {
+    let group = groups.find((item) => item.category === offering.category)
+    if (!group) {
+      group = { category: offering.category, label: offering.categoryLabel, offerings: [] }
+      groups.push(group)
+    }
+    group.offerings.push(offering)
+  }
+  return groups
 }
 
 const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTemplate> = {
   activity: {
+    bestTime: '14:00-18:00',
     booking: '建议提前查看场次和入场规则',
     confidence: 'Mock 可信度 82%',
     constraints: ['天气影响低', '适合临时调整', '需要确认场次'],
     contact: '官方小程序 / 本地电话待接入',
     hours: '活动场次以官方渠道为准',
+    mockItems: ['模拟场次确认 CNY 0'],
+    noiseLevel: '中等',
+    priceLevel: '¥¥',
     queue: '热门时段可能排队',
+    queueRisk: '中',
+    rating: '4.2',
+    reservationMode: '建议确认',
+    sourceLabel: 'fallback-local-mock',
     summary: '适合低负担开场，能给后续安排留出调整空间。',
+    suitableFor: ['轻量活动'],
     tags: ['室内优先', '低体力负担'],
   },
   dining: {
+    bestTime: '17:30-20:30',
     booking: '建议提前 30-60 分钟确认等位',
     confidence: 'Mock 可信度 78%',
     constraints: ['饭点排队风险', '预算需现场确认', '多人同行建议预约'],
     contact: '点评/地图电话待接入',
     hours: '晚餐时段通常可用',
+    mockItems: ['模拟留座 CNY 0'],
+    noiseLevel: '中等',
+    priceLevel: '¥¥',
     queue: '饭点建议预留 15-25 分钟',
+    queueRisk: '中',
+    rating: '4.1',
+    reservationMode: '建议预约',
+    sourceLabel: 'fallback-local-mock',
     summary: '适合作为计划中段补给点，位置和排队确定性优先。',
+    suitableFor: ['正餐'],
     tags: ['用餐', '排队风险'],
   },
   drinks: {
+    bestTime: '19:30-23:30',
     booking: '如需包间或露台建议提前确认',
     confidence: 'Mock 可信度 74%',
     constraints: ['噪音水平需现场确认', '未成年人不适用', '末班交通需检查'],
     contact: '门店电话待接入',
     hours: '夜间营业以门店为准',
+    mockItems: ['模拟夜间座位 CNY 0'],
+    noiseLevel: '中等',
+    priceLevel: '¥¥',
     queue: '低峰通常不用排队',
+    queueRisk: '低',
+    rating: '4.0',
+    reservationMode: '现场确认',
+    sourceLabel: 'fallback-local-mock',
     summary: '适合做可取消的收尾节点，不会强制拉长主线。',
+    suitableFor: ['夜间收尾'],
     tags: ['收尾', '可取消'],
   },
   leisure: {
+    bestTime: '14:00-17:30 / 19:00-21:00',
     booking: '多数轻量停靠点无需预约',
     confidence: 'Mock 可信度 80%',
     constraints: ['适合填补空档', '消费可控', '可随时跳过'],
     contact: '暂无联系电话',
     hours: '按当前空档临时安排',
+    mockItems: ['模拟到店提醒 CNY 0'],
+    noiseLevel: '低',
+    priceLevel: '¥',
     queue: '现场情况以实际为准',
+    queueRisk: '低',
+    rating: '4.2',
+    reservationMode: '通常无需预约',
+    sourceLabel: 'fallback-local-mock',
     summary: '用于吸收时间误差，降低复杂计划的失败概率。',
+    suitableFor: ['机动缓冲'],
     tags: ['机动', '缓冲'],
   },
   transit: {
+    bestTime: '按路线段估算',
     booking: '无需预约',
     confidence: 'Mock 可信度 68%',
     constraints: ['非实时路况', '不代表真实导航', '需要出发前复核'],
     contact: '地图服务待接入',
     hours: '按路线段估算',
+    mockItems: ['路线估算 CNY 0'],
+    noiseLevel: '波动',
+    priceLevel: '¥',
     queue: '交通时间可能波动',
+    queueRisk: '中',
+    rating: '3.8',
+    reservationMode: '无需预约',
+    sourceLabel: 'fallback-local-mock',
     summary: '路线仅作为本地估算，不代表实时导航。',
+    suitableFor: ['路线参考'],
     tags: ['交通', '参考'],
   },
 }
@@ -820,6 +986,91 @@ function phaseLabel(phase: PlanSegment['phase'] | undefined) {
   return labels[phase]
 }
 
+function segmentKindLabel(segment: Pick<PlanSegment, 'phase'> & { serviceCategory?: MerchantServiceCategory }) {
+  const service = serviceCategoryLabel(segment.serviceCategory)
+  return service || phaseLabel(segment.phase)
+}
+
+function serviceCategoryLabel(category: MerchantServiceCategory | undefined) {
+  if (!category) return ''
+  const labels: Record<MerchantServiceCategory, string> = {
+    dining: '用餐',
+    drinks: '收尾',
+    activity: '活动',
+    hotel: '酒店',
+    movie: '电影',
+    retail: '零售',
+    wellness: '放松服务',
+    ticket: '票务',
+    other: '生活服务',
+  }
+  return labels[category]
+}
+
+function queueRiskLabel(value: string) {
+  if (value === 'low') return '低排队风险'
+  if (value === 'high') return '高排队风险'
+  return '中排队风险'
+}
+
+function noiseLevelLabel(value: string) {
+  if (value === 'quiet') return '安静'
+  if (value === 'lively') return '热闹'
+  return '中等'
+}
+
+function reservationModeLabel(value: string) {
+  if (value === 'required') return '需预约'
+  if (value === 'recommended') return '建议预约'
+  if (value === 'none') return '无需预约'
+  return '现场确认'
+}
+
+function fulfillmentLabel(value: MerchantOffering['fulfillment']) {
+  const labels: Record<MerchantOffering['fulfillment'], string> = {
+    onsite: '到店消费',
+    pickup: '到店自提',
+    reservation: '模拟预约',
+    'e-ticket': '模拟电子票',
+    'room-night': '模拟入住',
+    'service-slot': '模拟时段',
+    'mock-only': '仅 mock',
+  }
+  return labels[value]
+}
+
+function offeringDetailLabel(offering: MerchantOffering) {
+  if (offering.category === 'hotel') {
+    return uniqueCompact([
+      offering.roomType,
+      offering.bedType,
+      offering.occupancy ? `${offering.occupancy} 人` : '',
+      offering.checkInTime && offering.checkOutTime ? `${offering.checkInTime} 入住 / ${offering.checkOutTime} 退房` : '',
+    ]).join(' · ')
+  }
+  if (offering.category === 'movie') {
+    return uniqueCompact([
+      offering.filmTitle,
+      offering.showtime,
+      offering.screenType,
+      offering.seatClass,
+      offering.runtimeMinutes ? `${offering.runtimeMinutes} 分钟` : '',
+    ]).join(' · ')
+  }
+  return uniqueCompact([
+    offering.durationMinutes ? `${offering.durationMinutes} 分钟` : '',
+    offering.availabilitySlots.slice(0, 2).join(' / '),
+    fulfillmentLabel(offering.fulfillment),
+  ]).join(' · ')
+}
+
+function defaultOfferingUiQuantity(offering: MerchantOffering) {
+  if (offering.category === 'hotel' || offering.priceCny <= 0) return 1
+  if (offering.unit === '组' || offering.unit === '套') return 1
+  if (offering.category === 'movie' || offering.category === 'ticket') return 2
+  return 1
+}
+
 function segmentTimeLabel(segment: Partial<PlanSegment>) {
   if (!segment.startTime && !segment.endTime) return ''
   if (!segment.endTime || segment.startTime === segment.endTime) return segment.startTime ?? ''
@@ -831,6 +1082,7 @@ function uniqueCompact(values: Array<string | undefined>) {
 }
 
 export function derivePlanReceiptDisplay(plan: Plan): PlanReceiptDisplay {
+  const sandbox = plan.sandboxOrder
   const segments = plan.segments
     .filter((segment) => !segment.isTransit)
     .map((segment, index) => {
@@ -846,12 +1098,25 @@ export function derivePlanReceiptDisplay(plan: Plan): PlanReceiptDisplay {
         title: segment.title,
       }
     })
-  const statusLabel = plan.status === 'confirmed' ? '已确认' : '未确认'
+  const statusLabel = sandbox ? '模拟确认' : plan.status === 'confirmed' ? '已确认' : '未确认'
   const versionLabel = `Version ${plan.currentVersion}`
-  const disclaimer = '这是 PlanPal 本地确认摘要，不代表真实预订、下单或第三方凭证。'
+  const disclaimer = sandbox?.disclaimer ?? '这是 PlanPal 本地确认摘要，不代表真实预订、下单或第三方凭证。'
+  const itemLines = sandbox?.items.map((item) => {
+    const unitPrice = item.unitPriceCny ?? item.priceCny
+    const scheduled = item.scheduledFor ? ` · ${item.scheduledFor}` : ''
+    const fulfillment = item.fulfillment ? ` · ${fulfillmentLabel(item.fulfillment)}` : ''
+    return `${item.merchantName} · ${item.label} ×${item.quantity} · CNY ${unitPrice}${scheduled}${fulfillment}`
+  }) ?? []
+  const totalEstimateLabel = sandbox
+    ? `${sandbox.totalEstimate.currency} ${sandbox.totalEstimate.low}-${sandbox.totalEstimate.high}`
+    : undefined
+  const merchantCountLabel = sandbox
+    ? `${sandbox.merchantRefs.length} 个 mock 商户`
+    : `${segments.length} 个节点`
   const text = [
-    `PlanPal 确认摘要：${plan.title}`,
-    `${statusLabel} · ${versionLabel}`,
+    sandbox ? `PlanPal Sandbox 模拟确认单：${plan.title}` : `PlanPal 确认摘要：${plan.title}`,
+    `${statusLabel} · ${versionLabel}${sandbox ? ` · ${sandbox.receiptId}` : ''}`,
+    totalEstimateLabel ? `模拟预算：${totalEstimateLabel}` : '',
     disclaimer,
     '',
     ...segments.flatMap((segment) => [
@@ -861,14 +1126,19 @@ export function derivePlanReceiptDisplay(plan: Plan): PlanReceiptDisplay {
       `理由：${segment.reason}`,
       '',
     ]),
+    ...(itemLines.length ? ['模拟项目：', ...itemLines, ''] : []),
   ].join('\n').trim()
 
   return {
     disclaimer,
+    itemLines,
+    merchantCountLabel,
+    receiptId: sandbox?.receiptId,
     segments,
     statusLabel,
     text,
     title: plan.title,
+    totalEstimateLabel,
     versionLabel,
   }
 }
@@ -959,6 +1229,64 @@ export function buildClearRouteChoiceCommand(route: RouteEstimate): PlanCommand 
   }
 }
 
+export function buildSandboxOrderCommand(): PlanCommand {
+  return {
+    type: 'CREATE_SANDBOX_ORDER',
+    source: 'puzzle',
+  }
+}
+
+export function buildRefreshServiceItemsCommand(input: {
+  category?: MerchantServiceCategory
+  limit?: number
+  merchantId?: string
+  query?: string
+  segmentId: string
+}): PlanCommand {
+  return {
+    type: 'REFRESH_SERVICE_ITEMS',
+    source: 'action-card',
+    segmentId: input.segmentId,
+    merchantId: input.merchantId,
+    category: input.category,
+    query: input.query,
+    limit: input.limit,
+  }
+}
+
+export function buildSelectServiceItemCommand(input: {
+  merchantId: string
+  offeringId: string
+  quantity?: number
+  segmentId: string
+}): PlanCommand {
+  return {
+    type: 'SELECT_SERVICE_ITEM',
+    source: 'action-card',
+    segmentId: input.segmentId,
+    merchantId: input.merchantId,
+    offeringId: input.offeringId,
+    quantity: input.quantity,
+  }
+}
+
+export function buildRemoveServiceItemCommand(selectionId: string): PlanCommand {
+  return {
+    type: 'REMOVE_SERVICE_ITEM',
+    source: 'action-card',
+    selectionId,
+  }
+}
+
+export function buildUpdateServiceItemQuantityCommand(selectionId: string, quantity: number): PlanCommand {
+  return {
+    type: 'UPDATE_SERVICE_ITEM_QUANTITY',
+    source: 'action-card',
+    selectionId,
+    quantity,
+  }
+}
+
 export function reorderSegmentsForCommand(segments: PlanSegment[], command: PlanCommand) {
   if (command.type !== 'REORDER_SEGMENT') return segments
   try {
@@ -1003,7 +1331,7 @@ export function getChatExecutionPathLabel(config: StoredModelConfig | null, draf
   if (!isCompleteModelConfig(config)) return '离线 fallback'
   const normalized = draft.trim().toLowerCase()
   if (!normalized) return '等待输入'
-  if (containsAny(normalized, ['换', '替换', 'replace', 'near', '近一点', '近点', '删除', '删掉', '去掉', '不要', 'remove', 'delete', '确认', '下单', '预订', 'confirm', '轻松', '别太赶', '安静', '改成', 'rewrite', '调整'])) {
+  if (containsAny(normalized, ['加一个', '加个', '加一段', '加点别的', '再加', '添加', '加入', '安排一个', '安排个', '空档', '空隙', '咖啡', '甜品', '拍照', '散步', '酒店', '住宿', '住一晚', '电影', '影院', 'imax', '房型', '双床', '大床', '电影票', '买票', '套餐', '换', '替换', 'replace', 'near', '近一点', '近点', '删除', '删掉', '去掉', '不要', 'remove', 'delete', '确认', '下单', '预订', 'confirm', '轻松', '别太赶', '安静', '改成', 'rewrite', '调整'])) {
     return '模型意图理解 + 确定性拼图命令'
   }
   return '模型回答'
@@ -1025,6 +1353,7 @@ function latestRunId(events: AgentEvent[]) {
 
 function progressItemFromEvent(event: AgentEvent): AgentProgressItem | null {
   const phase = readPayloadString(event, 'phase')
+  const toolName = readPayloadString(event, 'toolName')
   switch (event.type) {
     case 'agent.started':
       return {
@@ -1057,14 +1386,14 @@ function progressItemFromEvent(event: AgentEvent): AgentProgressItem | null {
     case 'tool.called':
       return {
         id: event.id,
-        label: '查找候选',
+        label: toolName === 'offering.search' ? '查找服务项' : toolName === 'order.preview' ? '预览确认单' : '查找候选',
         detail: event.message,
         state: 'active',
       }
     case 'tool.result':
       return {
         id: event.id,
-        label: '候选已准备',
+        label: event.message.includes('offerings') || event.message.includes('服务') ? '服务项已准备' : '候选已准备',
         detail: event.message,
         state: 'done',
       }
@@ -1136,10 +1465,55 @@ export function appendAssistantDeltaMessage(messages: ChatMessage[], delta: stri
 export function finalizeAssistantStreamingMessage(messages: ChatMessage[], content: string): ChatMessage[] {
   const last = messages.at(-1)
   if (last?.role === 'planpal' && last.streaming) {
-    return [...messages.slice(0, -1), { role: 'planpal', content }]
+    const { streaming: _streaming, ...rest } = last
+    return [...messages.slice(0, -1), { ...rest, role: 'planpal', content }]
   }
   return [...messages, { role: 'planpal', content }]
 }
+
+export function attachPendingActionToLatestPlanpalMessage(messages: ChatMessage[], action: PendingAction): ChatMessage[] {
+  const existingIndex = lastMessageIndex(messages, (message) => message.action?.id === action.id)
+  if (existingIndex >= 0) {
+    return messages.map((message, index) => index === existingIndex ? { ...message, action } : message)
+  }
+
+  const latestUserIndex = lastMessageIndex(messages, (message) => message.role === 'user')
+  const planpalIndex = lastMessageIndex(
+    messages,
+    (message, index) => message.role === 'planpal' && index > latestUserIndex,
+  )
+  if (planpalIndex < 0) return [...messages, chatMessageFromPendingAction(action)]
+  return messages.map((message, index) => index === planpalIndex ? { ...message, action } : message)
+}
+
+export function chatMessageFromPendingAction(action: PendingAction): ChatMessage {
+  return {
+    role: 'planpal',
+    content: pendingActionReceipt(action),
+    receipt: true,
+    action,
+  }
+}
+
+export function lastAttachedActionMessageIndex(messages: ChatMessage[], action?: PendingAction) {
+  if (!action) return -1
+  return lastMessageIndex(messages, (message) => message.action?.id === action.id)
+}
+
+export function activePlanVariantSelectionFromAction(
+  action: PendingAction | undefined,
+  selection?: PlanVariantSelection,
+): PlanVariantSelection | undefined {
+  if (!action || action.kind !== 'plan-variant-selection') return undefined
+  if (selection?.actionId === action.id) return selection
+  return {
+    actionId: action.id,
+    title: action.title,
+    description: action.description,
+    variants: action.variants,
+  }
+}
+
 export function chatMessageFromAgentEvent(event: AgentEvent): ChatMessage | null {
   if (event.type === 'agent.finished') return { role: 'planpal', content: event.message }
   if (event.type === 'agent.error') {
@@ -1188,6 +1562,7 @@ export function chatMessageFromCommandResult(command: PlanCommand, result: Comma
       return {
         role: 'planpal',
         content: candidateActionReceipt(result.plan.pendingAction, '候选已准备'),
+        action: result.plan.pendingAction?.kind === 'candidate-selection' ? result.plan.pendingAction : undefined,
       }
     case 'REFRESH_CANDIDATES':
       return {
@@ -1199,11 +1574,26 @@ export function chatMessageFromCommandResult(command: PlanCommand, result: Comma
             ? result.plan.pendingAction.searchQuery
             : undefined),
         ),
+        action: result.plan.pendingAction?.kind === 'candidate-selection' ? result.plan.pendingAction : undefined,
       }
     case 'CHOOSE_CANDIDATE':
       return commandReceipt(result.version, '候选已应用')
     case 'CONFIRM_PLAN':
       return commandReceipt(result.version, '计划已确认')
+    case 'CREATE_SANDBOX_ORDER':
+      return commandReceipt(result.version, '模拟确认单已生成')
+    case 'REFRESH_SERVICE_ITEMS':
+      return {
+        role: 'planpal',
+        content: serviceItemActionReceipt(result.plan.pendingAction),
+        action: result.plan.pendingAction?.kind === 'service-item-selection' ? result.plan.pendingAction : undefined,
+      }
+    case 'SELECT_SERVICE_ITEM':
+      return commandReceipt(result.version, '商品/服务已选择')
+    case 'REMOVE_SERVICE_ITEM':
+      return commandReceipt(result.version, '商品/服务已移除')
+    case 'UPDATE_SERVICE_ITEM_QUANTITY':
+      return commandReceipt(result.version, '商品/服务数量已更新')
     case 'DISMISS_PENDING_ACTION':
       return commandReceipt(result.version, '选择已取消')
     case 'SET_ROUTE_CHOICE':
@@ -1232,7 +1622,7 @@ export function chatMessageFromCommandError(command: PlanCommand, error: unknown
 
 export function shouldOpenChatForCommandResult(command: PlanCommand, result: CommandResult) {
   if (!result.plan.pendingAction) return false
-  return command.type === 'REPLACE_SEGMENT' || command.type === 'REFRESH_CANDIDATES'
+  return command.type === 'REPLACE_SEGMENT' || command.type === 'REFRESH_CANDIDATES' || command.type === 'REFRESH_SERVICE_ITEMS'
 }
 
 export function initialChatMessagesFromPlanEvents(_plan: Plan, _events: AgentEvent[]): ChatMessage[] {
@@ -1257,6 +1647,16 @@ function commandFailurePrefix(command: PlanCommand) {
       return '拼图重排失败'
     case 'CONFIRM_PLAN':
       return '确认计划失败'
+    case 'CREATE_SANDBOX_ORDER':
+      return '生成模拟确认单失败'
+    case 'REFRESH_SERVICE_ITEMS':
+      return '服务项生成失败'
+    case 'SELECT_SERVICE_ITEM':
+      return '服务项选择失败'
+    case 'REMOVE_SERVICE_ITEM':
+      return '服务项移除失败'
+    case 'UPDATE_SERVICE_ITEM_QUANTITY':
+      return '服务项数量更新失败'
     case 'DISMISS_PENDING_ACTION':
       return '取消选择失败'
     case 'SET_ROUTE_CHOICE':
@@ -1283,6 +1683,9 @@ function isPendingAction(value: unknown): value is PendingAction {
   if (kind === 'plan-variant-selection') {
     return Array.isArray((value as { variants?: unknown }).variants)
   }
+  if (kind === 'service-item-selection') {
+    return Array.isArray((value as { offerings?: unknown }).offerings)
+  }
   if (kind === 'clarification') {
     return Array.isArray((value as { requiredFields?: unknown }).requiredFields)
   }
@@ -1294,6 +1697,31 @@ function candidateActionReceipt(pendingAction: Plan['pendingAction'], fallback: 
   const query = searchQuery?.trim()
   const prefix = query ? `按“${truncateText(query, 18)}”筛选` : fallback
   return `${prefix} · ${pendingAction.candidates.length} 个候选`
+}
+
+function serviceItemActionReceipt(pendingAction: Plan['pendingAction']) {
+  if (!pendingAction || pendingAction.kind !== 'service-item-selection') return '商品/服务候选已准备 · 待选择'
+  const query = pendingAction.query?.trim()
+  const prefix = query ? `按“${truncateText(query, 18)}”筛选` : '商品/服务候选已准备'
+  return `${prefix} · ${pendingAction.offerings.length} 个服务项`
+}
+
+function pendingActionReceipt(action: PendingAction) {
+  if (action.kind === 'candidate-selection') {
+    const query = action.searchQuery?.trim()
+    const prefix = query ? `按“${truncateText(query, 18)}”筛选` : '候选已准备'
+    return `${prefix} · ${action.candidates.length} 个候选`
+  }
+  if (action.kind === 'service-item-selection') return serviceItemActionReceipt(action)
+  if (action.kind === 'plan-variant-selection') return `${action.title} · ${action.variants.length} 个方向`
+  return action.title || '需要补充信息'
+}
+
+function lastMessageIndex(messages: ChatMessage[], predicate: (message: ChatMessage, index: number) => boolean) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (predicate(messages[index]!, index)) return index
+  }
+  return -1
 }
 
 function truncateText(value: string, maxLength: number) {
@@ -1351,6 +1779,14 @@ function estimateTaxiPrice(distance: number) {
   const low = Math.max(14, Math.round(14 + distance * 2.2))
   const high = Math.max(low + 6, Math.round(low + 8 + distance * 1.6))
   return `CNY ${low}-${high}`
+}
+
+function routeRiskNotes(from: PlanSegmentDisplay, to: PlanSegmentDisplay, distance: number) {
+  return uniqueCompact([
+    'mock-route estimated',
+    distance > 2.5 ? '距离较长，建议保留打车备选' : '',
+    from.phase === 'dining' || to.phase === 'dining' ? '饭点前后建议预留缓冲' : '',
+  ])
 }
 
 function minutesBetween(start: string, end: string) {

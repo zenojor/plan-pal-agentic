@@ -1,4 +1,4 @@
-import type { AgentEvent, CommandResult, Plan, PlanCommand } from '@planpal/domain'
+import type { AgentEvent, CommandResult, FictionalPoi, MerchantOffering, MerchantServiceCategory, MockRouteEstimate, Plan, PlanCommand, SegmentPhase } from '@planpal/domain'
 import type { StoredModelConfig } from './modelConfig'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
@@ -21,6 +21,40 @@ export type PlanEnvelope = {
 
 export type PlanListResult = {
   plans: Plan[]
+}
+
+export type MockPoiSearchResult = {
+  count: number
+  source: 'fictional-local-mock-v2'
+  pois: Array<FictionalPoi & {
+    searchScore: number
+    reasons: string[]
+  }>
+}
+
+export type MockMerchantSearchResult = {
+  count: number
+  source: 'fictional-local-mock-v2'
+  merchants: Array<FictionalPoi & {
+    searchScore?: number
+    reasons?: string[]
+  }>
+}
+
+export type MockOfferingSearchResult = {
+  count: number
+  source: 'fictional-local-mock-v2'
+  offerings: Array<MerchantOffering & {
+    merchant: {
+      id: string
+      name: string
+      phase: SegmentPhase
+      area: string
+      serviceCategory: MerchantServiceCategory
+    }
+    searchScore: number
+    reasons: string[]
+  }>
 }
 
 export type CreatePlanResult = {
@@ -114,6 +148,107 @@ export async function listPlans(): Promise<Plan[]> {
   if (!response.ok) throw new Error(await parseError(response))
   const data = (await response.json()) as PlanListResult
   return Array.isArray(data.plans) ? data.plans : []
+}
+
+export async function searchMockPois(input: {
+  area?: string
+  limit?: number
+  maxPriceLevel?: number
+  phase?: SegmentPhase
+  q?: string
+  tags?: string[]
+} = {}): Promise<MockPoiSearchResult> {
+  const params = new URLSearchParams()
+  if (input.area) params.set('area', input.area)
+  if (input.limit) params.set('limit', String(input.limit))
+  if (input.maxPriceLevel) params.set('maxPriceLevel', String(input.maxPriceLevel))
+  if (input.phase) params.set('phase', input.phase)
+  if (input.q) params.set('q', input.q)
+  if (input.tags?.length) params.set('tags', input.tags.join(','))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await safeFetch(`${API_BASE}/api/mock/pois${suffix}`, {
+    method: 'GET',
+  }, '加载 mock 地点失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as MockPoiSearchResult
+}
+
+export async function getMockPoi(poiId: string): Promise<{ source: string; poi: FictionalPoi }> {
+  const response = await safeFetch(`${API_BASE}/api/mock/pois/${poiId}`, {
+    method: 'GET',
+  }, '加载 mock 地点失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as { source: string; poi: FictionalPoi }
+}
+
+export async function searchMockMerchants(input: {
+  area?: string
+  category?: MerchantServiceCategory
+  limit?: number
+  phase?: SegmentPhase
+  q?: string
+  tags?: string[]
+} = {}): Promise<MockMerchantSearchResult> {
+  const params = new URLSearchParams()
+  if (input.area) params.set('area', input.area)
+  if (input.category) params.set('category', input.category)
+  if (input.limit) params.set('limit', String(input.limit))
+  if (input.phase) params.set('phase', input.phase)
+  if (input.q) params.set('q', input.q)
+  if (input.tags?.length) params.set('tags', input.tags.join(','))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await safeFetch(`${API_BASE}/api/mock/merchants${suffix}`, {
+    method: 'GET',
+  }, '加载 mock 商户失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as MockMerchantSearchResult
+}
+
+export async function getMockMerchant(merchantId: string): Promise<{ source: string; merchant: FictionalPoi }> {
+  const response = await safeFetch(`${API_BASE}/api/mock/merchants/${merchantId}`, {
+    method: 'GET',
+  }, '加载 mock 商户失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as { source: string; merchant: FictionalPoi }
+}
+
+export async function getMockMerchantOfferings(merchantId: string): Promise<{ source: string; merchantId: string; count: number; offerings: MerchantOffering[] }> {
+  const response = await safeFetch(`${API_BASE}/api/mock/merchants/${merchantId}/offerings`, {
+    method: 'GET',
+  }, '加载 mock 服务项失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as { source: string; merchantId: string; count: number; offerings: MerchantOffering[] }
+}
+
+export async function searchMockOfferings(input: {
+  availableAt?: string
+  category?: MerchantServiceCategory
+  limit?: number
+  merchantId?: string
+  q?: string
+  tags?: string[]
+} = {}): Promise<MockOfferingSearchResult> {
+  const params = new URLSearchParams()
+  if (input.availableAt) params.set('availableAt', input.availableAt)
+  if (input.category) params.set('category', input.category)
+  if (input.limit) params.set('limit', String(input.limit))
+  if (input.merchantId) params.set('merchantId', input.merchantId)
+  if (input.q) params.set('q', input.q)
+  if (input.tags?.length) params.set('tags', input.tags.join(','))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await safeFetch(`${API_BASE}/api/mock/offerings${suffix}`, {
+    method: 'GET',
+  }, '加载 mock 服务项失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as MockOfferingSearchResult
+}
+
+export async function getMockRoutes(planId: string): Promise<{ source: string; planId: string; routes: MockRouteEstimate[] }> {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/mock/routes`, {
+    method: 'GET',
+  }, '加载 mock 路线失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as { source: string; planId: string; routes: MockRouteEstimate[] }
 }
 
 export async function sendPlanCommand(planId: string, command: PlanCommand): Promise<CommandResult> {

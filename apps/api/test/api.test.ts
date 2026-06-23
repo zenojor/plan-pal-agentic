@@ -40,6 +40,61 @@ describe('PlanPal API', () => {
     expect(commandResult.version).toBe(2)
   })
 
+  it('serves expanded local mock POIs and plan route estimates without network calls', async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error('network should not be used by mock API')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const searchResponse = await app.request('/api/mock/pois?phase=dining&q=%E7%81%AB%E9%94%85&limit=3')
+    expect(searchResponse.status).toBe(200)
+    const search = (await searchResponse.json()) as {
+      count: number
+      pois: Array<{ id: string; mockSource: string; reasons: string[]; searchScore: number }>
+      source: string
+    }
+    expect(search.source).toBe('fictional-local-mock-v2')
+    expect(search.count).toBe(3)
+    expect(search.pois.every((poi) => poi.mockSource === 'fictional-local-mock-v2')).toBe(true)
+    expect(search.pois.every((poi) => poi.searchScore > 0)).toBe(true)
+
+    const detailResponse = await app.request('/api/mock/pois/poi_copper_cloud_hotpot')
+    expect(detailResponse.status).toBe(200)
+    const detail = (await detailResponse.json()) as { poi: { id: string; orderableItems: unknown[] } }
+    expect(detail.poi.id).toBe('poi_copper_cloud_hotpot')
+    expect(detail.poi.orderableItems.length).toBeGreaterThan(0)
+
+    const missingResponse = await app.request('/api/mock/pois/poi_missing')
+    expect(missingResponse.status).toBe(404)
+
+    const merchantResponse = await app.request('/api/mock/merchants?category=hotel&q=%E5%8F%8C%E5%BA%8A&limit=3')
+    expect(merchantResponse.status).toBe(200)
+    const merchants = (await merchantResponse.json()) as { count: number; merchants: Array<{ serviceCategory: string; offerings: unknown[] }> }
+    expect(merchants.count).toBe(3)
+    expect(merchants.merchants.every((merchant) => merchant.serviceCategory === 'hotel' && merchant.offerings.length >= 3)).toBe(true)
+
+    const offeringResponse = await app.request('/api/mock/offerings?category=movie&q=IMAX&limit=3')
+    expect(offeringResponse.status).toBe(200)
+    const offerings = (await offeringResponse.json()) as { count: number; offerings: Array<{ category: string; merchant: { serviceCategory: string }; showtime?: string }> }
+    expect(offerings.count).toBe(3)
+    expect(offerings.offerings.every((offering) => offering.category === 'movie' && offering.merchant.serviceCategory === 'movie')).toBe(true)
+
+    const merchantOfferingsResponse = await app.request('/api/mock/merchants/poi_linen_clock_hotel/offerings')
+    expect(merchantOfferingsResponse.status).toBe(200)
+    const merchantOfferings = (await merchantOfferingsResponse.json()) as { offerings: Array<{ category: string; roomType?: string }> }
+    expect(merchantOfferings.offerings).toHaveLength(3)
+    expect(merchantOfferings.offerings.every((offering) => offering.category === 'hotel' && offering.roomType)).toBe(true)
+
+    const created = await createOfflinePlan('下午两个人附近轻松玩')
+    const routeResponse = await app.request(`/api/plans/${created.planId}/mock/routes`)
+    expect(routeResponse.status).toBe(200)
+    const routes = (await routeResponse.json()) as { source: string; routes: Array<{ source: string; options: Array<{ source: string }> }> }
+    expect(routes.source).toBe('mock-route')
+    expect(routes.routes.length).toBeGreaterThan(0)
+    expect(routes.routes[0]?.options.map((option) => option.source)).toEqual(['mock-route', 'mock-route', 'mock-route'])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('drives the product demo flow through new-architecture API commands', async () => {
     const createResponse = await app.request('/api/plans', {
       method: 'POST',
@@ -110,15 +165,17 @@ describe('PlanPal API', () => {
     expect(chooseCandidateResult.plan.segments[insertedIndex - 1]?.id).toBe(afterSegment.id)
 
     const confirmResult = await postCommand(created.planId, {
-      type: 'CONFIRM_PLAN',
+      type: 'CREATE_SANDBOX_ORDER',
       source: 'puzzle',
     })
     expect(confirmResult.version).toBe(6)
     expect(confirmResult.plan.status).toBe('confirmed')
+    expect(confirmResult.plan.sandboxOrder?.status).toBe('sandbox_generated')
 
     const envelopeResponse = await app.request(`/api/plans/${created.planId}`)
     const envelope = (await envelopeResponse.json()) as { events: Array<{ type: string }>; plan: Plan; versions: Array<{ segmentCount: number; status: string; version: number }> }
     expect(envelope.plan.status).toBe('confirmed')
+    expect(envelope.plan.sandboxOrder?.receiptId).toBe(confirmResult.plan.sandboxOrder?.receiptId)
     expect(envelope.events.filter((event) => event.type === 'plan.updated')).toHaveLength(5)
     expect(JSON.stringify(envelope)).not.toContain('PlanNode')
   })

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AgentEvent, CandidateOption, CommandResult, PendingAction, PlanCommand, PlanVariantOption } from '@planpal/domain'
+import type { AgentEvent, CandidateOption, CommandResult, MerchantOffering, PendingAction, PlanCommand, PlanVariantOption } from '@planpal/domain'
 import { AgentChatColumn } from '../components/workspace/AgentChatColumn'
 import { ConfirmPlanModal } from '../components/workspace/ConfirmPlanModal'
 import { DetailsColumn } from '../components/workspace/DetailsColumn'
@@ -13,6 +13,7 @@ import { WorkspaceShell } from '../components/workspace/WorkspaceShell'
 import {
   addWorkspaceColumn,
   appendAssistantDeltaMessage,
+  attachPendingActionToLatestPlanpalMessage,
   assistantDeltaFromAgentEvent,
   buildCandidateCommand,
   buildCandidateRefreshCommand,
@@ -21,6 +22,8 @@ import {
   buildPlanVariantCommand,
   buildRouteChoiceCommand,
   buildRouteEstimates,
+  buildSandboxOrderCommand,
+  buildSelectServiceItemCommand,
   buildSegmentReorderCommand,
   canSendAgentChat,
   chatMessageFromAgentEvent,
@@ -56,6 +59,8 @@ import {
 import { getPlan, sendPlanCommand, streamAgentResume, streamAgentRun, type PlanEnvelope } from '../lib/api'
 import { useStoredModelConfig } from '../lib/useStoredModelConfig'
 import { loadWorkspaceLayout, saveWorkspaceLayout } from '../lib/workspaceLayoutStorage'
+
+const workspaceLoadingClassName = 'grid min-h-[100svh] place-items-center bg-animal-bg bg-animal-grid p-6 text-center text-[1rem] font-[900] text-animal-text'
 
 type MutationContext = {
   previous?: PlanEnvelope
@@ -129,8 +134,8 @@ export function PlanWorkspacePage() {
     [planQuery.data?.events, streamEvents],
   )
   const segmentDisplays = useMemo(
-    () => derivePlanSegmentDisplays(plan?.segments ?? []),
-    [plan?.segments],
+    () => derivePlanSegmentDisplays(plan?.segments ?? [], plan?.serviceSelections ?? []),
+    [plan?.segments, plan?.serviceSelections],
   )
   const progressItems = useMemo(
     () => deriveAgentProgressItems(streamEvents),
@@ -257,6 +262,36 @@ export function PlanWorkspacePage() {
     commandMutation.mutate(buildPlanVariantCommand(actionId, variant))
   }
 
+  async function chooseServiceOffering(
+    action: Extract<PendingAction, { kind: 'service-item-selection' }>,
+    offering: MerchantOffering,
+    quantity: number,
+  ) {
+    if (getCandidateSelectionMode(pendingActionRunId) === 'resume') {
+      setIsStreaming(true)
+      try {
+        await streamAgentResume(planId, {
+          runId: pendingActionRunId!,
+          actionId: action.id,
+          payload: { offeringId: offering.id, quantity },
+        }, handleStreamEvent)
+      } catch (error) {
+        setColumns((current) => addWorkspaceColumn(current, 'chat'))
+        setMessages((prev) => [...prev, chatMessageFromAgentFailure('resume', error)])
+      } finally {
+        setPendingActionRunId(null)
+        setIsStreaming(false)
+      }
+      return
+    }
+    commandMutation.mutate(buildSelectServiceItemCommand({
+      segmentId: action.segmentId,
+      merchantId: action.merchantId,
+      offeringId: offering.id,
+      quantity,
+    }))
+  }
+
   function dismissPendingAction(actionId: string) {
     commandMutation.mutate(buildDismissPendingActionCommand(actionId))
   }
@@ -266,6 +301,7 @@ export function PlanWorkspacePage() {
     const streamedAction = pendingActionFromAgentEvent(event)
     if (streamedAction) {
       setStreamPendingAction(streamedAction)
+      setMessages((prev) => attachPendingActionToLatestPlanpalMessage(prev, streamedAction))
     }
     if (shouldOpenChatForAgentEvent(event)) {
       setColumns((current) => addWorkspaceColumn(current, 'chat'))
@@ -370,9 +406,9 @@ export function PlanWorkspacePage() {
     setDragOverSegmentId(null)
   }
 
-  if (planQuery.isLoading) return <main className="workspace-loading">正在加载计划...</main>
-  if (planQuery.error) return <main className="workspace-loading">加载失败：{planQuery.error.message}</main>
-  if (!plan) return <main className="workspace-loading">计划不存在</main>
+  if (planQuery.isLoading) return <main className={workspaceLoadingClassName}>正在加载计划...</main>
+  if (planQuery.error) return <main className={workspaceLoadingClassName}>加载失败：{planQuery.error.message}</main>
+  if (!plan) return <main className={workspaceLoadingClassName}>计划不存在</main>
 
   const executionBrief = derivePlanExecutionBrief({ ...plan, pendingAction: plan.pendingAction ?? streamPendingAction })
   const confirmDisabled = !executionBrief.canConfirm || commandMutation.isPending
@@ -380,7 +416,7 @@ export function PlanWorkspacePage() {
     ? '已确认'
     : executionBrief.confirmBlockedReason
       ? '先处理检查'
-      : '确认计划'
+      : '生成模拟确认单'
   const visiblePendingAction = plan.pendingAction ?? streamPendingAction
 
   return (
@@ -437,6 +473,7 @@ export function PlanWorkspacePage() {
             onDraftChange={setDraft}
             onPendingActionDismiss={dismissPendingAction}
             onSend={() => void runChat()}
+            onServiceOfferingSelect={(action, offering, quantity) => void chooseServiceOffering(action, offering, quantity)}
             onVariantSelect={choosePlanVariant}
           />
         ),
@@ -449,6 +486,7 @@ export function PlanWorkspacePage() {
             selectedRouteModes={selectedRouteModes}
             selectedSegmentId={activeSelectedSegmentId}
             segments={plan.segments}
+            serviceSelections={plan.serviceSelections}
             onCommand={(command) => commandMutation.mutate(command)}
             onDragEnd={() => {
               setDraggingSegmentId(null)
@@ -465,9 +503,12 @@ export function PlanWorkspacePage() {
         ),
         merchant: (
           <MerchantColumn
+            commandBusy={commandMutation.isPending}
             displays={segmentDisplays}
+            plan={plan}
             selectedPlace={null}
             selectedSegmentId={activeSelectedSegmentId}
+            onCommand={(command) => commandMutation.mutate(command)}
             onSelectSegment={selectSegment}
           />
         ),
@@ -509,7 +550,7 @@ export function PlanWorkspacePage() {
         plan={plan}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => {
-          commandMutation.mutate({ type: 'CONFIRM_PLAN', source: 'puzzle' })
+          commandMutation.mutate(buildSandboxOrderCommand())
           setConfirmOpen(false)
         }}
       />

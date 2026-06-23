@@ -1,7 +1,22 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
-import { applyPlanCommand, createId, nowIso, type AgentEvent, type Plan, type PlanCommand } from '@planpal/domain'
+import {
+  applyPlanCommand,
+  buildMockRouteEstimates,
+  createId,
+  fictionalPoiCatalog,
+  getFictionalPoiById,
+  getMerchantOfferings,
+  nowIso,
+  searchMerchantOfferings,
+  searchFictionalPois,
+  type AgentEvent,
+  type MerchantServiceCategory,
+  type Plan,
+  type PlanCommand,
+  type SegmentPhase,
+} from '@planpal/domain'
 import { createPlanWithVariants, testOpenAICompatibleModel } from '@planpal/agent'
 import { agentRuntime, stores } from './store'
 import { modelConfigFromRequest, readJson, toPublicError } from './http'
@@ -71,6 +86,113 @@ app.use('*', cors({
 }))
 
 app.get('/api/health', (context) => context.json({ ok: true, service: 'planpal-agentic-api' }))
+
+app.get('/api/mock/pois', (context) => {
+  const lng = parseFiniteNumber(context.req.query('lng') ?? context.req.query('nearLng'))
+  const lat = parseFiniteNumber(context.req.query('lat') ?? context.req.query('nearLat'))
+  const results = searchFictionalPois({
+    area: context.req.query('area'),
+    limit: parsePositiveInt(context.req.query('limit'), 20),
+    maxPriceLevel: parsePositiveInt(context.req.query('maxPriceLevel') ?? context.req.query('priceLevel'), 0) || undefined,
+    nearLnglat: Number.isFinite(lng) && Number.isFinite(lat) ? [lng!, lat!] : undefined,
+    phase: parseSegmentPhase(context.req.query('phase')),
+    query: context.req.query('q') ?? context.req.query('query'),
+    tags: parseCsv(context.req.query('tags')),
+  })
+  return context.json({
+    source: 'fictional-local-mock-v2',
+    count: results.length,
+    pois: results.map((result) => ({
+      ...result.poi,
+      searchScore: result.score,
+      reasons: result.reasons,
+    })),
+  })
+})
+
+app.get('/api/mock/pois/:poiId', (context) => {
+  const poi = getFictionalPoiById(context.req.param('poiId'))
+  if (!poi) return context.json({ error: 'Mock POI not found' }, 404)
+  return context.json({ source: 'fictional-local-mock-v2', poi })
+})
+
+app.get('/api/mock/merchants', (context) => {
+  const category = parseMerchantServiceCategory(context.req.query('category') ?? context.req.query('serviceCategory'))
+  const phase = parseSegmentPhase(context.req.query('phase'))
+  const query = context.req.query('q') ?? context.req.query('query')
+  const lng = parseFiniteNumber(context.req.query('lng') ?? context.req.query('nearLng'))
+  const lat = parseFiniteNumber(context.req.query('lat') ?? context.req.query('nearLat'))
+  const results = query || phase || category || context.req.query('area') || context.req.query('tags')
+    ? searchFictionalPois({
+        area: context.req.query('area'),
+        limit: parsePositiveInt(context.req.query('limit'), 20),
+        maxPriceLevel: parsePositiveInt(context.req.query('maxPriceLevel') ?? context.req.query('priceLevel'), 0) || undefined,
+        nearLnglat: Number.isFinite(lng) && Number.isFinite(lat) ? [lng!, lat!] : undefined,
+        phase,
+        query,
+        serviceCategory: category,
+        tags: parseCsv(context.req.query('tags')),
+      }).map((result) => ({
+        ...result.poi,
+        searchScore: result.score,
+        reasons: result.reasons,
+      }))
+    : fictionalPoiCatalog
+        .filter((poi) => !category || poi.serviceCategory === category)
+        .slice(0, parsePositiveInt(context.req.query('limit'), 20))
+  return context.json({
+    source: 'fictional-local-mock-v2',
+    count: results.length,
+    merchants: results,
+  })
+})
+
+app.get('/api/mock/merchants/:merchantId', (context) => {
+  const merchant = getFictionalPoiById(context.req.param('merchantId'))
+  if (!merchant) return context.json({ error: 'Mock merchant not found' }, 404)
+  return context.json({ source: 'fictional-local-mock-v2', merchant })
+})
+
+app.get('/api/mock/merchants/:merchantId/offerings', (context) => {
+  const merchant = getFictionalPoiById(context.req.param('merchantId'))
+  if (!merchant) return context.json({ error: 'Mock merchant not found' }, 404)
+  const category = parseMerchantServiceCategory(context.req.query('category'))
+  const offerings = getMerchantOfferings(merchant.id)
+    .filter((offering) => !category || offering.category === category)
+  return context.json({
+    source: 'fictional-local-mock-v2',
+    merchantId: merchant.id,
+    count: offerings.length,
+    offerings,
+  })
+})
+
+app.get('/api/mock/offerings', (context) => {
+  const results = searchMerchantOfferings({
+    availableAt: context.req.query('availableAt'),
+    category: parseMerchantServiceCategory(context.req.query('category')),
+    limit: parsePositiveInt(context.req.query('limit'), 20),
+    merchantId: context.req.query('merchantId'),
+    query: context.req.query('q') ?? context.req.query('query'),
+    tags: parseCsv(context.req.query('tags')),
+  })
+  return context.json({
+    source: 'fictional-local-mock-v2',
+    count: results.length,
+    offerings: results.map((result) => ({
+      ...result.offering,
+      merchant: {
+        id: result.merchant.id,
+        name: result.merchant.name,
+        phase: result.merchant.phase,
+        area: result.merchant.area,
+        serviceCategory: result.merchant.serviceCategory,
+      },
+      searchScore: result.score,
+      reasons: result.reasons,
+    })),
+  })
+})
 
 app.post('/api/model/test', async (context) => {
   const body = await readJson<ModelTestBody>(context)
@@ -147,6 +269,16 @@ app.post('/api/plans/stream', async (context) => {
     } catch (error) {
       await writeCreatePlanStreamError(stream, error)
     }
+  })
+})
+
+app.get('/api/plans/:planId/mock/routes', async (context) => {
+  const plan = await stores.plans.getPlan(context.req.param('planId'))
+  if (!plan) return context.json({ error: 'Plan not found' }, 404)
+  return context.json({
+    source: 'mock-route',
+    planId: plan.id,
+    routes: buildMockRouteEstimates(plan.segments),
   })
 })
 
@@ -262,6 +394,48 @@ function summarizePlanVersion(plan: Plan): PlanVersionSummary {
 
 function hasModelConfig(authorization: string | undefined, body: ModelConfigBody) {
   return Boolean(authorization && body.baseURL && body.model)
+}
+
+function parseSegmentPhase(value: string | undefined): SegmentPhase | undefined {
+  if (value === 'activity' || value === 'dining' || value === 'drinks' || value === 'leisure' || value === 'transit') {
+    return value
+  }
+  return undefined
+}
+
+function parseMerchantServiceCategory(value: string | undefined): MerchantServiceCategory | undefined {
+  if (
+    value === 'dining'
+    || value === 'drinks'
+    || value === 'activity'
+    || value === 'hotel'
+    || value === 'movie'
+    || value === 'retail'
+    || value === 'wellness'
+    || value === 'ticket'
+    || value === 'other'
+  ) {
+    return value
+  }
+  return undefined
+}
+
+function parseCsv(value: string | undefined) {
+  return value
+    ?.split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseFiniteNumber(value: string | undefined) {
+  if (!value) return undefined
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 async function writeAgentEvent(stream: Parameters<Parameters<typeof streamSSE>[1]>[0], event: AgentEvent) {

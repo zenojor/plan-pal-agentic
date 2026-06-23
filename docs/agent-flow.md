@@ -45,6 +45,7 @@ flowchart LR
 - Plan commands：`packages/domain/src/commands.ts`
 - Plan types：`packages/domain/src/types.ts`
 - 本地 POI / fallback seed：`packages/domain/src/seed.ts`、`packages/domain/src/poiCatalog.ts`
+- 本地 mock 路线 / sandbox receipt：`packages/domain/src/mockServices.ts`
 
 ## 数据结构
 
@@ -57,6 +58,8 @@ flowchart LR
 - `pendingAction`：等待用户选择的动作，例如候选替换。
 - `variantSelection`：初始 3 个方案的保留状态。
 - `routeChoices`：用户手动选过的路线方式。
+- `serviceSelections`：用户已选择的商品/服务项快照，例如电影票、酒店房型、套餐。
+- `sandboxOrder`：本地 sandbox 模拟确认单，不代表真实预订、下单或支付。
 - `currentVersion`：每次确定性写入都会递增。
 
 ### PendingAction
@@ -65,6 +68,7 @@ flowchart LR
 
 - `plan-variant-selection`：初始方案选择。
 - `candidate-selection`：替换或加点候选。
+- `service-item-selection`：商户商品/服务项选择，例如房型、电影票、票务、套餐。
 - `clarification`：预留给未来补充信息。
 
 它的意义是：Agent 不直接替用户决定，而是把可执行选项交给用户确认。
@@ -80,7 +84,12 @@ flowchart LR
 - `REORDER_SEGMENT`
 - `SET_ROUTE_CHOICE`
 - `CLEAR_ROUTE_CHOICE`
+- `REFRESH_SERVICE_ITEMS`
+- `SELECT_SERVICE_ITEM`
+- `REMOVE_SERVICE_ITEM`
+- `UPDATE_SERVICE_ITEM_QUANTITY`
 - `CONFIRM_PLAN`
+- `CREATE_SANDBOX_ORDER`
 
 只要一个能力会修改 `Plan`，就应该优先考虑把它设计成 command。
 
@@ -171,9 +180,12 @@ flowchart LR
 - 选择候选：`CHOOSE_CANDIDATE`
 - 路线方式：`SET_ROUTE_CHOICE`
 - 恢复推荐路线：`CLEAR_ROUTE_CHOICE`
+- 商品/服务选择：`SELECT_SERVICE_ITEM`
+- 商品/服务移除或改数量：`REMOVE_SERVICE_ITEM` / `UPDATE_SERVICE_ITEM_QUANTITY`
 - 确认计划：`CONFIRM_PLAN`
+- 生成模拟确认单：`CREATE_SANDBOX_ORDER`
 
-判断标准很简单：如果 UI 已经知道用户要做什么，就不用绕 Agent。
+判断标准很简单：如果 UI 已经知道用户要做什么，就不用绕 Agent。当前确认弹窗使用 `CREATE_SANDBOX_ORDER`，domain 会把计划置为 `confirmed` 并生成本地 sandbox receipt；receipt 会优先使用 `serviceSelections` 中的服务快照，没有手动选择的节点会使用默认 mock item fallback。`CONFIRM_PLAN` 仍保留兼容路径，也会生成模拟确认信息。
 
 ## Agent 对话链路
 
@@ -185,19 +197,23 @@ flowchart TD
   Route --> Kind{"route.kind"}
   Kind -->|"qa"| Answer["流式回答"]
   Kind -->|"command"| Apply["applyPlanCommand"]
-  Kind -->|"candidate-search"| CallTool["callTools"]
-  CallTool --> Propose["REPLACE_SEGMENT 生成候选票据"]
+  Kind -->|"candidate-search"| CallTool["poi.search"]
+  Kind -->|"service-item-search"| OfferingTool["offering.search"]
+  CallTool --> Propose["REPLACE_SEGMENT / REFRESH_CANDIDATES 生成候选票据"]
+  OfferingTool --> ServicePropose["REFRESH_SERVICE_ITEMS 生成服务项票据"]
   Propose --> Interrupt["action.required 等用户选择"]
+  ServicePropose --> Interrupt
   Apply --> Updated["plan.updated"]
   Answer --> Finished["agent.finished"]
   Updated --> Finished
 ```
 
-`route.kind` 目前有三类：
+`route.kind` 目前有四类：
 
 - `qa`：只回答，不改计划。
 - `command`：可以直接转成确定性命令。
-- `candidate-search`：需要先查候选，再让用户选择。
+- `candidate-search`：需要先查候选，再让用户选择；可用于替换当前节点，也可用于加点插入空档。
+- `service-item-search`：需要先查商户商品/服务项，再让用户选择；用于已有酒店、电影、票务等服务商户节点。
 
 ### selectedSegmentId
 
@@ -245,8 +261,11 @@ type ToolSpec = {
 
 | 工具 | effect | 当前用途 |
 | --- | --- | --- |
-| `poi.search` | `read-only` | 根据计划节点和 query 找替换候选。当前 Agent candidate-search 会调用它。 |
+| `poi.search` | `read-only` | 根据计划节点、空档锚点和 query 找替换或加点候选。当前 Agent candidate-search 会调用它。 |
+| `offering.search` | `read-only` | 查询本地 mock `MerchantOffering`，包括酒店房型、电影场次、票务、套餐和生活服务。 |
 | `weather.check` | `read-only` | 确定性天气提示，目前是预留示例，尚未接入主要路由。 |
+| `route.estimate` | `read-only` | 基于计划节点坐标生成本地 mock-route 估算，不调用真实地图。 |
+| `order.preview` | `read-only` | 预览 sandbox receipt，不产生真实预订、下单或支付。 |
 | `order.execute` | `external-write` | 外部写入示例，规划阶段会被 effect gate 阻止。 |
 
 ### 工具调用生命周期
@@ -277,7 +296,21 @@ sequenceDiagram
 - 如果未来模型想触发 `order.execute`，runtime 也会因为 effect 不匹配而阻止。
 - 工具调用记录会进入 store，Trace 可以展示工具输入、状态和结果。
 
-### poi.search 和 PlanCommand 的关系
+### 当前 mock API 边界
+
+本阶段不接高德/AMap 或其他真实地图/商户 provider。API 暴露的 mock endpoints 都只读、确定性、纯本地：
+
+- `GET /api/mock/pois`：按 phase、query、tags、area、priceLevel 查询虚构 POI。
+- `GET /api/mock/pois/:poiId`：读取虚构 POI 详情。
+- `GET /api/mock/merchants`：按 phase/category/query 查询虚构商户。
+- `GET /api/mock/merchants/:merchantId`：读取虚构商户详情。
+- `GET /api/mock/merchants/:merchantId/offerings`：读取某个商户的 mock 商品/服务。
+- `GET /api/mock/offerings`：按 merchantId/category/query/availableAt 查询 mock 商品/服务。
+- `GET /api/plans/:planId/mock/routes`：基于计划坐标生成 mock-route 估算。
+
+这些 endpoint 和 Merchant/Map/Trace UI 都必须明确标注 mock/local/sandbox，不得展示成实时营业、实时导航或真实下单结果。
+
+### poi.search / offering.search 和 PlanCommand 的关系
 
 当前 candidate-search 正常路径是：
 
@@ -285,14 +318,17 @@ sequenceDiagram
 flowchart TD
   Route["route.kind = candidate-search"] --> Tool["poi.search 读取候选"]
   Tool --> Record["记录 ToolCallRecord"]
-  Record --> Command["REPLACE_SEGMENT command"]
+  Record --> Command["REPLACE_SEGMENT / REFRESH_CANDIDATES command"]
   Command --> Domain["domain 生成 pendingAction"]
   Domain --> Ticket["candidate-selection 票据"]
+  ServiceRoute["route.kind = service-item-search"] --> Offering["offering.search 读取服务项"]
+  Offering --> ServiceCommand["REFRESH_SERVICE_ITEMS command"]
+  ServiceCommand --> ServiceTicket["service-item-selection 票据"]
 ```
 
-这里有一个刻意的边界：`poi.search` 的结果不会直接写进 `Plan`。
+这里有一个刻意的边界：`poi.search` 和 `offering.search` 的结果不会直接写进 `Plan`。
 
-现在 `poi.search` 和 `REPLACE_SEGMENT` 底层都使用 domain 的候选生成能力，所以 Trace 里的工具结果和最终票据保持一致。真正被前端当作可选择票据的数据，以 `applyPlanCommand(REPLACE_SEGMENT)` 生成的 `Plan.pendingAction` 为准。
+现在 `poi.search`、`REPLACE_SEGMENT`、`REFRESH_CANDIDATES(mode: add-after)`、`offering.search` 和 `REFRESH_SERVICE_ITEMS` 底层都使用 domain 的 mock catalog/ranking 能力，所以 Trace 里的工具结果和最终票据保持一致。真正被前端当作可选择票据的数据，以 `applyPlanCommand(...)` 生成的 `Plan.pendingAction` 为准。
 
 这样做的好处：
 

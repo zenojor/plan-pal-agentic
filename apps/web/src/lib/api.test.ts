@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlanFromPrompt, type AgentEvent } from '@planpal/domain'
-import { createPlan, deletePlan, getPlan, listPlans, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
+import { createPlan, deletePlan, getMockPoi, getMockRoutes, getPlan, listPlans, searchMockPois, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
 import type { StoredModelConfig } from './modelConfig'
 
 const config: StoredModelConfig = {
@@ -279,6 +279,48 @@ describe('web API streaming client', () => {
     }), { status: 200 }))
 
     await expect(listPlans()).resolves.toEqual([first, second])
+  })
+
+  it('loads local mock POIs and route estimates without BYOK credentials', async () => {
+    let capturedInputs: string[] = []
+    vi.stubGlobal('fetch', async (input: unknown) => {
+      const url = String(input)
+      capturedInputs = [...capturedInputs, url]
+      if (url.includes('/api/mock/pois/poi_copper_cloud_hotpot')) {
+        return new Response(JSON.stringify({
+          source: 'fictional-local-mock-v2',
+          poi: { id: 'poi_copper_cloud_hotpot', name: '铜锅云汤火锅社' },
+        }), { status: 200 })
+      }
+      if (url.includes('/api/plans/plan_1/mock/routes')) {
+        return new Response(JSON.stringify({
+          source: 'mock-route',
+          planId: 'plan_1',
+          routes: [{ id: 'seg_1->seg_2', source: 'mock-route', options: [] }],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({
+        source: 'fictional-local-mock-v2',
+        count: 1,
+        pois: [{ id: 'poi_copper_cloud_hotpot', name: '铜锅云汤火锅社', searchScore: 120, reasons: ['匹配火锅需求'] }],
+      }), { status: 200 })
+    })
+
+    await expect(searchMockPois({ phase: 'dining', q: '火锅', tags: ['火锅'], limit: 3 })).resolves.toMatchObject({
+      count: 1,
+      source: 'fictional-local-mock-v2',
+    })
+    await expect(getMockPoi('poi_copper_cloud_hotpot')).resolves.toMatchObject({
+      poi: { id: 'poi_copper_cloud_hotpot' },
+    })
+    await expect(getMockRoutes('plan_1')).resolves.toMatchObject({
+      source: 'mock-route',
+      planId: 'plan_1',
+    })
+    expect(capturedInputs[0]).toContain('/api/mock/pois?')
+    expect(capturedInputs[0]).toContain('phase=dining')
+    expect(capturedInputs[0]).toContain('q=%E7%81%AB%E9%94%85')
+    expect(JSON.stringify(capturedInputs)).not.toContain(config.apiKey)
   })
 
   it('treats malformed plan list responses as an empty recent list', async () => {

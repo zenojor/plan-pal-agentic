@@ -16,12 +16,14 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 ## 当前能力
 
 - 首页快速创建计划，支持时间、人数、范围、节奏和补充需求。
-- `/settings/model` 配置 OpenAI-compatible 模型，API key 只保存在浏览器本地。
+- `/settings/model` 配置 OpenAI-compatible 模型，内置 DeepSeek/OpenAI 预设，API key 只保存在浏览器本地。
 - 创建计划时生成 3 个方案方向，用户选择后写入拼图主轴。
 - 工作台保留多列框架：对话、拼图、商家、详情、路线、记录。
-- 对话列支持全局计划或选中活动上下文，Agent-first 进入候选/命令流程。
-- 拼图列支持替换、上移/下移、删除、锁定、备注、路线模式选择、确认计划。
-- 候选、初始方案和 fallback POI 使用具体虚构地点，不接真实商家或真实预订。
+- 对话列支持全局计划或选中活动上下文，Agent-first 进入替换、加点候选和命令流程。
+- 拼图列支持替换、上移/下移、删除、锁定、备注、路线模式选择、生成模拟确认单。
+- 候选、初始方案和 fallback POI 使用扩展后的具体虚构地点，不接真实商家、真实地图或真实预订。
+- 本地 mock API 支持 POI/merchant/offering 查询、计划路线估算和 sandbox receipt 演示闭环。
+- 商家可带 `MerchantOffering` 商品/服务项；酒店房型、电影场次、票务、花礼、SPA 等仍是 fictional local mock。
 - Trace 列展示 Agent / model / tool / command 事件和版本历史。
 - 本地 demo 默认用文件存储，测试环境使用内存存储。
 
@@ -102,6 +104,8 @@ http://localhost:5174/settings/model
 - `model`
 - `apiKey`
 
+可先点 DeepSeek 或 OpenAI 预设填入常用 `baseURL` / `model`，再填写自己的 API key。
+
 点击 `测试连接` 只会测试，不会保存。点击 `保存到浏览器` 后才会写入浏览器本地存储。
 
 安全边界：
@@ -167,7 +171,7 @@ $env:PLANPAL_STORE_MODE="memory"
 4. 用户在对话列选择 3 个方案之一。
 5. 前端发送 `CHOOSE_PLAN_VARIANT` 到 `/api/plans/:planId/commands`。
 6. domain 应用命令，替换拼图主轴并产生版本。
-7. 用户在工作台中继续拖拽、替换、加点、改路线、确认。
+7. 用户在工作台中继续拖拽、替换、加点、改路线、选择商品/服务、生成模拟确认单；自然语言“再加个咖啡/拍照点/酒店/电影”会先生成候选或服务票据。
 8. Agent 对话只负责理解自然语言；写计划仍通过命令。
 
 更完整的 Agent 细节见 [docs/agent-flow.md](docs/agent-flow.md)。
@@ -176,10 +180,17 @@ $env:PLANPAL_STORE_MODE="memory"
 
 - `GET /api/health`
 - `POST /api/model/test`
+- `GET /api/mock/pois`
+- `GET /api/mock/pois/:poiId`
+- `GET /api/mock/merchants`
+- `GET /api/mock/merchants/:merchantId`
+- `GET /api/mock/merchants/:merchantId/offerings`
+- `GET /api/mock/offerings`
 - `GET /api/plans`
 - `POST /api/plans`
 - `POST /api/plans/stream`
 - `GET /api/plans/:planId`
+- `GET /api/plans/:planId/mock/routes`
 - `DELETE /api/plans/:planId`
 - `POST /api/plans/:planId/commands`
 - `POST /api/plans/:planId/agent/runs`
@@ -202,7 +213,12 @@ $env:PLANPAL_STORE_MODE="memory"
 - `DISMISS_PENDING_ACTION`
 - `SET_ROUTE_CHOICE`
 - `CLEAR_ROUTE_CHOICE`
+- `REFRESH_SERVICE_ITEMS`
+- `SELECT_SERVICE_ITEM`
+- `REMOVE_SERVICE_ITEM`
+- `UPDATE_SERVICE_ITEM_QUANTITY`
 - `CONFIRM_PLAN`
+- `CREATE_SANDBOX_ORDER`
 
 新增会修改计划的能力时，优先问自己：
 
@@ -219,12 +235,14 @@ $env:PLANPAL_STORE_MODE="memory"
 3. 回到 `/` 创建计划。
 4. 验证创建进度、3 个方案票据、选择方案后的拼图主轴。
 5. 在拼图列中替换一个节点，检查候选票据在对话列出现。
-6. 输入类似 `晚上想吃火锅啊`，检查候选是否匹配火锅需求。
-7. 选择候选，检查版本号、Trace 事件和拼图内容。
-8. 切换选中活动和全局上下文，检查 Agent 目标是否正确。
-9. 改路线模式，检查 `SET_ROUTE_CHOICE` 写入和 Trace 事件。
-10. 打开确认弹窗，检查计划摘要和执行节点。
-11. 在 1440、820、390px 宽度下检查工作台无横向溢出。
+6. 输入类似 `晚上想吃火锅啊`，检查替换候选是否匹配火锅需求。
+7. 输入类似 `中间再加个咖啡休息`，检查加点候选是否进入空档票据。
+8. 选择候选，检查版本号、Trace 事件和拼图内容。
+9. 切换选中活动和全局上下文，检查 Agent 目标是否正确。
+10. 改路线模式，检查 `SET_ROUTE_CHOICE` 写入和 Trace 事件。
+11. 在 Merchant 面板选择一个电影票/房型/套餐，调整数量或移除，检查 Plan version 与 receipt 项目同步。
+12. 打开确认弹窗，生成 sandbox 模拟确认单，检查 receipt id、mock 商户、模拟项目和非真实预订/支付声明。
+13. 在 1440、820、390px 宽度下检查工作台无横向溢出。
 
 ## 开发守则
 

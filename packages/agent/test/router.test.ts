@@ -7,7 +7,8 @@ describe('agent natural language router', () => {
     const plan = createPlanFromPrompt('晚上两个人附近吃饭')
     const route = routeNaturalLanguageTurn(plan, '把晚饭换近一点')
     expect(route.kind).toBe('candidate-search')
-    if (route.kind === 'candidate-search') {
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
+    if (route.kind === 'candidate-search' && route.mode === 'replace') {
       const segment = plan.segments.find((item) => item.id === route.segmentId)
       expect(segment?.phase).toBe('dining')
     }
@@ -17,10 +18,22 @@ describe('agent natural language router', () => {
     const plan = createPlanFromPrompt('晚上两个人附近吃饭')
     const route = routeNaturalLanguageTurn(plan, '晚上想吃火锅啊')
     expect(route.kind).toBe('candidate-search')
-    if (route.kind === 'candidate-search') {
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
+    if (route.kind === 'candidate-search' && route.mode === 'replace') {
       const segment = plan.segments.find((item) => item.id === route.segmentId)
       expect(segment?.phase).toBe('dining')
       expect(route.query).toBe('晚上想吃火锅啊')
+    }
+  })
+
+  it('routes add-after requests to candidate search without mutating the plan', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const route = routeNaturalLanguageTurn(plan, '中间再加个咖啡休息')
+    expect(route.kind).toBe('candidate-search')
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'add-after' })
+    if (route.kind === 'candidate-search' && route.mode === 'add-after') {
+      expect(route.afterSegmentId).toBe(plan.segments[0]?.id)
+      expect(route.query).toBe('中间再加个咖啡休息')
     }
   })
 
@@ -30,6 +43,15 @@ describe('agent natural language router', () => {
     expect(route.kind).toBe('command')
     if (route.kind === 'command') {
       expect(route.command.type).toBe('CONFIRM_PLAN')
+    }
+  })
+
+  it('routes booking-like wording to sandbox order generation', () => {
+    const plan = createPlanFromPrompt('下午两个人逛逛')
+    const route = routeNaturalLanguageTurn(plan, '可以模拟下单了')
+    expect(route.kind).toBe('command')
+    if (route.kind === 'command') {
+      expect(route.command.type).toBe('CREATE_SANDBOX_ORDER')
     }
   })
 
@@ -49,14 +71,80 @@ describe('agent natural language router', () => {
       query: '换近一点',
       reason: 'user wants nearby dinner',
       answer: undefined,
+      category: undefined,
       targetSegmentId: undefined,
     })
 
     const route = routeModelTurnIntent(plan, '把晚饭换近一点', intent!)
     expect(route.kind).toBe('candidate-search')
-    if (route.kind === 'candidate-search') {
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
+    if (route.kind === 'candidate-search' && route.mode === 'replace') {
       expect(route.segmentId).toBe(dining.id)
       expect(route.query).toBe('换近一点')
     }
+  })
+
+  it('validates model add intent before turning it into an add-after candidate workflow', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const first = plan.segments[0]!
+    const intent = parseModelTurnIntent(JSON.stringify({
+      action: 'add',
+      targetSegmentId: first.id,
+      query: '加一个咖啡休息点',
+      reason: 'user wants an extra stop',
+    }))
+
+    expect(intent).toEqual({
+      action: 'add',
+      category: undefined,
+      targetPhase: undefined,
+      targetSegmentId: first.id,
+      query: '加一个咖啡休息点',
+      reason: 'user wants an extra stop',
+      answer: undefined,
+    })
+
+    const route = routeModelTurnIntent(plan, '加一个咖啡休息点', intent!)
+    expect(route.kind).toBe('candidate-search')
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'add-after' })
+    if (route.kind === 'candidate-search' && route.mode === 'add-after') {
+      expect(route.afterSegmentId).toBe(first.id)
+      expect(route.query).toBe('加一个咖啡休息点')
+    }
+  })
+
+  it('routes hotel and movie service requests through add and item-selection workflows', () => {
+    const plan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const hotelRoute = routeNaturalLanguageTurn(plan, '帮我加个安静双床酒店')
+    expect(hotelRoute.kind).toBe('candidate-search')
+    expect(hotelRoute).toMatchObject({ kind: 'candidate-search', mode: 'add-after' })
+
+    const movieRoute = routeNaturalLanguageTurn(plan, '饭后看个 IMAX 电影')
+    expect(movieRoute.kind).toBe('candidate-search')
+    expect(movieRoute).toMatchObject({ kind: 'candidate-search', mode: 'add-after' })
+
+    const moviePlan = {
+      ...plan,
+      segments: [
+        ...plan.segments,
+        {
+          ...plan.segments[0]!,
+          id: 'seg_movie',
+          phase: 'activity' as const,
+          serviceCategory: 'movie' as const,
+          poiId: 'poi_orbit_cinema',
+          title: '电影场次',
+          place: '轨道影厅',
+        },
+      ],
+    }
+    const ticketRoute = routeNaturalLanguageTurn(moviePlan, '买两张电影票')
+    expect(ticketRoute.kind).toBe('service-item-search')
+    expect(ticketRoute).toMatchObject({
+      kind: 'service-item-search',
+      category: 'movie',
+      merchantId: 'poi_orbit_cinema',
+      segmentId: 'seg_movie',
+    })
   })
 })

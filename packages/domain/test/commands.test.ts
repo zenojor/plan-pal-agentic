@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { applyPlanCommand, attachPlanVariants, createPlanFromPrompt, getPlanRouteChoiceId } from '../src'
+import {
+  applyPlanCommand,
+  attachPlanVariants,
+  buildMockRouteEstimates,
+  createPlanFromPrompt,
+  fictionalPoiCatalog,
+  getFictionalPoiById,
+  getPlanRouteChoiceId,
+  searchMerchantOfferings,
+  searchFictionalPois,
+} from '../src'
 
 describe('PlanCommand deterministic handler', () => {
   it('reorders a segment without calling an agent and reflows times', () => {
@@ -92,6 +102,161 @@ describe('PlanCommand deterministic handler', () => {
     expect(client.intent.headcount).toBe(4)
     expect(client.intent.preferences).toEqual(expect.arrayContaining(['business']))
     expect(client.segments).toHaveLength(3)
+  })
+
+  it('keeps the local mock POI catalog broad, structured, and fictional', () => {
+    expect(fictionalPoiCatalog.length).toBeGreaterThanOrEqual(64)
+    const ids = new Set(fictionalPoiCatalog.map((poi) => poi.id))
+    expect(ids.size).toBe(fictionalPoiCatalog.length)
+    const count = (phase: string) => fictionalPoiCatalog.filter((poi) => poi.phase === phase).length
+    expect(count('activity')).toBeGreaterThanOrEqual(16)
+    expect(count('dining')).toBeGreaterThanOrEqual(20)
+    expect(count('leisure')).toBeGreaterThanOrEqual(18)
+    expect(count('drinks')).toBeGreaterThanOrEqual(10)
+    expect(fictionalPoiCatalog.every((poi) =>
+      poi.lnglat.length === 2
+      && poi.area
+      && poi.mockSource === 'fictional-local-mock-v2'
+      && poi.offerings.length > 0
+      && poi.orderableItems.length > 0
+      && poi.availabilitySlots.length > 0,
+    )).toBe(true)
+  })
+
+  it('keeps merchant offerings broad enough for hotels, movies, and life services', () => {
+    const offerings = fictionalPoiCatalog.flatMap((poi) => poi.offerings)
+    const ids = new Set(offerings.map((offering) => offering.id))
+    expect(fictionalPoiCatalog.filter((poi) => poi.serviceCategory === 'hotel')).toHaveLength(8)
+    expect(fictionalPoiCatalog.filter((poi) => poi.serviceCategory === 'movie')).toHaveLength(8)
+    expect(fictionalPoiCatalog.filter((poi) => ['retail', 'wellness', 'ticket', 'other'].includes(poi.serviceCategory)).length).toBeGreaterThanOrEqual(7)
+    expect(offerings.length).toBeGreaterThanOrEqual(200)
+    expect(ids.size).toBe(offerings.length)
+
+    const hotel = fictionalPoiCatalog.find((poi) => poi.serviceCategory === 'hotel')!
+    const movie = fictionalPoiCatalog.find((poi) => poi.serviceCategory === 'movie')!
+    expect(hotel.offerings).toHaveLength(3)
+    expect(hotel.offerings.every((offering) => offering.roomType && offering.bedType && offering.checkInTime)).toBe(true)
+    expect(movie.offerings).toHaveLength(3)
+    expect(movie.offerings.every((offering) => offering.filmTitle && offering.showtime && offering.runtimeMinutes)).toBe(true)
+  })
+
+  it('searches mock POIs with structured scoring instead of id-only boosts', () => {
+    const quietCafe = searchFictionalPois({ phase: 'leisure', query: '加个安静咖啡', limit: 3 })
+    expect(quietCafe).toHaveLength(3)
+    expect(quietCafe[0]?.reasons).toEqual(expect.arrayContaining(['匹配咖啡/休息需求']))
+    expect(`${quietCafe[0]?.poi.name}${quietCafe[0]?.poi.tags.join('')}`).toMatch(/咖啡|安静/)
+
+    const hotpot = searchFictionalPois({ phase: 'dining', query: '今晚想吃火锅', limit: 3 })
+    expect(hotpot.every((item) => `${item.poi.name}${item.poi.tags.join('')}`.includes('火锅'))).toBe(true)
+
+    const hotels = searchFictionalPois({ phase: 'leisure', query: '订个安静双床酒店', serviceCategory: 'hotel', limit: 3 })
+    expect(hotels).toHaveLength(3)
+    expect(hotels.every((item) => item.poi.serviceCategory === 'hotel')).toBe(true)
+
+    const movieTickets = searchMerchantOfferings({ category: 'movie', query: '买两张 IMAX 电影票', limit: 3 })
+    expect(movieTickets).toHaveLength(3)
+    expect(movieTickets.every((item) => item.offering.category === 'movie')).toBe(true)
+  })
+
+  it('selects service offerings through commands and snapshots them into sandbox receipts', () => {
+    const plan = createPlanFromPrompt('晚上两个人看电影再住一晚')
+    const moviePoi = getFictionalPoiById('poi_orbit_cinema')!
+    const hotelPoi = getFictionalPoiById('poi_linen_clock_hotel')!
+    const withMovie = applyPlanCommand(plan, {
+      type: 'ADD_SEGMENT',
+      source: 'puzzle',
+      afterSegmentId: plan.segments[0]!.id,
+      segment: {
+        id: 'seg_movie_demo',
+        phase: 'activity',
+        serviceCategory: 'movie',
+        title: moviePoi.activityTitle,
+        place: moviePoi.name,
+        startTime: '16:20',
+        endTime: '18:20',
+        durationMinutes: 120,
+        status: '待确认',
+        reason: moviePoi.description,
+        budget: moviePoi.budget,
+        poiId: moviePoi.id,
+        lnglat: moviePoi.lnglat,
+      },
+    }).plan
+    const withHotel = applyPlanCommand(withMovie, {
+      type: 'ADD_SEGMENT',
+      source: 'puzzle',
+      afterSegmentId: 'seg_movie_demo',
+      segment: {
+        id: 'seg_hotel_demo',
+        phase: 'leisure',
+        serviceCategory: 'hotel',
+        title: hotelPoi.activityTitle,
+        place: hotelPoi.name,
+        startTime: '21:30',
+        endTime: '22:00',
+        durationMinutes: 30,
+        status: '待确认',
+        reason: hotelPoi.description,
+        budget: hotelPoi.budget,
+        poiId: hotelPoi.id,
+        lnglat: hotelPoi.lnglat,
+      },
+    }).plan
+
+    const selectedMovie = applyPlanCommand(withHotel, {
+      type: 'SELECT_SERVICE_ITEM',
+      source: 'action-card',
+      segmentId: 'seg_movie_demo',
+      merchantId: moviePoi.id,
+      offeringId: moviePoi.offerings[0]!.id,
+      quantity: 2,
+    }).plan
+    const selectedHotel = applyPlanCommand(selectedMovie, {
+      type: 'SELECT_SERVICE_ITEM',
+      source: 'action-card',
+      segmentId: 'seg_hotel_demo',
+      merchantId: hotelPoi.id,
+      offeringId: hotelPoi.offerings.find((offering) => `${offering.title}${offering.tags.join('')}`.includes('双床'))!.id,
+      quantity: 1,
+    }).plan
+
+    expect(selectedHotel.serviceSelections).toHaveLength(2)
+    const updatedQuantity = applyPlanCommand(selectedHotel, {
+      type: 'UPDATE_SERVICE_ITEM_QUANTITY',
+      source: 'action-card',
+      selectionId: selectedHotel.serviceSelections![0]!.id,
+      quantity: 3,
+    }).plan
+    expect(updatedQuantity.serviceSelections![0]!.quantity).toBe(3)
+
+    const ordered = applyPlanCommand(updatedQuantity, {
+      type: 'CREATE_SANDBOX_ORDER',
+      source: 'puzzle',
+    }).plan
+    expect(ordered.sandboxOrder?.items.some((item) => item.offeringId === moviePoi.offerings[0]!.id && item.quantity === 3)).toBe(true)
+    expect(ordered.sandboxOrder?.items.some((item) => item.serviceCategory === 'hotel' && item.fulfillment === 'room-night')).toBe(true)
+  })
+
+  it('builds deterministic mock routes and sandbox receipts from plan data', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const routes = buildMockRouteEstimates(plan.segments)
+    expect(routes).toHaveLength(2)
+    expect(routes[0]?.source).toBe('mock-route')
+    expect(routes[0]?.options.map((option) => option.mode)).toEqual(['walk', 'transit', 'taxi'])
+
+    const ordered = applyPlanCommand(plan, {
+      type: 'CREATE_SANDBOX_ORDER',
+      source: 'puzzle',
+    })
+
+    expect(ordered.plan.status).toBe('confirmed')
+    expect(ordered.plan.sandboxOrder).toMatchObject({
+      planId: plan.id,
+      status: 'sandbox_generated',
+    })
+    expect(ordered.plan.sandboxOrder?.receiptId).toBe(`sandbox_${plan.id}_v${ordered.version}`)
+    expect(ordered.plan.sandboxOrder?.merchantRefs).toHaveLength(plan.segments.filter((segment) => !segment.isTransit).length)
+    expect(ordered.plan.sandboxOrder?.disclaimer).toContain('不代表真实预订')
   })
 
   it('chooses a plan variant through a deterministic command', () => {
@@ -251,7 +416,6 @@ describe('PlanCommand deterministic handler', () => {
       searchQuery: '近一点',
     })
     if (first.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing candidates')
-    const shown = first.plan.pendingAction.candidates.map((candidate) => candidate.id)
 
     const refined = applyPlanCommand(first.plan, {
       type: 'REFRESH_CANDIDATES',
@@ -262,7 +426,8 @@ describe('PlanCommand deterministic handler', () => {
 
     if (refined.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing refined candidates')
     expect(refined.plan.pendingAction.searchQuery).toBe('近一点，室内')
-    expect(refined.plan.pendingAction.candidates.some((candidate) => shown.includes(candidate.id))).toBe(true)
+    expect(refined.plan.pendingAction.excludeCandidateIds).toEqual([])
+    expect(refined.plan.pendingAction.candidates.length).toBeGreaterThan(0)
   })
 
   it('dismisses an active pending action without mutating the itinerary', () => {

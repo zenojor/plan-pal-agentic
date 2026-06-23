@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { HomePage } from './routes/HomePage'
 import { ModelSettingsPage } from './routes/ModelSettingsPage'
 import { PlanWorkspacePage } from './routes/PlanWorkspacePage'
+import { appClasses } from './lib/appClasses'
 
 type RouterContext = {
   queryClient: QueryClient
@@ -50,16 +51,16 @@ function RootLayout() {
   })
 
   return (
-    <div className={`app-shell ${isWorkspaceRoute ? 'is-workspace' : ''}`}>
+    <div className={appClasses.shell(isWorkspaceRoute)}>
       {!isWorkspaceRoute && (
-        <header className="topbar">
-          <Link to="/" className="brand">
-            <span className="brand-mark">P</span>
+        <header className={appClasses.topbar}>
+          <Link to="/" className={appClasses.brand}>
+            <span className={appClasses.brandMark}>P</span>
             <span>PlanPal</span>
           </Link>
-          <nav className="topnav">
-            <Link to="/" activeProps={{ className: 'active' }}>开始</Link>
-            <Link to="/settings/model" activeProps={{ className: 'active' }}>模型设置</Link>
+          <nav className={appClasses.topnav}>
+            <Link to="/" className={appClasses.topnavLink()} activeProps={{ className: appClasses.topnavLink(true) }}>开始</Link>
+            <Link to="/settings/model" className={appClasses.topnavLink()} activeProps={{ className: appClasses.topnavLink(true) }}>模型设置</Link>
           </nav>
         </header>
       )}

@@ -21,6 +21,34 @@ export type PublicStoredModelConfig = {
   lastTestedAt?: string
 }
 
+export type ModelProviderPreset = {
+  id: string
+  label: string
+  baseURL: string
+  model: string
+  providerMode: ProviderMode
+  description: string
+}
+
+export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    baseURL: 'https://api.deepseek.com',
+    model: 'deepseek-chat',
+    providerMode: 'openai-compatible',
+    description: 'DeepSeek Chat，使用 OpenAI-compatible Chat Completions。',
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    baseURL: 'https://api.openai.com/v1',
+    model: 'gpt-4.1-mini',
+    providerMode: 'openai-compatible',
+    description: 'OpenAI 官方 /v1 Chat Completions 端点。',
+  },
+]
+
 export function loadModelConfig(storage: Pick<Storage, 'getItem'> = window.localStorage): StoredModelConfig | null {
   const raw = storage.getItem(MODEL_CONFIG_STORAGE_KEY)
   if (!raw) return null
@@ -72,6 +100,17 @@ export function modelConfigsEqual(left: StoredModelConfig | null, right: StoredM
     (normalizedLeft.providerMode ?? 'auto') === (normalizedRight.providerMode ?? 'auto') &&
     (normalizedLeft.resolvedBaseURL ?? '') === (normalizedRight.resolvedBaseURL ?? '')
   )
+}
+
+export function applyModelProviderPreset(config: StoredModelConfig, preset: ModelProviderPreset): StoredModelConfig {
+  return normalizeModelConfig({
+    ...config,
+    baseURL: preset.baseURL,
+    model: preset.model,
+    providerMode: preset.providerMode,
+    resolvedBaseURL: undefined,
+    lastTestedAt: undefined,
+  })
 }
 
 export function normalizeModelConfig(config: StoredModelConfig): StoredModelConfig {
