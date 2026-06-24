@@ -56,9 +56,46 @@ export type FictionalPoiSearchResult = {
   reasons: string[]
 }
 
+export type CandidateSearchMode = 'replace' | 'add-after'
+
+export type CandidateSearchContext = {
+  mode?: CandidateSearchMode
+  phase?: SegmentPhase
+  serviceCategory?: MerchantServiceCategory
+}
+
+export type CandidateSearchIntent = {
+  query: string
+  normalizedQuery: string
+  targetPhase?: SegmentPhase
+  serviceCategory?: MerchantServiceCategory
+  positiveTags: string[]
+  negativeTags: string[]
+  hardConstraints: string[]
+  softPreferences: string[]
+  requestedTags: string[]
+  confidence: number
+  summary: string
+  rankingSignals: string[]
+}
+
+export type CandidateSearchIntentSummary = Pick<
+  CandidateSearchIntent,
+  | 'targetPhase'
+  | 'serviceCategory'
+  | 'positiveTags'
+  | 'negativeTags'
+  | 'hardConstraints'
+  | 'softPreferences'
+  | 'confidence'
+  | 'summary'
+  | 'rankingSignals'
+>
+
 export type FictionalPoiSearchInput = {
   area?: string
   excludePoiIds?: string[]
+  intent?: CandidateSearchIntent
   limit?: number
   maxPriceLevel?: number
   nearLnglat?: [number, number]
@@ -428,11 +465,11 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     phase: 'dining',
     title: '火锅晚餐',
     area: '云汤街',
-    description: '鸳鸯锅和小锅都能安排，适合明确想吃火锅的晚上。',
+    description: '麻辣和番茄鸳鸯锅都能安排，适合明确想吃火锅或辣味的晚上。',
     budget: 'CNY 120-220/人',
     lnglat: [121.4768, 31.2317],
     notes: '适合 2-4 人，建议提前确认锅底和等位。',
-    tags: ['火锅', '鸳鸯锅', '多人', '可预约'],
+    tags: ['火锅', '鸳鸯锅', '辣味', '麻辣', '川湘', '多人', '可预约'],
     address: '云汤街 8 号 2F',
     hours: '11:30-14:00 / 17:00-23:00',
     booking: '晚高峰建议提前 30 分钟留座',
@@ -452,7 +489,7 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     budget: 'CNY 150-280/人',
     lnglat: [121.4783, 31.2327],
     notes: '适合 4 人以上聚餐，可提前备注清淡锅底。',
-    tags: ['火锅', '鸳鸯锅', '多人友好', '可预约'],
+    tags: ['火锅', '鸳鸯锅', '少辣', '多人友好', '可预约'],
     address: '松子里 19 号 1F',
     hours: '11:00-14:30 / 16:30-23:30',
     booking: '多人建议提前预约圆桌',
@@ -472,7 +509,7 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     budget: 'CNY 85-150/人',
     lnglat: [121.4741, 31.2309],
     notes: '适合 1-3 人，翻台较快，预算更可控。',
-    tags: ['火锅', '小锅', '预算可控', '翻台快'],
+    tags: ['火锅', '小锅', '辣味', '预算可控', '翻台快'],
     address: '雾岛弄 4 号 B1',
     hours: '10:30-22:30',
     booking: '通常无需预约，可电话确认等位',
@@ -487,11 +524,11 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     phase: 'dining',
     title: '预算晚餐',
     area: '杏仁巷',
-    description: '成本低、翻台快，不拖累复杂计划。',
+    description: '麻辣小面和清汤小碗都有，成本低、翻台快，不拖累复杂计划。',
     budget: 'CNY 45-80/人',
     lnglat: [121.4728, 31.2299],
-    notes: '适合预算敏感或临时变更。',
-    tags: ['预算可控', '翻台快', '低消费'],
+    notes: '默认偏麻辣，也可备注清汤；适合预算敏感或临时变更。',
+    tags: ['预算可控', '翻台快', '低消费', '辣味', '麻辣', '川湘'],
     address: '杏仁巷 3 号',
     hours: '10:30-21:30',
     booking: '无需预约',
@@ -564,7 +601,7 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     budget: 'CNY 90-170/人',
     lnglat: [121.4762, 31.2314],
     notes: '建议确认儿童椅和少油少辣备注。',
-    tags: ['亲子', '家庭', '多人友好', '可预约'],
+    tags: ['亲子', '家庭', '儿童椅', '少辣', '多人友好', '可预约'],
     suitableFor: ['亲子', '家庭', '长辈'],
     reservationMode: 'recommended',
   }),
@@ -589,13 +626,13 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     phase: 'dining',
     title: '热闹串串',
     area: '星桥弄',
-    description: '氛围热闹、成本可控，适合朋友局。',
+    description: '麻辣串串和小签签上菜快，氛围热闹、成本可控，适合朋友局。',
     budget: 'CNY 70-130/人',
     lnglat: [121.4769, 31.2322],
-    notes: '噪音较高，不适合商务。',
-    tags: ['预算可控', '朋友', '夜间', '热闹'],
+    notes: '噪音较高，不适合商务；带孩子建议换少辣锅或避开晚高峰。',
+    tags: ['串串', '辣味', '麻辣', '川湘', '预算可控', '朋友', '夜间', '热闹'],
     suitableFor: ['朋友聚会', '临时晚饭'],
-    avoidFor: ['商务', '安静'],
+    avoidFor: ['商务', '安静', '亲子低龄'],
     noiseLevel: 'lively',
   }),
   seed({
@@ -608,7 +645,7 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     budget: 'CNY 90-160/人',
     lnglat: [121.4779, 31.2318],
     notes: '适合长辈和低刺激需求。',
-    tags: ['清淡', '安静', '低刺激', '素食'],
+    tags: ['清淡', '不辣', '少辣', '安静', '低刺激', '素食'],
     suitableFor: ['长辈', '低刺激', '不吃辣'],
     noiseLevel: 'quiet',
   }),
@@ -644,11 +681,11 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     phase: 'dining',
     title: '烤肉聚餐',
     area: '河岸街',
-    description: '桌面互动强，适合朋友和生日，但排队风险偏高。',
+    description: '香辣烤肉和桌面互动强，适合朋友和生日，但排队风险偏高。',
     budget: 'CNY 130-230/人',
     lnglat: [121.4824, 31.2327],
-    notes: '建议提前确认油烟和等位。',
-    tags: ['多人', '生日', '热闹', '可预约'],
+    notes: '建议提前确认油烟和等位；聊天场景要避开高峰。',
+    tags: ['多人', '生日', '热闹', '可预约', '辣味', '香辣', '川湘'],
     suitableFor: ['朋友聚会', '生日'],
     queueRisk: 'high',
     noiseLevel: 'lively',
@@ -720,7 +757,7 @@ const baseFictionalPoiCatalog: FictionalPoi[] = [
     budget: 'CNY 80-150/人',
     lnglat: [121.4803, 31.2332],
     notes: '可备注少油少盐。',
-    tags: ['清淡', '无辣', '亲子', '室内'],
+    tags: ['清淡', '无辣', '不辣', '少辣', '亲子', '室内'],
     suitableFor: ['亲子', '不吃辣', '长辈'],
     indoorScore: 5,
   }),
@@ -1550,11 +1587,125 @@ export const fictionalPoiCatalog: FictionalPoi[] = [
   ...lifeServicePoiCatalog,
 ]
 
+export function deriveCandidateSearchIntent(query = '', context: CandidateSearchContext = {}): CandidateSearchIntent {
+  const normalizedQuery = normalizeSearchText(query)
+  const positiveTags: string[] = []
+  const negativeTags: string[] = []
+  const hardConstraints: string[] = []
+  const softPreferences: string[] = []
+
+  const noSpicy = hasNoSpicyIntent(normalizedQuery)
+  const spicy = !noSpicy && hasSpicyIntent(normalizedQuery)
+  if (spicy) {
+    positiveTags.push('辣味')
+    softPreferences.push('偏辣口味')
+  }
+  if (!noSpicy && containsAnyText(normalizedQuery, ['川菜', '湘菜', '川湘'])) {
+    positiveTags.push('川湘', '辣味')
+    softPreferences.push('川湘口味')
+  }
+  if (!noSpicy && containsAnyText(normalizedQuery, ['串串', '签签', '钵钵'])) {
+    positiveTags.push('串串', '辣味')
+    softPreferences.push('串串/小签签')
+  }
+  if (noSpicy) {
+    positiveTags.push('不辣', '清淡')
+    negativeTags.push('辣味')
+    hardConstraints.push('避免重辣')
+  }
+  if (containsAnyText(normalizedQuery, ['火锅', '涮锅', '涮肉', '锅底', 'hotpot'])) {
+    positiveTags.push('火锅')
+    softPreferences.push('火锅')
+  }
+  if (containsAnyText(normalizedQuery, ['亲子', '孩子', '儿童', '家庭', 'family'])) {
+    positiveTags.push('亲子')
+    softPreferences.push('亲子友好')
+  }
+  if (containsAnyText(normalizedQuery, ['商务', '客户', 'client'])) {
+    positiveTags.push('商务')
+    softPreferences.push('商务确定性')
+  }
+  if (containsAnyText(normalizedQuery, ['安静', '聊天', '能聊', '好聊', 'quiet'])) {
+    positiveTags.push('安静')
+    softPreferences.push('适合聊天')
+    if (containsAnyText(normalizedQuery, ['安静', '能聊天', '好聊天'])) hardConstraints.push('控制噪音')
+  }
+  if (containsAnyText(normalizedQuery, ['预算', '便宜', '别太贵', '低预算'])) {
+    positiveTags.push('预算可控')
+    softPreferences.push('预算可控')
+  }
+  if (containsAnyText(normalizedQuery, ['室内', '雨', 'indoor'])) {
+    positiveTags.push('室内')
+    hardConstraints.push('室内/天气稳定')
+  }
+  if (containsAnyText(normalizedQuery, ['夜', '晚', 'night'])) {
+    positiveTags.push('夜间')
+    softPreferences.push('适配夜间时段')
+  }
+
+  const inferredTags = inferQueryTags(normalizedQuery)
+  const requestedTags = uniqueCompact([...inferredTags, ...positiveTags])
+  const targetPhase = context.phase ?? inferIntentPhase(normalizedQuery, requestedTags, context.serviceCategory)
+  const serviceCategory = context.serviceCategory ?? inferIntentServiceCategory(normalizedQuery)
+  const signalCount = requestedTags.length + negativeTags.length + hardConstraints.length + softPreferences.length
+  const confidence = normalizedQuery
+    ? Math.min(0.96, Math.max(0.48, 0.52 + signalCount * 0.07 + (targetPhase ? 0.08 : 0)))
+    : 0.32
+  const summaryParts = [
+    targetPhase ? `目标 ${targetPhase}` : '目标待推断',
+    requestedTags.length ? `偏好 ${requestedTags.join('/')}` : '',
+    negativeTags.length ? `避开 ${negativeTags.join('/')}` : '',
+    hardConstraints.length ? `约束 ${hardConstraints.join('/')}` : '',
+  ].filter(Boolean)
+
+  return {
+    query,
+    normalizedQuery,
+    targetPhase,
+    serviceCategory,
+    positiveTags: uniqueCompact(positiveTags),
+    negativeTags: uniqueCompact(negativeTags),
+    hardConstraints: uniqueCompact(hardConstraints),
+    softPreferences: uniqueCompact(softPreferences),
+    requestedTags,
+    confidence: Number(confidence.toFixed(2)),
+    summary: summaryParts.join('；') || '没有明确候选偏好',
+    rankingSignals: uniqueCompact([
+      context.mode ? `mode:${context.mode}` : '',
+      targetPhase ? `phase:${targetPhase}` : '',
+      serviceCategory ? `service:${serviceCategory}` : '',
+      ...requestedTags.map((tag) => `boost:${tag}`),
+      ...negativeTags.map((tag) => `penalty:${tag}`),
+      ...hardConstraints.map((item) => `hard:${item}`),
+    ]),
+  }
+}
+
+export function summarizeCandidateSearchIntent(intent: CandidateSearchIntent): CandidateSearchIntentSummary {
+  return {
+    targetPhase: intent.targetPhase,
+    serviceCategory: intent.serviceCategory,
+    positiveTags: intent.positiveTags,
+    negativeTags: intent.negativeTags,
+    hardConstraints: intent.hardConstraints,
+    softPreferences: intent.softPreferences,
+    confidence: intent.confidence,
+    summary: intent.summary,
+    rankingSignals: intent.rankingSignals,
+  }
+}
+
 export function searchFictionalPois(input: FictionalPoiSearchInput): FictionalPoiSearchResult[] {
   const phase = input.phase ? normalizePoiPhase(input.phase) : undefined
   const normalizedQuery = normalizeSearchText(input.query)
-  const queryTags = inferQueryTags(normalizedQuery)
-  const requestedTags = [...queryTags, ...(input.tags ?? []).map(normalizeSearchText).filter(Boolean)]
+  const intent = input.intent ?? deriveCandidateSearchIntent(input.query, {
+    phase: input.phase,
+    serviceCategory: input.serviceCategory,
+  })
+  const requestedTags = uniqueCompact([
+    ...intent.requestedTags,
+    ...(input.tags ?? []).map(normalizeSearchText).filter(Boolean),
+  ])
   const excluded = new Set(input.excludePoiIds ?? [])
   const limit = Math.max(1, Math.min(50, input.limit ?? 20))
 
@@ -1564,7 +1715,7 @@ export function searchFictionalPois(input: FictionalPoiSearchInput): FictionalPo
     .filter((poi) => !excluded.has(poi.id))
     .filter((poi) => !input.area || normalizeSearchText(poi.area).includes(normalizeSearchText(input.area)))
     .filter((poi) => !input.maxPriceLevel || poi.priceLevel <= input.maxPriceLevel)
-    .map((poi, index) => scorePoi(poi, index, { ...input, normalizedQuery, requestedTags }))
+    .map((poi, index) => scorePoi(poi, index, { ...input, intent, normalizedQuery, requestedTags }))
     .filter((result) => result.score > 0)
     .sort((left, right) => right.score - left.score || left.poi.id.localeCompare(right.poi.id))
 
@@ -1713,7 +1864,7 @@ function seed(seedInput: CompactPoiSeed): FictionalPoi {
 function scorePoi(
   poi: FictionalPoi,
   index: number,
-  input: FictionalPoiSearchInput & { normalizedQuery: string; requestedTags: string[] },
+  input: FictionalPoiSearchInput & { intent: CandidateSearchIntent; normalizedQuery: string; requestedTags: string[] },
 ): FictionalPoiSearchResult {
   let score = 100 - index * 0.05
   const reasons = new Set<string>(['匹配当前阶段'])
@@ -1771,6 +1922,66 @@ function scorePoi(
     }
   }
 
+  if (input.intent.positiveTags.includes('辣味')) {
+    if (hasSpicyPoiSignal(poi)) {
+      score += 34
+      reasons.add('匹配辣味需求')
+    } else {
+      score -= 34
+    }
+  }
+  if (input.intent.positiveTags.includes('川湘')) {
+    if (hasTagLike(poi, ['川湘', '川菜', '湘菜', '麻辣', '香辣'])) {
+      score += 24
+      reasons.add('匹配川湘口味')
+    } else {
+      score -= 8
+    }
+  }
+  if (input.intent.positiveTags.includes('串串')) {
+    if (hasTagLike(poi, ['串串', '签签', '钵钵'])) {
+      score += 30
+      reasons.add('匹配串串需求')
+    } else {
+      score -= 10
+    }
+  }
+  if (input.intent.negativeTags.includes('辣味')) {
+    if (hasSpicyPoiSignal(poi) && !hasNoSpicyPoiSignal(poi)) {
+      score -= 72
+      reasons.add('避开重辣风险')
+    } else {
+      score += 28
+      reasons.add('匹配不辣/少辣要求')
+    }
+  }
+  if (input.intent.positiveTags.includes('亲子')) {
+    if (hasTagLike(poi, ['亲子', '家庭', '儿童', '儿童椅'])) {
+      score += 22
+      reasons.add('考虑亲子友好')
+    } else {
+      score -= 8
+    }
+    if (hasSpicyPoiSignal(poi) && !hasNoSpicyPoiSignal(poi)) {
+      score -= 14
+      reasons.add('口味偏重，带孩子需备注少辣')
+    }
+  }
+  if (input.intent.positiveTags.includes('商务')) {
+    if (hasTagLike(poi, ['商务', '包间', '投屏']) || poi.noiseLevel === 'quiet') {
+      score += 22
+      reasons.add('考虑商务确定性')
+    }
+    if (poi.noiseLevel === 'lively' || hasTagLike(poi, ['热闹'])) {
+      score -= 24
+      reasons.add('噪音较高，不适合商务')
+    }
+  }
+  if (input.intent.positiveTags.includes('安静')) {
+    score += poi.noiseLevel === 'quiet' ? 24 : poi.noiseLevel === 'moderate' ? 6 : -22
+    reasons.add(poi.noiseLevel === 'lively' ? '热闹场景，聊天风险较高' : '匹配安静/聊天需求')
+  }
+
   if (input.normalizedQuery.includes('近') || input.normalizedQuery.includes('near')) {
     score += 8
     reasons.add('匹配近距离偏好')
@@ -1808,7 +2019,7 @@ function scorePoi(
   return {
     poi,
     score,
-    reasons: [...reasons].slice(0, 5),
+    reasons: [...reasons].slice(0, 6),
   }
 }
 
@@ -1910,7 +2121,7 @@ function scoreOffering(
 }
 
 function isStrongIntentTag(tag: string) {
-  return ['火锅', '咖啡', '不喝酒', '酒店', '住宿', '电影', '影院', '双床', '大床', 'IMAX'].includes(tag)
+  return ['火锅', '咖啡', '不喝酒', '酒店', '住宿', '电影', '影院', '双床', '大床', 'IMAX', '辣味', '不辣'].includes(tag)
 }
 
 function hasStrongPoiSignal(poi: FictionalPoi, tag: string) {
@@ -1934,11 +2145,20 @@ function hasStrongPoiSignal(poi: FictionalPoi, tag: string) {
   ].join(' '))
   if (tag === '住宿') return poi.serviceCategory === 'hotel' || core.includes('酒店') || core.includes('住宿')
   if (tag === '影院') return poi.serviceCategory === 'movie' || core.includes('电影') || core.includes('影院')
+  if (tag === '辣味') return hasSpicyPoiSignal(poi)
+  if (tag === '不辣') return hasNoSpicyPoiSignal(poi)
   return core.includes(normalized)
 }
 
 function inferQueryTags(query: string) {
   const tags: string[] = []
+  if (hasNoSpicyIntent(query)) {
+    tags.push('不辣', '清淡')
+  } else {
+    if (hasSpicyIntent(query)) tags.push('辣味')
+    if (containsAnyText(query, ['川菜', '湘菜', '川湘'])) tags.push('川湘')
+    if (containsAnyText(query, ['串串', '签签', '钵钵'])) tags.push('串串')
+  }
   const mapping: Array<[string[], string]> = [
     [['咖啡', 'coffee'], '咖啡'],
     [['甜品', '蛋糕'], '甜品'],
@@ -1964,7 +2184,7 @@ function inferQueryTags(query: string) {
   for (const [needles, tag] of mapping) {
     if (needles.some((needle) => query.includes(needle))) tags.push(tag)
   }
-  return tags
+  return uniqueCompact(tags)
 }
 
 function reasonForTag(tag: string) {
@@ -1972,6 +2192,10 @@ function reasonForTag(tag: string) {
   if (tag.includes('甜品')) return '匹配甜品缓冲需求'
   if (tag.includes('拍照')) return '匹配拍照记忆点'
   if (tag.includes('火锅')) return '匹配火锅需求'
+  if (tag.includes('辣味')) return '匹配辣味需求'
+  if (tag.includes('川湘')) return '匹配川湘口味'
+  if (tag.includes('串串')) return '匹配串串需求'
+  if (tag.includes('不辣') || tag.includes('无辣') || tag.includes('清淡')) return '匹配不辣/少辣要求'
   if (tag.includes('亲子')) return '考虑亲子友好'
   if (tag.includes('商务')) return '考虑商务确定性'
   if (tag.includes('预算')) return '考虑预算可控'
@@ -1984,6 +2208,62 @@ function reasonForTag(tag: string) {
 
 function normalizePoiPhase(phase: SegmentPhase): FictionalPoiPhase {
   return phase === 'transit' ? 'leisure' : phase
+}
+
+function inferIntentPhase(
+  query: string,
+  requestedTags: string[],
+  serviceCategory: MerchantServiceCategory | undefined,
+): SegmentPhase | undefined {
+  if (serviceCategory === 'hotel') return 'leisure'
+  if (serviceCategory === 'movie' || serviceCategory === 'ticket') return 'activity'
+  if (containsAnyText(query, ['饭', '吃', '餐厅', '晚餐', '午餐', 'dinner']) || requestedTags.some((tag) => ['辣味', '川湘', '串串', '不辣', '清淡', '火锅'].includes(tag))) return 'dining'
+  if (containsAnyText(query, ['喝', '酒', '清吧', 'bar', 'drink'])) return 'drinks'
+  if (serviceCategory) return 'leisure'
+  return undefined
+}
+
+function inferIntentServiceCategory(query: string): MerchantServiceCategory | undefined {
+  if (containsAnyText(query, ['酒店', '住宿', '住一晚', '住一夜', '双床', '大床', 'hotel'])) return 'hotel'
+  if (containsAnyText(query, ['电影', '影院', 'imax', 'movie', 'cinema'])) return 'movie'
+  if (containsAnyText(query, ['票', '门票', 'ticket'])) return 'ticket'
+  if (containsAnyText(query, ['spa', '按摩', '瑜伽', '放松'])) return 'wellness'
+  if (containsAnyText(query, ['花', '花束', '礼物', '写真'])) return 'retail'
+  return undefined
+}
+
+function hasNoSpicyIntent(value: string) {
+  return containsAnyText(value, ['不吃辣', '不能吃辣', '不要辣', '别太辣', '不辣', '无辣', '少辣', '微辣', '清淡'])
+}
+
+function hasSpicyIntent(value: string) {
+  return containsAnyText(value, ['想吃辣', '吃辣', '辣的', '辣味', '麻辣', '香辣', '重口', '川菜', '湘菜', '川湘', '串串', '签签', '钵钵'])
+}
+
+function hasSpicyPoiSignal(poi: FictionalPoi) {
+  return hasTagLike(poi, ['辣味', '麻辣', '香辣', '重口', '川湘', '川菜', '湘菜', '串串', '签签', '钵钵'])
+}
+
+function hasNoSpicyPoiSignal(poi: FictionalPoi) {
+  return hasTagLike(poi, ['不辣', '无辣', '少辣', '微辣', '清淡', '低刺激'])
+}
+
+function hasTagLike(poi: FictionalPoi, needles: string[]) {
+  const core = normalizeSearchText([
+    poi.name,
+    poi.activityTitle,
+    poi.description,
+    poi.notes,
+    ...poi.tags,
+    ...poi.sceneTags,
+    ...poi.suitableFor,
+    ...poi.avoidFor,
+  ].join(' '))
+  return needles.some((needle) => core.includes(normalizeSearchText(needle)))
+}
+
+function containsAnyText(value: string, needles: string[]) {
+  return needles.some((needle) => value.includes(normalizeSearchText(needle)))
 }
 
 function normalizeSearchText(value: string | undefined) {

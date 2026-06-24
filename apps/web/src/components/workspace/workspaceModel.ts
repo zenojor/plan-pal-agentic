@@ -1497,7 +1497,22 @@ export function chatMessageFromPendingAction(action: PendingAction): ChatMessage
 
 export function lastAttachedActionMessageIndex(messages: ChatMessage[], action?: PendingAction) {
   if (!action) return -1
-  return lastMessageIndex(messages, (message) => message.action?.id === action.id)
+  const attachedIndex = lastMessageIndex(messages, (message) => message.action?.id === action.id)
+  if (attachedIndex >= 0) return attachedIndex
+
+  const latestUserIndex = lastMessageIndex(messages, (message) => message.role === 'user')
+  const latestPlanpalAfterUser = lastMessageIndex(
+    messages,
+    (message, index) => message.role === 'planpal' && !message.receipt && index > latestUserIndex,
+  )
+  if (latestPlanpalAfterUser >= 0) return latestPlanpalAfterUser
+
+  return lastMessageIndex(messages, (message) => message.role === 'planpal' && !message.receipt)
+}
+
+export function lastVariantSelectionMessageIndex(messages: ChatMessage[], selection?: PlanVariantSelection) {
+  if (!selection) return -1
+  return lastMessageIndex(messages, (message) => message.action?.id === selection.actionId)
 }
 
 export function activePlanVariantSelectionFromAction(
@@ -1512,6 +1527,16 @@ export function activePlanVariantSelectionFromAction(
     description: action.description,
     variants: action.variants,
   }
+}
+
+export function visiblePlanVariantSelectionFromState(
+  action: PendingAction | undefined,
+  selection?: PlanVariantSelection,
+): PlanVariantSelection | undefined {
+  if (action?.kind === 'plan-variant-selection') {
+    return activePlanVariantSelectionFromAction(action, selection)
+  }
+  return selection?.selectedVariantId ? selection : undefined
 }
 
 export function chatMessageFromAgentEvent(event: AgentEvent): ChatMessage | null {
@@ -1671,7 +1696,7 @@ function redactUiError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '请求失败')
   return message
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi, 'Bearer [redacted]')
 }
 
 function isPendingAction(value: unknown): value is PendingAction {

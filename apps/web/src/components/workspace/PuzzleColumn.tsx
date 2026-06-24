@@ -144,6 +144,19 @@ export function PuzzleColumn({
           />
         )
       })}
+      {draggingSegmentId && (
+        <div
+          className={puzzleClasses.endDropZone}
+          role="presentation"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.stopPropagation()
+            onDropSegment(null)
+          }}
+        >
+          放到行程末尾
+        </div>
+      )}
     </div>
   )
 }
@@ -168,11 +181,16 @@ function RouteConnector({
   if (!route) {
     return (
       <div className={puzzleClasses.routeConnector}>
-        <div className={puzzleClasses.routeMain}>
-          <span className={puzzleClasses.routeBadge}>路线</span>
-          <strong className={puzzleClasses.routeTitle}>{label}</strong>
+        <div className={puzzleClasses.routeRail} aria-hidden="true">
+          <span className={puzzleClasses.routeDot} />
         </div>
-        <small className={puzzleClasses.routeDetail}>坐标不足 · 估计 {durationMinutes} 分钟</small>
+        <div className={puzzleClasses.routeBody}>
+          <div className={puzzleClasses.routeMain}>
+            <span className={puzzleClasses.routeBadge}>路线</span>
+            <strong className={puzzleClasses.routeTitle}>{label}</strong>
+          </div>
+          <small className={puzzleClasses.routeDetail}>坐标不足 · 估计 {durationMinutes} 分钟</small>
+        </div>
       </div>
     )
   }
@@ -181,31 +199,36 @@ function RouteConnector({
   const display = deriveRouteLegDisplay(route, selectedRouteModes)
   return (
     <div className={puzzleClasses.routeConnector}>
-      <div className={puzzleClasses.routeMain}>
-        <span className={puzzleClasses.routeBadge}>{display.statusLabel}</span>
-        <strong className={puzzleClasses.routeTitle}>{display.title}</strong>
+      <div className={puzzleClasses.routeRail} aria-hidden="true">
+        <span className={puzzleClasses.routeDot} />
       </div>
-      <small className={puzzleClasses.routeDetail}>{display.detail}</small>
-      <div className={puzzleClasses.routeModes} role="group" aria-label="拼图路线方式">
-        <button
-          className={puzzleClasses.routeModeButton(!hasExplicitChoice)}
-          disabled={busy || !hasExplicitChoice}
-          type="button"
-          onClick={() => onRouteChoiceClear(route)}
-        >
-          推荐
-        </button>
-        {route.options.map((option) => (
+      <div className={puzzleClasses.routeBody}>
+        <div className={puzzleClasses.routeMain}>
+          <span className={puzzleClasses.routeBadge}>{display.statusLabel}</span>
+          <strong className={puzzleClasses.routeTitle}>{display.title}</strong>
+        </div>
+        <small className={puzzleClasses.routeDetail}>{display.detail}</small>
+        <div className={puzzleClasses.routeModes} role="group" aria-label="拼图路线方式">
           <button
-            className={puzzleClasses.routeModeButton(selectedMode === option.mode)}
-            disabled={busy || selectedMode === option.mode}
-            key={option.mode}
+            className={puzzleClasses.routeModeButton(!hasExplicitChoice)}
+            disabled={busy || !hasExplicitChoice}
             type="button"
-            onClick={() => onRouteModeChange(route, option.mode)}
+            onClick={() => onRouteChoiceClear(route)}
           >
-            {option.label}
+            <strong className={workspacePrimitives.routeModeStrong}>推荐</strong>
           </button>
-        ))}
+          {route.options.map((option) => (
+            <button
+              className={puzzleClasses.routeModeButton(hasExplicitChoice && selectedMode === option.mode)}
+              disabled={busy || (hasExplicitChoice && selectedMode === option.mode)}
+              key={option.mode}
+              type="button"
+              onClick={() => onRouteModeChange(route, option.mode)}
+            >
+              <strong className={workspacePrimitives.routeModeStrong}>{option.label}</strong>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -259,7 +282,7 @@ function SegmentCard({
   }
 
   return (
-    <Card
+    <article
       className={puzzleClasses.ticket({
         selected,
         draggable: actions.canReorder,
@@ -276,15 +299,15 @@ function SegmentCard({
         }
       }}
       onDragLeave={() => onSetDragOverSegment(null)}
-      onDragOver={(event: DragEvent<HTMLDivElement>) => {
+      onDragOver={(event: DragEvent<HTMLElement>) => {
         if (draggingSegmentId && actions.canReorder) event.preventDefault()
       }}
-      onDragStart={(event: DragEvent<HTMLDivElement>) => {
+      onDragStart={(event: DragEvent<HTMLElement>) => {
         if (!actions.canReorder) return
         event.stopPropagation()
         onDragStart(segment.id)
       }}
-      onDrop={(event: DragEvent<HTMLDivElement>) => {
+      onDrop={(event: DragEvent<HTMLElement>) => {
         if (!actions.canReorder) return
         event.stopPropagation()
         onDropSegment(segment.id)
@@ -439,6 +462,6 @@ function SegmentCard({
           </Button>
         </div>
       </article>
-    </Card>
+    </article>
   )
 }

@@ -238,7 +238,7 @@ function ColumnPicker({
         type="button"
         onClick={onToggle}
       >
-        +
+        <span className={workspaceShellClasses.columnPickerPlus} aria-hidden="true">+</span>
       </button>
     </div>
   )
@@ -272,7 +272,7 @@ function WorkspaceHeader({
         <strong className={workspaceShellClasses.homeLinkText}>首页</strong>
       </Link>
       <div className={workspaceShellClasses.headerCopy}>
-        <span className="text-[0.72rem] font-[950] uppercase tracking-[0.08em] text-[var(--animal-primary-active)]">PlanPal Board</span>
+        <span className="text-[0.7rem] font-[850] uppercase tracking-[0.08em] text-[var(--animal-primary-active)]">PlanPal Board</span>
         <strong className={workspaceShellClasses.headerTitle}>{planTitle || '为你推荐'}</strong>
         <small className={workspaceShellClasses.headerSummary}>{planSummary || '选一个方向后，拼图主轴会变成可编辑计划。'}</small>
       </div>
@@ -327,7 +327,10 @@ function ColumnHeader({
         </span>
         <div>
           <span className={workspaceShellClasses.columnDragPill}>拖拽排序</span>
-          <h2 className={workspaceShellClasses.columnTitle}>{meta.title}</h2>
+          <div className={workspaceShellClasses.columnTitleRow}>
+            <span className={workspaceShellClasses.columnDragHandle} aria-hidden="true">⋮⋮</span>
+            <h2 className={workspaceShellClasses.columnTitle}>{meta.title}</h2>
+          </div>
           <p className={workspaceShellClasses.columnHint}>{meta.hint}</p>
         </div>
       </div>

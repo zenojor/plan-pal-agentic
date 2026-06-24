@@ -29,13 +29,20 @@ export type RoutedTurn =
       reason: string
     }
   | {
+      kind: 'clarification'
+      title: string
+      description: string
+      requiredFields: string[]
+      reason: string
+    }
+  | {
       kind: 'qa'
       answerSeed: string
       reason: string
     }
 
 export type ModelTurnIntent = {
-  action: 'qa' | 'replace' | 'add' | 'rewrite' | 'delete' | 'confirm' | 'service'
+  action: 'qa' | 'replace' | 'add' | 'rewrite' | 'delete' | 'confirm' | 'service' | 'clarify'
   answer?: string
   category?: MerchantServiceCategory
   query?: string
@@ -85,6 +92,24 @@ export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSe
       afterSegmentId: insertionAnchor?.id ?? null,
       query: message,
       reason: 'add-after request',
+    }
+  }
+  if (isAmbiguousChangeRequest(normalized)) {
+    return {
+      kind: 'clarification',
+      title: '需要补充目标',
+      description: 'PlanPal 还不确定你想替换节点、加一个新地点，还是只调整当前节点。',
+      requiredFields: ['要改哪个节点', '想替换、加点还是改描述', '新的偏好或约束'],
+      reason: 'low-confidence change request',
+    }
+  }
+  if (target.phase === 'dining' && isDiningPreferenceRequest(normalized)) {
+    return {
+      kind: 'candidate-search',
+      mode: 'replace',
+      segmentId: target.id,
+      query: message,
+      reason: 'dining preference replacement request',
     }
   }
   if (containsAny(normalized, ['换', '替换', 'replace', 'near', '近一点', '近点', '火锅', '涮锅', '涮肉', '锅底', 'hotpot'])) {
@@ -154,7 +179,7 @@ export function parseModelTurnIntent(raw: string): ModelTurnIntent | null {
   if (!json) return null
   try {
     const parsed = JSON.parse(json) as Partial<ModelTurnIntent>
-    if (!parsed.action || !['qa', 'replace', 'add', 'rewrite', 'delete', 'confirm', 'service'].includes(parsed.action)) return null
+    if (!parsed.action || !['qa', 'replace', 'add', 'rewrite', 'delete', 'confirm', 'service', 'clarify'].includes(parsed.action)) return null
     const targetPhase = isSegmentPhase(parsed.targetPhase) ? parsed.targetPhase : undefined
     const category = isMerchantServiceCategory(parsed.category) ? parsed.category : undefined
     return {
@@ -188,6 +213,15 @@ export function routeModelTurnIntent(
       category,
       query: intent.query?.trim() || message,
       reason: intent.reason || 'model interpreted service item request',
+    }
+  }
+  if (intent.action === 'clarify') {
+    return {
+      kind: 'clarification',
+      title: '需要补充信息',
+      description: intent.reason || 'PlanPal 还不确定应该替换、加点还是只调整当前节点。',
+      requiredFields: ['目标节点', '操作类型', '偏好或约束'],
+      reason: intent.reason || 'model requested clarification',
     }
   }
   if (intent.action === 'replace') {
@@ -265,7 +299,7 @@ function findTargetSegment(
   if (byPhase) return byPhase
   const selected = selectedSegmentId ? plan.segments.find((segment) => segment.id === selectedSegmentId) : null
   if (selected) return selected
-  if (containsAny(normalized, ['饭', '吃', 'dinner', '餐厅', '晚餐', '火锅', '涮锅', '涮肉', '锅底', 'hotpot'])) {
+  if (containsAny(normalized, ['饭', '吃', 'dinner', '餐厅', '晚餐', '火锅', '涮锅', '涮肉', '锅底', 'hotpot', '辣', '麻辣', '川菜', '湘菜', '川湘', '串串', '不吃辣', '少辣', '清淡'])) {
     return plan.segments.find((segment) => segment.phase === 'dining') ?? plan.segments[0]!
   }
   if (containsAny(normalized, ['喝', '酒', 'bar', '清吧'])) {
@@ -319,6 +353,62 @@ function findInsertionAnchor(
 function containsAny(value: string, needles: string[]) {
   return needles.some((needle) => value.includes(needle))
 }
+
+function isDiningPreferenceRequest(value: string) {
+  return containsAny(value, diningPreferenceKeywords)
+    || (containsAny(value, ['想吃', '吃点', '来点']) && containsAny(value, ['辣', '清淡', '不辣', '川', '湘', '串串', '餐厅', '饭']))
+}
+
+function isAmbiguousChangeRequest(value: string) {
+  if (!containsAny(value, ['调整一下', '改一下', '换一下', '优化一下', '重新安排一下', '随便改改'])) return false
+  return !containsAny(value, [
+    ...diningPreferenceKeywords,
+    ...addCandidateKeywords,
+    '删除',
+    '删掉',
+    '去掉',
+    '确认',
+    '下单',
+    '预订',
+    '轻松',
+    '别太赶',
+    '安静',
+    '近一点',
+    '近点',
+  ])
+}
+
+const diningPreferenceKeywords = [
+  '想吃辣',
+  '吃辣',
+  '辣的',
+  '辣味',
+  '麻辣',
+  '香辣',
+  '重口',
+  '川菜',
+  '湘菜',
+  '川湘',
+  '串串',
+  '签签',
+  '钵钵',
+  '不吃辣',
+  '不能吃辣',
+  '不要辣',
+  '不辣',
+  '无辣',
+  '少辣',
+  '微辣',
+  '清淡',
+  '亲子友好',
+  '带孩子',
+  '孩子',
+  '家庭',
+  '商务',
+  '客户',
+  '能聊天',
+  '好聊天',
+]
 
 const addCandidateKeywords = [
   '加一个',

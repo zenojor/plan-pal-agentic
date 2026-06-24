@@ -123,7 +123,7 @@ export function MerchantColumn({
                   </div>
                   <div className="grid min-w-0 gap-[0.48rem]">
                     {group.offerings.map((offering) => (
-                      <article className={`${workspacePrimitives.panelCard} ${offering.selected ? 'border-animal-primary bg-animal-primary-bg shadow-[0_2px_0_var(--animal-primary-active)]' : 'bg-[#fff8dd]'}`} key={offering.id}>
+                      <article className={workspacePrimitives.offeringCard(offering.selected)} key={offering.id}>
                         <header>
                           <strong className={workspacePrimitives.headingTitle} title={offering.title}>{offering.title}</strong>
                           <small className={workspacePrimitives.headingSubtitle}>{offering.priceLabel} · {offering.availabilityLabel}</small>
@@ -144,7 +144,7 @@ export function MerchantColumn({
                               >
                                 -
                               </button>
-                              <strong className="grid h-[30px] min-w-[30px] place-items-center rounded-full bg-[var(--animal-focus-yellow)] text-[0.78rem] font-[950] text-animal-text">{offering.quantity}</strong>
+                              <strong className="grid h-[30px] min-w-[30px] place-items-center rounded-full bg-[var(--animal-focus-yellow)] text-[0.78rem] font-[850] text-animal-text">{offering.quantity}</strong>
                               <button
                                 className={workspacePrimitives.smallButton()}
                                 type="button"
@@ -164,7 +164,7 @@ export function MerchantColumn({
                             </>
                           ) : (
                             <button
-                              className={workspacePrimitives.smallButton(true)}
+                              className={workspacePrimitives.selectActionButton}
                               type="button"
                               disabled={commandBusy}
                               onClick={() => onCommand(buildSelectServiceItemCommand({
@@ -174,7 +174,7 @@ export function MerchantColumn({
                                 quantity: offering.quantity,
                               }))}
                             >
-                              模拟选择
+                              <strong className={workspacePrimitives.routeModeStrong}>模拟选择</strong>
                             </button>
                           )}
                         </div>

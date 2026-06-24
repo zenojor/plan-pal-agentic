@@ -158,6 +158,43 @@ describe('PlanCommand deterministic handler', () => {
     expect(movieTickets.every((item) => item.offering.category === 'movie')).toBe(true)
   })
 
+  it('ranks spicy, mild, family, and business dining candidates with explainable reasons', () => {
+    const spicy = searchFictionalPois({ phase: 'dining', query: '想吃辣的', limit: 3 })
+    expect(spicy).toHaveLength(3)
+    expect(spicy[0]?.reasons).toEqual(expect.arrayContaining(['匹配辣味需求']))
+    expect(spicy.every((item) => `${item.poi.name}${item.poi.description}${item.poi.tags.join('')}`.match(/辣|川湘|串串|麻辣|香辣/))).toBe(true)
+
+    const mild = searchFictionalPois({ phase: 'dining', query: '不吃辣', limit: 3 })
+    expect(mild).toHaveLength(3)
+    expect(mild[0]?.reasons).toEqual(expect.arrayContaining(['匹配不辣/少辣要求']))
+    expect(mild[0] ? `${mild[0].poi.name}${mild[0].poi.tags.join('')}` : '').toMatch(/不辣|无辣|少辣|清淡|亲子/)
+
+    const familySpicy = searchFictionalPois({ phase: 'dining', query: '想吃川湘但带孩子', limit: 3 })
+    expect(familySpicy).toHaveLength(3)
+    expect(familySpicy.flatMap((item) => item.reasons).join(' ')).toMatch(/川湘|亲子|少辣|带孩子/)
+
+    const chattySpicy = searchFictionalPois({ phase: 'dining', query: '换个能聊天的辣味餐厅', limit: 3 })
+    expect(chattySpicy).toHaveLength(3)
+    expect(chattySpicy.flatMap((item) => item.reasons).join(' ')).toMatch(/辣味|聊天|安静|噪音/)
+  })
+
+  it('creates candidate cards whose reasons expose matches, tradeoffs, and risks', () => {
+    const plan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const dining = plan.segments.find((segment) => segment.phase === 'dining')!
+    const result = applyPlanCommand(plan, {
+      type: 'REPLACE_SEGMENT',
+      source: 'agent',
+      segmentId: dining.id,
+      searchQuery: '想吃川湘但带孩子',
+    })
+
+    expect(result.plan.pendingAction?.kind).toBe('candidate-selection')
+    if (result.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing candidates')
+    const reasons = result.plan.pendingAction.candidates.flatMap((candidate) => candidate.reasons).join(' ')
+    expect(reasons).toMatch(/匹配|考虑/)
+    expect(reasons).toMatch(/风险|少辣|孩子|亲子/)
+  })
+
   it('selects service offerings through commands and snapshots them into sandbox receipts', () => {
     const plan = createPlanFromPrompt('晚上两个人看电影再住一晚')
     const moviePoi = getFictionalPoiById('poi_orbit_cinema')!

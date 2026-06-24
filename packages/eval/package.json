@@ -1,0 +1,10 @@
+{
+  "name": "@planpal/eval",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "eval:agent": "node ../../node_modules/tsx/dist/cli.mjs src/index.ts"
+  }
+}

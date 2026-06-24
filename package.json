@@ -9,9 +9,11 @@
     "build:web": "pnpm --dir apps/web build",
     "build:api": "pnpm --dir apps/api build",
     "build:domain": "pnpm --dir packages/domain build",
+    "build:eval": "pnpm --dir packages/eval build",
     "build:agent": "pnpm --dir packages/agent build",
     "build:db": "pnpm --dir packages/db build",
-    "build:new": "pnpm build:domain && pnpm build:db && pnpm build:agent && pnpm build:api && pnpm build:web",
+    "build:new": "pnpm build:domain && pnpm build:db && pnpm build:agent && pnpm build:eval && pnpm build:api && pnpm build:web",
+    "eval:agent": "pnpm --dir packages/eval eval:agent",
     "test:new": "pnpm --dir packages/domain test && pnpm --dir packages/db test && pnpm --dir packages/agent test && pnpm --dir apps/api test && pnpm --dir apps/web test"
   },
   "devDependencies": {

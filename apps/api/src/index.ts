@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import {
   applyPlanCommand,
+  buildAgentTraceSnapshot,
   buildMockRouteEstimates,
   createId,
   fictionalPoiCatalog,
@@ -12,10 +13,12 @@ import {
   searchMerchantOfferings,
   searchFictionalPois,
   type AgentEvent,
+  type AgentRun,
   type MerchantServiceCategory,
   type Plan,
   type PlanCommand,
   type SegmentPhase,
+  redactTraceText,
 } from '@planpal/domain'
 import { createPlanWithVariants, testOpenAICompatibleModel } from '@planpal/agent'
 import { agentRuntime, stores } from './store'
@@ -290,6 +293,36 @@ app.get('/api/plans/:planId', async (context) => {
   return context.json({ plan, events, versions: versions.map(summarizePlanVersion) })
 })
 
+app.get('/api/plans/:planId/agent/runs', async (context) => {
+  const plan = await stores.plans.getPlan(context.req.param('planId'))
+  if (!plan) return context.json({ error: 'Plan not found' }, 404)
+  const runs = await stores.agents.listRuns(plan.id)
+  return context.json({
+    planId: plan.id,
+    runs: runs.map(summarizeAgentRun),
+  })
+})
+
+app.get('/api/plans/:planId/agent/runs/:runId/trace', async (context) => {
+  const plan = await stores.plans.getPlan(context.req.param('planId'))
+  if (!plan) return context.json({ error: 'Plan not found' }, 404)
+  const run = await stores.agents.getRun(context.req.param('runId'))
+  if (!run || run.planId !== plan.id) return context.json({ error: 'Agent run not found' }, 404)
+  const [events, toolCalls, versions] = await Promise.all([
+    stores.agents.listEvents(plan.id),
+    stores.agents.listToolCalls(run.id),
+    stores.plans.listPlanVersions(plan.id),
+  ])
+  return context.json({
+    trace: buildAgentTraceSnapshot({
+      events,
+      run,
+      toolCalls,
+      versions,
+    }),
+  })
+})
+
 app.delete('/api/plans/:planId', async (context) => {
   const planId = context.req.param('planId')
   const deleted = await stores.plans.deletePlan(planId)
@@ -389,6 +422,18 @@ function summarizePlanVersion(plan: Plan): PlanVersionSummary {
     title: plan.title,
     updatedAt: plan.updatedAt,
     version: plan.currentVersion,
+  }
+}
+
+function summarizeAgentRun(run: AgentRun) {
+  return {
+    id: run.id,
+    planId: run.planId,
+    status: run.status,
+    inputMessage: redactTraceText(run.inputMessage),
+    checkpointId: run.checkpointId,
+    createdAt: run.createdAt,
+    finishedAt: run.finishedAt,
   }
 }
 

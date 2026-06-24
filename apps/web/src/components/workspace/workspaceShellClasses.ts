@@ -6,31 +6,31 @@ export const workspaceShellClasses = {
     'max-[1080px]:pb-[74px]',
   ),
   planningHeader: classNames(
-    'relative z-20 flex shrink-0 items-center justify-between gap-3 min-h-16',
+    'relative z-20 flex min-h-[62px] shrink-0 items-center justify-between gap-3',
     'border-b-2 border-[rgba(196,184,158,0.38)] bg-[rgba(248,248,240,0.92)]',
-    'px-[clamp(1rem,3.3vw,2.5rem)] py-3 backdrop-blur-[14px]',
+    'px-[clamp(1rem,3vw,2rem)] py-2.5 backdrop-blur-[14px]',
     'max-[760px]:gap-[0.58rem] max-[760px]:px-[0.72rem]',
   ),
   homeLink: classNames(
     'inline-flex min-h-9 flex-none items-center justify-center gap-[0.32rem]',
     'rounded-[var(--animal-radius-pill)] border-2 border-[rgba(196,184,158,0.72)]',
-    'bg-animal-bg-light px-[0.78rem] py-[0.28rem] text-[0.86rem] font-[950]',
-    'text-animal-text no-underline shadow-[0_3px_0_var(--animal-shadow-input)]',
+    'bg-animal-bg-light px-[0.78rem] py-[0.28rem] text-[0.84rem] font-[800]',
+    'text-animal-text no-underline shadow-[0_2px_0_var(--animal-shadow-input)]',
     'transition hover:-translate-y-px hover:border-animal-primary hover:shadow-[0_4px_0_var(--animal-primary-active)]',
     'max-[760px]:h-[38px] max-[760px]:w-[38px] max-[760px]:p-0',
   ),
   homeLinkText: 'max-[760px]:sr-only',
   homeLinkArrow: 'inline-grid w-[1.1rem] place-items-center text-base leading-none',
   headerCopy: 'grid min-w-0 flex-1 gap-[0.18rem] mr-2',
-  headerTitle: 'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[1.18rem] font-[900] leading-[1.15] text-animal-text',
+  headerTitle: 'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[1.02rem] font-[850] leading-[1.15] text-animal-text',
   headerSummary: classNames(
-    'block max-w-[760px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.82rem] font-[800] leading-[1.35] text-animal-text-body',
+    'block max-w-[760px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.78rem] font-[700] leading-[1.35] text-animal-text-body',
     'max-[1080px]:max-w-[62vw] max-[760px]:whitespace-normal',
   ),
   headerMeta: 'flex min-w-0 flex-wrap justify-end gap-[0.45rem] overflow-hidden max-[1080px]:hidden',
   headerMetaPill: (state?: 'ready' | 'blocked') => classNames(
     'inline-flex min-h-7 max-w-[210px] items-center overflow-hidden text-ellipsis whitespace-nowrap',
-    'rounded-[var(--animal-radius-pill)] border-2 px-[0.72rem] py-[0.18rem] text-[0.75rem] font-[900]',
+    'rounded-[var(--animal-radius-pill)] border-2 px-[0.66rem] py-[0.18rem] text-[0.72rem] font-[800]',
     state === 'ready'
       ? 'border-animal-green bg-[#ecffd9] text-[#3d6d17]'
       : state === 'blocked'
@@ -53,15 +53,15 @@ export const workspaceShellClasses = {
     'hidden max-[1080px]:mt-[0.65rem] max-[1080px]:mx-[0.65rem]',
     'max-[1080px]:flex max-[1080px]:min-h-[210px] max-[1080px]:max-h-[min(36svh,330px)]',
     'max-[1080px]:flex-[0_0_min(36svh,330px)] max-[1080px]:overflow-hidden',
-    'max-[1080px]:rounded-[24px] max-[1080px]:border-2 max-[1080px]:border-[rgba(196,184,158,0.78)]',
-    'max-[1080px]:bg-[var(--animal-bg-content)] max-[1080px]:shadow-[0_4px_0_var(--animal-shadow-input)]',
+    'max-[1080px]:rounded-[24px] max-[1080px]:border-2 max-[1080px]:border-[rgba(159,146,125,0.72)]',
+    'max-[1080px]:bg-[var(--animal-bg-content)] max-[1080px]:shadow-[0_4px_0_var(--animal-shadow-input),0_12px_24px_rgba(61,52,40,0.08)]',
   ),
   desktopBoard: classNames(
     'grid flex-1 items-stretch gap-3.5 overflow-x-auto overflow-y-hidden',
     'mx-auto min-h-0 pt-3.5 pb-[76px]',
     '[scrollbar-color:var(--animal-border)_transparent] [scrollbar-width:thin]',
-    '[grid-template-columns:repeat(var(--workspace-column-count,3),minmax(360px,1fr))]',
-    '[width:var(--workspace-board-width,min(1680px,calc(100%_-_108px)))]',
+    '[grid-template-columns:repeat(var(--workspace-column-count,3),minmax(356px,1fr))]',
+    '[width:var(--workspace-board-width,min(1720px,calc(100%_-_96px)))]',
     'max-[1080px]:hidden',
   ),
   mobileBoard: classNames(
@@ -70,31 +70,33 @@ export const workspaceShellClasses = {
     'max-[1080px]:px-[0.65rem] max-[1080px]:pt-[0.65rem] max-[1080px]:pb-0',
   ),
   columnHeader: classNames(
-    'flex min-h-[72px] cursor-grab select-none items-center justify-between gap-4',
-    'px-4 pt-[0.7rem] pb-[0.65rem] active:cursor-grabbing',
+    'flex min-h-[64px] cursor-grab select-none items-center justify-between gap-3',
+    'px-3.5 pt-[0.62rem] pb-[0.55rem] active:cursor-grabbing',
     'max-[1080px]:hidden',
   ),
   columnTitleLockup: 'flex min-w-0 items-center gap-3',
   columnIconPill: classNames(
-    'inline-grid h-[46px] w-[46px] flex-none place-items-center',
-    'rounded-[18px] border-2 border-[rgba(196,184,158,0.76)] bg-[#fff3c4]',
-    'shadow-[0_3px_0_#dba90e]',
+    'inline-grid h-[40px] w-[40px] flex-none place-items-center',
+    'rounded-[16px] border-2 border-[rgba(159,146,125,0.58)] bg-[#fff3c4]',
+    'shadow-[0_3px_0_#dba90e,0_8px_14px_rgba(61,52,40,0.08)]',
   ),
-  columnDragPill: classNames(
-    'inline-flex min-h-[21px] items-center rounded-[var(--animal-radius-pill)]',
-    'bg-animal-primary-bg px-[0.52rem] py-[0.12rem]',
-    'text-[0.7rem] font-[900] text-[var(--animal-primary-active)]',
+  columnDragPill: 'sr-only',
+  columnTitleRow: 'flex min-w-0 items-center gap-2',
+  columnDragHandle: classNames(
+    'inline-grid h-6 w-6 flex-none place-items-center rounded-full border-2 border-[rgba(196,184,158,0.62)]',
+    'bg-[#fffdf5] text-[0.78rem] font-[850] leading-none text-[var(--animal-text-muted)]',
+    'shadow-[0_2px_0_var(--animal-shadow-input)]',
   ),
-  columnTitle: 'm-0 mt-[0.28rem] text-[1.18rem] font-[900] leading-[1.12] text-animal-text',
+  columnTitle: 'm-0 text-[1rem] font-[850] leading-[1.15] text-animal-text',
   columnHint: classNames(
     'mt-0.5 block max-w-96 overflow-hidden text-ellipsis whitespace-nowrap',
-    'text-[0.8rem] font-[800] text-[var(--animal-text-secondary)]',
+    'text-[0.74rem] font-[700] text-[var(--animal-text-secondary)]',
     'max-[760px]:whitespace-normal',
   ),
   columnClose: classNames(
     'grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[var(--animal-radius-pill)]',
     'border-2 border-animal-border bg-animal-bg-light p-0 text-[1.2rem]',
-    'font-[900] leading-none text-animal-text-body shadow-[0_3px_0_var(--animal-shadow-input)]',
+    'font-[850] leading-none text-animal-text-body shadow-[0_2px_0_var(--animal-shadow-input)]',
     'transition hover:-translate-y-px hover:border-[var(--animal-border-hover)]',
   ),
   columnDragImage: classNames(
@@ -112,9 +114,10 @@ export const workspaceShellClasses = {
   columnPickerMenuButton: 'flex min-h-[38px] items-center gap-2 whitespace-nowrap rounded-[14px] border-0 bg-transparent px-[0.9rem] py-[0.4rem] text-left font-[900] text-animal-text-body hover:bg-[rgba(255,249,232,0.8)]',
   columnPickerTrigger: classNames(
     'grid h-[42px] w-[42px] place-items-center rounded-[14px] border-2 border-animal-border',
-    'bg-animal-bg-light text-[2rem] font-[900] leading-none text-animal-text-body',
+    'bg-animal-bg-light text-animal-text-body',
     'shadow-[0_5px_0_var(--animal-shadow-input),0_12px_28px_rgba(61,52,40,0.16)] transition hover:-translate-y-px',
   ),
+  columnPickerPlus: 'grid h-full w-full place-items-center text-[1.8rem] font-[850] leading-none',
   mobileTabs: classNames(
     'hidden max-[1080px]:fixed max-[1080px]:inset-x-0 max-[1080px]:bottom-0 max-[1080px]:z-[60]',
     'max-[1080px]:flex max-[1080px]:justify-around max-[1080px]:gap-[0.4rem]',
@@ -142,16 +145,9 @@ export function workspaceColumnSlotClassName({
   isDragOver: boolean
 }) {
   return classNames(
-    'relative isolate flex h-full min-h-0 min-w-0 flex-col rounded-[26px] animate-column-pop transition-opacity',
-    isDragging && 'opacity-[0.62]',
-    isDragOver && [
-      "before:content-[''] before:absolute before:inset-0 before:z-[5] before:pointer-events-none",
-      'before:rounded-[28px] before:border-[3px] before:border-[rgba(25,200,185,0.58)]',
-      'before:shadow-[0_0_0_5px_rgba(230,249,246,0.54)]',
-      "after:content-[''] after:absolute after:top-[0.24rem] after:right-5 after:left-5 after:z-[6]",
-      'after:h-1.5 after:pointer-events-none after:rounded-[var(--animal-radius-pill)]',
-      'after:bg-animal-primary after:shadow-[0_2px_0_var(--animal-primary-active)]',
-    ],
+    'relative isolate flex h-full min-h-0 min-w-0 flex-col rounded-[24px] animate-column-pop transition',
+    isDragging && 'scale-[0.985] opacity-[0.58]',
+    isDragOver && 'bg-[rgba(230,249,246,0.42)] shadow-[inset_0_0_0_4px_rgba(25,200,185,0.22)]',
   )
 }
 
@@ -162,9 +158,9 @@ export function workspaceMobileColumnSlotClassName(isActive: boolean) {
 export function workspaceColumnPanelClassName(isDragOver = false) {
   return classNames(
     'flex min-h-0 flex-1 flex-col overflow-hidden border-2 bg-[#fffaf0]',
-    'rounded-[var(--animal-radius-lg)] max-[1080px]:h-full max-[1080px]:rounded-[24px]',
+    'rounded-[22px] max-[1080px]:h-full max-[1080px]:rounded-[22px]',
     isDragOver
-      ? 'border-[rgba(25,200,185,0.58)] shadow-[0_4px_0_rgba(17,168,155,0.22),0_12px_28px_rgba(61,52,40,0.09)]'
-      : 'border-[rgba(196,184,158,0.78)] shadow-[0_4px_0_0_var(--animal-shadow-input),0_12px_28px_rgba(61,52,40,0.09)]',
+      ? 'border-[rgba(25,200,185,0.64)] bg-[#f2fffb] shadow-[0_3px_0_rgba(17,168,155,0.26),0_10px_22px_rgba(61,52,40,0.08)]'
+      : 'border-[rgba(159,146,125,0.72)] shadow-[0_3px_0_0_var(--animal-shadow-input),0_10px_22px_rgba(61,52,40,0.08)]',
   )
 }

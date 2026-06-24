@@ -57,6 +57,12 @@ export class InMemoryAgentRepository implements AgentRepository {
     return this.runs.get(runId) ?? null
   }
 
+  async listRuns(planId: string) {
+    return [...this.runs.values()]
+      .filter((run) => run.planId === planId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  }
+
   async deletePlanData(planId: string) {
     const runIds = [...this.runs.values()]
       .filter((run) => run.planId === planId)
@@ -84,6 +90,10 @@ export class InMemoryAgentRepository implements AgentRepository {
     calls.push(toolCall)
     this.toolCalls.set(toolCall.runId, calls)
     return toolCall
+  }
+
+  async listToolCalls(runId: string) {
+    return this.toolCalls.get(runId) ?? []
   }
 }
 

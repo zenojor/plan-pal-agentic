@@ -4,7 +4,7 @@ import type { AgentEvent, AgentRun, Plan, ToolCallRecord } from '@planpal/domain
 import type { AgentRepository, PlanPalStores, PlanRepository } from './repository'
 
 const DEFAULT_STORE_PATH = '.planpal-data/demo-store.json'
-const SECRET_PATTERNS = [/sk-[A-Za-z0-9_-]+/g, /Bearer\s+[A-Za-z0-9._~+/=-]+/gi]
+const SECRET_PATTERNS = [/sk-[A-Za-z0-9_-]+/g, /Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi]
 
 type JsonRecord<T> = Record<string, T>
 
@@ -100,6 +100,13 @@ class FileBackedAgentRepository implements AgentRepository {
     return this.persistence.snapshot((data) => cloneNullable(data.runs[runId] ?? null))
   }
 
+  async listRuns(planId: string) {
+    return this.persistence.snapshot((data) => Object.values(data.runs)
+      .filter((run) => run.planId === planId)
+      .map((run) => cloneJson(run))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt)))
+  }
+
   async deletePlanData(planId: string) {
     return this.persistence.mutate((data) => {
       const runIds = Object.values(data.runs)
@@ -135,6 +142,10 @@ class FileBackedAgentRepository implements AgentRepository {
       data.toolCalls[stored.runId] = calls
       return cloneJson(stored)
     })
+  }
+
+  async listToolCalls(runId: string) {
+    return this.persistence.snapshot((data) => (data.toolCalls[runId] ?? []).map((call) => cloneJson(call)))
   }
 }
 

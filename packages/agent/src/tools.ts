@@ -1,6 +1,6 @@
 import type { CandidateOption, MerchantServiceCategory, Plan, ToolCallRecord, ToolEffect } from '@planpal/domain'
 import { createId } from '@planpal/domain'
-import { buildMockRouteEstimates, createAddSegmentCandidates, createReplacementCandidates, createSandboxOrderReceipt, searchMerchantOfferings } from '@planpal/domain'
+import { buildMockRouteEstimates, createAddSegmentCandidates, createReplacementCandidates, createSandboxOrderReceipt, deriveCandidateSearchIntent, searchMerchantOfferings, summarizeCandidateSearchIntent } from '@planpal/domain'
 
 export type ToolSpec = {
   name: string
@@ -90,10 +90,22 @@ export function createDefaultToolRegistry() {
           query?: string
           segmentId?: string
         }
+        const target = value.mode === 'replace'
+          ? value.plan.segments.find((segment) => segment.id === value.segmentId)
+          : undefined
+        const intent = deriveCandidateSearchIntent(value.query, {
+          mode: value.mode,
+          phase: target?.phase,
+          serviceCategory: target?.serviceCategory,
+        })
         const candidates: CandidateOption[] = value.mode === 'add-after'
           ? createAddSegmentCandidates(value.plan, value.afterSegmentId, value.query)
           : createReplacementCandidates(value.plan, requireSegmentId(value.segmentId), value.query)
-        return { candidates }
+        return {
+          source: 'fictional-local-mock-v2',
+          intent: summarizeCandidateSearchIntent(intent),
+          candidates,
+        }
       },
     })
     .register({

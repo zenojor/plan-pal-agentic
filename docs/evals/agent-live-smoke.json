@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-06-23T14:44:44.934Z",
+  "provider": "deepseek",
+  "results": [],
+  "skipped": true,
+  "suite": "live-smoke",
+  "summary": {
+    "failed": 0,
+    "passed": 0,
+    "total": 0
+  }
+}

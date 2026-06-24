@@ -13,10 +13,12 @@ export type AgentRepository = {
   createRun(run: AgentRun): Promise<AgentRun>
   saveRun(run: AgentRun): Promise<AgentRun>
   getRun(runId: string): Promise<AgentRun | null>
+  listRuns(planId: string): Promise<AgentRun[]>
   deletePlanData(planId: string): Promise<void>
   appendEvent(event: AgentEvent): Promise<AgentEvent>
   listEvents(planId: string): Promise<AgentEvent[]>
   appendToolCall(toolCall: ToolCallRecord): Promise<ToolCallRecord>
+  listToolCalls(runId: string): Promise<ToolCallRecord[]>
 }
 
 export type PlanPalStores = {

@@ -373,7 +373,7 @@ function redactModelError(error: unknown) {
 function redactModelText(value: string) {
   return value
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi, 'Bearer [redacted]')
 }
 
 

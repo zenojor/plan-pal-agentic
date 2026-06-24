@@ -365,6 +365,13 @@ export type PlanCommand =
       excludeCandidateIds?: string[]
     }
   | {
+      type: 'REQUEST_CLARIFICATION'
+      source: CommandSource
+      title: string
+      description: string
+      requiredFields: string[]
+    }
+  | {
       type: 'CHOOSE_PLAN_VARIANT'
       source: CommandSource
       actionId: string

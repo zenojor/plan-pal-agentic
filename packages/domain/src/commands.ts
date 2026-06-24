@@ -61,6 +61,8 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
       return chooseCandidate(plan, command.actionId, command.candidateId)
     case 'REFRESH_CANDIDATES':
       return refreshCandidates(plan, command)
+    case 'REQUEST_CLARIFICATION':
+      return requestClarification(plan, command)
     case 'CHOOSE_PLAN_VARIANT':
       return choosePlanVariant(plan, command.actionId, command.variantId)
     case 'DISMISS_PENDING_ACTION':
@@ -205,6 +207,17 @@ function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'RE
     searchQuery,
     candidates,
     excludeCandidateIds: [...new Set(excluded)],
+  }
+  return touch(plan, { pendingAction: action })
+}
+
+function requestClarification(plan: Plan, command: Extract<PlanCommand, { type: 'REQUEST_CLARIFICATION' }>) {
+  const action: PendingAction = {
+    id: createId('action'),
+    kind: 'clarification',
+    title: command.title,
+    description: command.description,
+    requiredFields: command.requiredFields.map((field) => field.trim()).filter(Boolean),
   }
   return touch(plan, { pendingAction: action })
 }
@@ -584,6 +597,8 @@ export function summarizeCommand(command: PlanCommand) {
       return '已应用候选'
     case 'REFRESH_CANDIDATES':
       return '已刷新候选'
+    case 'REQUEST_CLARIFICATION':
+      return '需要补充信息'
     case 'CHOOSE_PLAN_VARIANT':
       return '已选择方案'
     case 'DISMISS_PENDING_ACTION':

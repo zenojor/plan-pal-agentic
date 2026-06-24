@@ -199,6 +199,9 @@ describe('PlanPal API', () => {
     const deletedEnvelope = await app.request(`/api/plans/${created.planId}`)
     expect(deletedEnvelope.status).toBe(404)
 
+    const deletedRuns = await app.request(`/api/plans/${created.planId}/agent/runs`)
+    expect(deletedRuns.status).toBe(404)
+
     const listResponse = await app.request('/api/plans')
     const list = (await listResponse.json()) as { plans: Plan[] }
     expect(list.plans.some((plan) => plan.id === created.planId)).toBe(false)
@@ -269,6 +272,10 @@ describe('PlanPal API', () => {
     expect(resumeResponse.status).toBe(200)
     const resumeEvents = await readSseEvents(resumeResponse)
     expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
+    expect(resumeEvents[0]?.payload).toMatchObject({
+      command: { type: 'CHOOSE_CANDIDATE' },
+      patch: { operation: 'CHOOSE_CANDIDATE' },
+    })
 
     const envelopeResponse = await app.request(`/api/plans/${created.planId}`)
     const envelope = (await envelopeResponse.json()) as { events: AgentEvent[]; plan: Plan }
@@ -278,6 +285,31 @@ describe('PlanPal API', () => {
     expect(envelope.events.some((event) => event.type === 'action.required')).toBe(true)
     expect(envelope.events.some((event) => event.type === 'agent.finished')).toBe(true)
     expect(JSON.stringify(envelope)).not.toContain(modelConfig.apiKey)
+
+    const runsResponse = await app.request(`/api/plans/${created.planId}/agent/runs`)
+    expect(runsResponse.status).toBe(200)
+    const runsBody = (await runsResponse.json()) as { runs: Array<{ id: string; inputMessage: string; status: string }> }
+    expect(runsBody.runs.some((run) => run.id === actionEvent.runId && run.status === 'completed')).toBe(true)
+    expect(JSON.stringify(runsBody)).not.toContain(modelConfig.apiKey)
+
+    const traceResponse = await app.request(`/api/plans/${created.planId}/agent/runs/${actionEvent.runId}/trace`)
+    expect(traceResponse.status).toBe(200)
+    const traceBody = (await traceResponse.json()) as {
+      trace: {
+        commandWrites: Array<{ commandType: string }>
+        safetyFindings: Array<{ id: string; status: string }>
+        steps: Array<{ commandType?: string; toolName?: string }>
+        toolCalls: Array<{ effect: string; toolName: string }>
+      }
+    }
+    expect(traceBody.trace.toolCalls.some((call) => call.toolName === 'poi.search' && call.effect === 'read-only')).toBe(true)
+    expect(traceBody.trace.commandWrites.some((write) => write.commandType === 'CHOOSE_CANDIDATE')).toBe(true)
+    expect(traceBody.trace.steps.some((step) => step.toolName === 'poi.search')).toBe(true)
+    expect(traceBody.trace.safetyFindings).toContainEqual(expect.objectContaining({
+      id: 'secret-redaction',
+      status: 'pass',
+    }))
+    expect(JSON.stringify(traceBody)).not.toContain(modelConfig.apiKey)
   })
 
 

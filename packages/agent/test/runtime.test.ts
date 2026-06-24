@@ -141,6 +141,35 @@ describe('agent runtime model transparency', () => {
       routeSource: 'model',
       usedModel: true,
     })
+    expect(action?.payload).toMatchObject({
+      intentSummary: expect.objectContaining({
+        summary: expect.stringContaining('dining'),
+        rankingSignals: expect.arrayContaining(['phase:dining']),
+      }),
+    })
+    expect(JSON.stringify(events)).not.toContain(config.apiKey)
+  })
+
+  it('pauses for clarification instead of guessing vague edits', async () => {
+    const { plan, runtime, stores } = await createRuntime({
+      generateAssistantReply: async () => {
+        throw new Error('no model call expected')
+      },
+    })
+    const events: AgentEvent[] = []
+
+    const run = await runtime.run({ planId: plan.id, message: '调整一下' }, (event) => {
+      events.push(event)
+    })
+
+    expect(run.status).toBe('waiting_for_user')
+    expect(events.some((event) => event.type === 'tool.called')).toBe(false)
+    const action = events.find((event) => event.type === 'action.required')
+    expect(action?.payload).toMatchObject({
+      action: expect.objectContaining({ kind: 'clarification' }),
+    })
+    const updated = await stores.plans.getPlan(plan.id)
+    expect(updated?.pendingAction?.kind).toBe('clarification')
   })
 
   it('previews a sandbox receipt before applying an order command', async () => {

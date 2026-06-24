@@ -1,6 +1,6 @@
 import type { CandidateOption, MerchantServiceCategory, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
 import { createId, nowIso } from './ids'
-import { fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type FictionalPoi } from './poiCatalog'
+import { deriveCandidateSearchIntent, fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type CandidateSearchIntent, type FictionalPoi } from './poiCatalog'
 
 
 export function createPlanFromPrompt(prompt: string): Plan {
@@ -148,7 +148,7 @@ export function createReplacementCandidates(
     startTime: target.startTime,
     endTime: target.endTime,
     status: '待确认',
-  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory)
+  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory, 'replace')
 }
 
 export function createAddSegmentCandidates(
@@ -165,7 +165,7 @@ export function createAddSegmentCandidates(
     ? 'leisure'
     : serviceCategory === 'movie'
       ? 'activity'
-      : query.includes('吃') || query.includes('饭') || wantsHotpot(query)
+      : query.includes('吃') || query.includes('饭') || wantsDiningPreference(query)
     ? 'dining'
     : query.includes('喝') || query.includes('酒') || normalized.includes('drink')
       ? 'drinks'
@@ -176,7 +176,7 @@ export function createAddSegmentCandidates(
     startTime,
     endTime,
     status: '待确认',
-  }, serviceCategory)
+  }, serviceCategory, 'add-after')
 }
 
 function createCandidatesForPhase(
@@ -185,22 +185,18 @@ function createCandidatesForPhase(
   excludeCandidateIds: string[] = [],
   defaults: Partial<PlanSegment> = {},
   serviceCategory?: MerchantServiceCategory,
+  mode?: 'replace' | 'add-after',
 ): CandidateOption[] {
-  const normalized = query.toLowerCase()
-  const near = query.includes('近') || normalized.includes('near')
-  const quiet = query.includes('安静') || normalized.includes('quiet')
-  const indoor = query.includes('室内') || query.includes('雨') || normalized.includes('indoor')
-  const family = query.includes('亲子') || query.includes('孩子') || normalized.includes('family')
-  const business = query.includes('客户') || query.includes('商务') || normalized.includes('client')
-  const hotpot = wantsHotpot(query)
+  const intent = deriveCandidateSearchIntent(query, { mode, phase, serviceCategory })
   const results = searchFictionalPois({
     phase,
     query,
     excludePoiIds: excludeCandidateIds,
+    intent,
     limit: 3,
     serviceCategory,
   })
-  const fallbackResults = results.length > 0 ? results : searchFictionalPois({ phase, query, limit: 3, serviceCategory })
+  const fallbackResults = results.length > 0 ? results : searchFictionalPois({ phase, query, intent, limit: 3, serviceCategory })
 
   return fallbackResults.map(({ poi, score, reasons }, index) => ({
     id: poi.id,
@@ -208,13 +204,7 @@ function createCandidatesForPhase(
     description: poi.description,
     score: normalizeCandidateScore(score, index),
     reasons: uniqueReasons([
-      poi.description,
-      near ? '匹配近距离偏好' : '匹配当前阶段',
-      quiet && poi.tags.some((tag) => tag.includes('安静') || tag.includes('低刺激')) ? '匹配安静要求' : '',
-      indoor && poi.tags.some((tag) => tag.includes('室内') || tag.includes('天气')) ? '匹配室内/天气约束' : '',
-      family ? '考虑亲子友好' : '',
-      business ? '考虑商务确定性' : '',
-      hotpot && isHotpotPoi(poi) ? '匹配火锅需求' : '',
+      ...candidateReasonLines(intent, poi, reasons),
       ...reasons,
     ]),
     segment: {
@@ -307,9 +297,70 @@ function uniqueReasons(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
+function candidateReasonLines(intent: CandidateSearchIntent, poi: FictionalPoi, searchReasons: string[]) {
+  const lines: string[] = []
+  if (intent.positiveTags.includes('辣味') && isSpicyPoi(poi)) lines.push('匹配辣味需求')
+  if (intent.positiveTags.includes('川湘') && poiHasAny(poi, ['川湘', '川菜', '湘菜', '麻辣', '香辣'])) lines.push('匹配川湘口味')
+  if (intent.positiveTags.includes('串串') && poiHasAny(poi, ['串串', '签签', '钵钵'])) lines.push('匹配串串需求')
+  if (intent.negativeTags.includes('辣味') && isMildPoi(poi)) lines.push('匹配不辣/少辣要求')
+  if (intent.positiveTags.includes('火锅') && isHotpotPoi(poi)) lines.push('匹配火锅需求')
+  if (intent.positiveTags.includes('亲子') && poiHasAny(poi, ['亲子', '家庭', '儿童', '儿童椅'])) lines.push('考虑亲子友好')
+  if (intent.positiveTags.includes('商务') && (poiHasAny(poi, ['商务', '包间', '投屏']) || poi.noiseLevel === 'quiet')) lines.push('考虑商务确定性')
+  if (intent.positiveTags.includes('安静') && poi.noiseLevel !== 'lively') lines.push('匹配安静/聊天需求')
+  if (intent.positiveTags.includes('预算可控') && poi.priceLevel <= 2) lines.push('考虑预算可控')
+  if (intent.positiveTags.includes('室内') && poi.indoorScore >= 4) lines.push('匹配室内/天气约束')
+
+  const risk = candidateRiskLine(intent, poi)
+  const tradeoff = candidateTradeoffLine(intent, poi)
+  const fallbackReason = searchReasons.find((reason) => reason !== '匹配当前阶段') ?? '匹配当前阶段'
+  return uniqueReasons([
+    ...lines,
+    tradeoff,
+    risk,
+    lines.length ? '' : fallbackReason,
+    poi.description,
+  ])
+}
+
+function candidateRiskLine(intent: CandidateSearchIntent, poi: FictionalPoi) {
+  if (intent.negativeTags.includes('辣味') && isSpicyPoi(poi) && !isMildPoi(poi)) return '重辣风险，不符合不吃辣约束'
+  if (intent.positiveTags.includes('亲子') && isSpicyPoi(poi) && !isMildPoi(poi)) return '口味偏重，带孩子需备注少辣'
+  if (intent.positiveTags.includes('商务') && poi.noiseLevel === 'lively') return '噪音较高，不适合商务'
+  if (intent.positiveTags.includes('安静') && poi.noiseLevel === 'lively') return '热闹场景，聊天风险较高'
+  if (poi.queueRisk === 'high') return '热门时段排队风险较高'
+  return ''
+}
+
+function candidateTradeoffLine(intent: CandidateSearchIntent, poi: FictionalPoi) {
+  if (intent.positiveTags.includes('亲子') && isMildPoi(poi)) return '家庭场景有少辣备注'
+  if (intent.positiveTags.includes('辣味') && isMildPoi(poi) && !isSpicyPoi(poi)) return '口味更稳，但辣味记忆点较弱'
+  if (intent.positiveTags.includes('预算可控') && poi.priceLevel >= 3) return '预算较高，需要权衡价格'
+  if (intent.positiveTags.includes('商务') && poi.reservationMode === 'required') return '需要提前预约确认'
+  return ''
+}
+
 function normalizeCandidateScore(score: number, index: number) {
   const normalized = 0.62 + Math.min(0.35, Math.max(0, score - 80) / 140)
   return Math.max(0.62, Math.min(0.97, normalized - index * 0.015))
+}
+
+function wantsDiningPreference(value: string) {
+  const normalized = value.toLowerCase()
+  return wantsHotpot(value)
+    || value.includes('餐厅')
+    || value.includes('晚餐')
+    || value.includes('午餐')
+    || value.includes('辣')
+    || value.includes('麻辣')
+    || value.includes('川菜')
+    || value.includes('湘菜')
+    || value.includes('川湘')
+    || value.includes('串串')
+    || value.includes('签签')
+    || value.includes('清淡')
+    || value.includes('不吃辣')
+    || value.includes('少辣')
+    || normalized.includes('dinner')
 }
 
 function wantsHotpot(value: string) {
@@ -326,6 +377,28 @@ function isHotpotPoi(poi: FictionalPoi) {
     || poi.name.includes('火锅')
     || poi.activityTitle.includes('火锅')
     || poi.description.includes('火锅')
+}
+
+function isSpicyPoi(poi: FictionalPoi) {
+  return poiHasAny(poi, ['辣味', '麻辣', '香辣', '重口', '川湘', '川菜', '湘菜', '串串', '签签', '钵钵'])
+}
+
+function isMildPoi(poi: FictionalPoi) {
+  return poiHasAny(poi, ['不辣', '无辣', '少辣', '微辣', '清淡', '低刺激'])
+}
+
+function poiHasAny(poi: FictionalPoi, needles: string[]) {
+  const haystack = [
+    poi.name,
+    poi.activityTitle,
+    poi.description,
+    poi.notes,
+    ...poi.tags,
+    ...poi.sceneTags,
+    ...poi.suitableFor,
+    ...poi.avoidFor,
+  ].join(' ')
+  return needles.some((needle) => haystack.includes(needle))
 }
 
 function inferServiceCategoryFromQuery(value: string): MerchantServiceCategory | undefined {

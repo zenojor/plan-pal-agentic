@@ -26,6 +26,39 @@ describe('agent natural language router', () => {
     }
   })
 
+  it('routes spicy and mild dining preferences to dinner candidate search', () => {
+    const plan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const spicyRoute = routeNaturalLanguageTurn(plan, '想吃辣的')
+    expect(spicyRoute.kind).toBe('candidate-search')
+    expect(spicyRoute).toMatchObject({ kind: 'candidate-search', mode: 'replace', query: '想吃辣的' })
+    if (spicyRoute.kind === 'candidate-search' && spicyRoute.mode === 'replace') {
+      expect(plan.segments.find((item) => item.id === spicyRoute.segmentId)?.phase).toBe('dining')
+    }
+
+    const mildRoute = routeNaturalLanguageTurn(plan, '不吃辣，换个清淡点的')
+    expect(mildRoute.kind).toBe('candidate-search')
+    expect(mildRoute).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
+  })
+
+  it('routes Sichuan/Hunan family dining preferences through candidate search', () => {
+    const plan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const route = routeNaturalLanguageTurn(plan, '想吃川湘但带孩子')
+    expect(route.kind).toBe('candidate-search')
+    expect(route).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
+    if (route.kind === 'candidate-search' && route.mode === 'replace') {
+      expect(plan.segments.find((item) => item.id === route.segmentId)?.phase).toBe('dining')
+    }
+  })
+
+  it('asks for clarification on low-confidence change requests', () => {
+    const plan = createPlanFromPrompt('晚上两个人附近吃饭')
+    const route = routeNaturalLanguageTurn(plan, '调整一下')
+    expect(route.kind).toBe('clarification')
+    if (route.kind === 'clarification') {
+      expect(route.requiredFields).toContain('要改哪个节点')
+    }
+  })
+
   it('routes add-after requests to candidate search without mutating the plan', () => {
     const plan = createPlanFromPrompt('下午两个人附近轻松玩')
     const route = routeNaturalLanguageTurn(plan, '中间再加个咖啡休息')

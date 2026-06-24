@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Icon } from 'animal-island-ui'
-import type { AgentEvent, Plan } from '@planpal/domain'
+import { useQuery } from '@tanstack/react-query'
+import type { AgentEvent, AgentTraceSnapshot, Plan, TraceReplayFrame, TraceSafetyFinding, TraceStep, TraceToolCallSummary } from '@planpal/domain'
 import classNames from 'classnames'
-import type { PlanVersionSummary } from '../../lib/api'
+import { getAgentRunTrace, listAgentRuns, type AgentRunSummary, type PlanVersionSummary } from '../../lib/api'
 import { appClasses } from '../../lib/appClasses'
 import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import { derivePlanReceiptDisplay, type PlanExecutionBrief } from './workspaceModel'
@@ -20,9 +21,38 @@ type TraceColumnProps = {
 
 export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events, executionBrief, plan, versions, onConfirm }: TraceColumnProps) {
   const [receiptCopyState, setReceiptCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [activeTab, setActiveTab] = useState<'timeline' | 'tools' | 'replay' | 'safety'>('timeline')
+  const [selectedRunId, setSelectedRunId] = useState('')
+  const [replayIndex, setReplayIndex] = useState(0)
   const latestEvents = events.filter((event) => event.type !== 'agent.message.delta').slice(-10).reverse()
   const latestVersions = versions.slice(-4).reverse()
   const receipt = derivePlanReceiptDisplay(plan)
+  const runsQuery = useQuery({
+    queryKey: ['agent-runs', plan.id, events.length, plan.currentVersion],
+    queryFn: () => listAgentRuns(plan.id),
+  })
+  const runs = runsQuery.data?.runs ?? []
+  const activeRunId = runs.find((run) => run.id === selectedRunId)?.id ?? runs.at(-1)?.id ?? ''
+  const traceQuery = useQuery({
+    enabled: Boolean(activeRunId),
+    queryKey: ['agent-run-trace', plan.id, activeRunId, events.length, plan.currentVersion],
+    queryFn: () => getAgentRunTrace(plan.id, activeRunId),
+  })
+  const trace = traceQuery.data
+
+  useEffect(() => {
+    if (!runs.length) {
+      if (selectedRunId) setSelectedRunId('')
+      return
+    }
+    if (!selectedRunId || !runs.some((run) => run.id === selectedRunId)) {
+      setSelectedRunId(runs.at(-1)!.id)
+    }
+  }, [runs, selectedRunId])
+
+  useEffect(() => {
+    setReplayIndex(0)
+  }, [activeRunId])
 
   async function copyReceipt() {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
@@ -56,7 +86,7 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
         <div className="grid gap-[0.38rem]">
           {executionBrief.checks.map((check) => (
             <article className={executionCheckClassName(check.state)} key={check.id}>
-              <span className="grid h-8 min-w-[42px] place-items-center rounded-[var(--animal-radius-pill)] bg-[#fffdf5] px-2 text-[0.68rem] font-[950]">{check.state === 'ok' ? 'OK' : check.state === 'blocked' ? '阻塞' : '提醒'}</span>
+              <span className="grid h-8 min-w-[42px] place-items-center rounded-[var(--animal-radius-pill)] bg-[#fffdf5] px-2 text-[0.68rem] font-[850]">{check.state === 'ok' ? 'OK' : check.state === 'blocked' ? '阻塞' : '提醒'}</span>
               <div>
                 <strong className={workspacePrimitives.listTitle}>{check.label}</strong>
                 <small className={workspacePrimitives.listMeta}>{check.detail}</small>
@@ -153,20 +183,203 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
 
       <section className={workspacePrimitives.directory} aria-label="运行日志">
         <div className={workspacePrimitives.sectionHeading}>
-          <strong className={workspacePrimitives.sectionHeadingTitle}>运行日志</strong>
-          <small className={workspacePrimitives.sectionHeadingMeta}>{latestEvents.length || 0} 条</small>
+          <strong className={workspacePrimitives.sectionHeadingTitle}>Trace Replay</strong>
+          <small className={workspacePrimitives.sectionHeadingMeta}>{runs.length || 0} runs</small>
         </div>
-        <div className={workspacePrimitives.list}>
-          {latestEvents.length === 0 && <div className={workspacePrimitives.emptyState}>还没有运行记录。</div>}
-          {latestEvents.map((event) => (
-            <article className="grid gap-1 rounded-[16px] bg-[#fffdf5] p-2" key={event.id}>
-              <span className={chipClassName(0)}>{event.type}</span>
-              <p className="m-0 text-[0.76rem] font-[820] leading-[1.45] text-animal-text-body">{event.message}</p>
-              <small className={workspacePrimitives.listMeta}>{new Date(event.createdAt).toLocaleTimeString()}</small>
-            </article>
+        <TraceExplorer
+          activeTab={activeTab}
+          events={latestEvents}
+          loading={runsQuery.isLoading || traceQuery.isLoading}
+          replayIndex={replayIndex}
+          runs={runs}
+          selectedRunId={activeRunId}
+          trace={trace}
+          onReplayIndexChange={setReplayIndex}
+          onRunChange={setSelectedRunId}
+          onTabChange={setActiveTab}
+        />
+      </section>
+    </div>
+  )
+}
+
+function TraceExplorer({
+  activeTab,
+  events,
+  loading,
+  replayIndex,
+  runs,
+  selectedRunId,
+  trace,
+  onReplayIndexChange,
+  onRunChange,
+  onTabChange,
+}: {
+  activeTab: 'timeline' | 'tools' | 'replay' | 'safety'
+  events: AgentEvent[]
+  loading: boolean
+  replayIndex: number
+  runs: AgentRunSummary[]
+  selectedRunId: string
+  trace?: AgentTraceSnapshot
+  onReplayIndexChange: (index: number) => void
+  onRunChange: (runId: string) => void
+  onTabChange: (tab: 'timeline' | 'tools' | 'replay' | 'safety') => void
+}) {
+  const tabs = [
+    ['timeline', 'Timeline'],
+    ['tools', 'Tools'],
+    ['replay', 'Replay'],
+    ['safety', 'Safety'],
+  ] as const
+  return (
+    <div className="grid gap-2">
+      <div className="grid gap-2 rounded-[18px] border-2 border-animal-border bg-[#fffdf5] p-2">
+        <label className="grid gap-1 text-[0.72rem] font-[900] text-[var(--animal-text-muted)]">
+          Agent Run
+          <select
+            className="min-w-0 rounded-[14px] border-2 border-animal-border bg-white px-2 py-2 text-[0.76rem] font-[850] text-animal-text outline-none"
+            disabled={!runs.length}
+            value={selectedRunId}
+            onChange={(event) => onRunChange(event.target.value)}
+          >
+            {runs.length === 0 && <option value="">暂无 run</option>}
+            {runs.map((run, index) => (
+              <option value={run.id} key={run.id}>
+                {index + 1}. {run.status} · {truncate(run.inputMessage, 24)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex min-w-0 flex-wrap gap-1">
+          {tabs.map(([id, label]) => (
+            <button
+              className={traceTabClassName(activeTab === id)}
+              key={id}
+              type="button"
+              onClick={() => onTabChange(id)}
+            >
+              {label}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
+
+      {loading && <div className={workspacePrimitives.emptyState}>正在加载 trace...</div>}
+      {!loading && activeTab === 'timeline' && <TraceTimeline events={events} steps={trace?.steps ?? []} />}
+      {!loading && activeTab === 'tools' && <TraceTools toolCalls={trace?.toolCalls ?? []} />}
+      {!loading && activeTab === 'replay' && (
+        <TraceReplay
+          frames={trace?.replayFrames ?? []}
+          replayIndex={replayIndex}
+          onReplayIndexChange={onReplayIndexChange}
+        />
+      )}
+      {!loading && activeTab === 'safety' && <TraceSafety findings={trace?.safetyFindings ?? []} />}
+    </div>
+  )
+}
+
+function TraceTimeline({ events, steps }: { events: AgentEvent[]; steps: TraceStep[] }) {
+  if (!steps.length && !events.length) return <div className={workspacePrimitives.emptyState}>还没有运行记录。</div>
+  if (steps.length) {
+    return (
+      <div className={workspacePrimitives.list}>
+        {steps.map((step) => (
+          <article className={traceRowClassName(step.status)} key={step.id}>
+            <span className={chipClassName(step.status === 'error' ? 3 : step.status === 'active' ? 1 : 0)}>{step.kind}</span>
+            <strong className={workspacePrimitives.listTitle}>{step.label}</strong>
+            <p className="m-0 text-[0.74rem] font-[780] leading-[1.45] text-animal-text-body">{step.summary}</p>
+            <small className={workspacePrimitives.listMeta}>
+              #{step.sequence}
+              {step.toolName ? ` · ${step.toolName}` : ''}
+              {step.commandType ? ` · ${step.commandType}` : ''}
+              {step.version ? ` · V${step.version}` : ''}
+            </small>
+          </article>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className={workspacePrimitives.list}>
+      {events.map((event) => (
+        <article className="grid gap-1 rounded-[16px] bg-[#fffdf5] p-2" key={event.id}>
+          <span className={chipClassName(0)}>{event.type}</span>
+          <p className="m-0 text-[0.76rem] font-[820] leading-[1.45] text-animal-text-body">{event.message}</p>
+          <small className={workspacePrimitives.listMeta}>{new Date(event.createdAt).toLocaleTimeString()}</small>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function TraceTools({ toolCalls }: { toolCalls: TraceToolCallSummary[] }) {
+  if (!toolCalls.length) return <div className={workspacePrimitives.emptyState}>这个 run 没有工具调用。</div>
+  return (
+    <div className={workspacePrimitives.list}>
+      {toolCalls.map((call) => (
+        <article className={traceRowClassName(call.status === 'failed' ? 'error' : call.status === 'blocked' ? 'blocked' : 'done')} key={call.id}>
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <span className={chipClassName(call.effect === 'external-write' ? 3 : 0)}>{call.effect}</span>
+            <span className={chipClassName(call.status === 'success' ? 1 : 2)}>{call.status}</span>
+            <small className={workspacePrimitives.listMeta}>{call.durationMs}ms</small>
+          </div>
+          <strong className={workspacePrimitives.listTitle}>{call.toolName}</strong>
+          <small className={workspacePrimitives.listMeta}>args · {call.argsSummary}</small>
+          {call.resultSummary && <small className={workspacePrimitives.listMeta}>result · {call.resultSummary}</small>}
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function TraceReplay({
+  frames,
+  replayIndex,
+  onReplayIndexChange,
+}: {
+  frames: TraceReplayFrame[]
+  replayIndex: number
+  onReplayIndexChange: (index: number) => void
+}) {
+  if (!frames.length) return <div className={workspacePrimitives.emptyState}>这个 run 还没有可回放帧。</div>
+  const index = Math.max(0, Math.min(replayIndex, frames.length - 1))
+  const frame = frames[index]!
+  return (
+    <div className="grid gap-2 rounded-[18px] border-2 border-animal-border bg-[#fffdf5] p-3">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className={chipClassName(0)}>Frame {index + 1}/{frames.length}</span>
+        <div className="flex gap-1">
+          <button className={traceStepButtonClassName} type="button" disabled={index <= 0} onClick={() => onReplayIndexChange(index - 1)}>上一步</button>
+          <button className={traceStepButtonClassName} type="button" disabled={index >= frames.length - 1} onClick={() => onReplayIndexChange(index + 1)}>下一步</button>
+        </div>
+      </div>
+      <strong className={workspacePrimitives.headingTitle}>{frame.title}</strong>
+      <p className={workspacePrimitives.note}>{frame.description}</p>
+      <input
+        className="w-full accent-[var(--animal-primary)]"
+        max={frames.length - 1}
+        min={0}
+        type="range"
+        value={index}
+        onChange={(event) => onReplayIndexChange(Number(event.target.value))}
+      />
+    </div>
+  )
+}
+
+function TraceSafety({ findings }: { findings: TraceSafetyFinding[] }) {
+  if (!findings.length) return <div className={workspacePrimitives.emptyState}>这个 run 暂无安全检查。</div>
+  return (
+    <div className={workspacePrimitives.list}>
+      {findings.map((finding) => (
+        <article className={traceRowClassName(finding.status === 'fail' ? 'error' : finding.status === 'warn' ? 'active' : 'done')} key={finding.id}>
+          <span className={chipClassName(finding.status === 'pass' ? 0 : finding.status === 'warn' ? 2 : 3)}>{finding.status}</span>
+          <strong className={workspacePrimitives.listTitle}>{finding.label}</strong>
+          <small className={workspacePrimitives.listMeta}>{finding.detail}</small>
+        </article>
+      ))}
     </div>
   )
 }
@@ -184,4 +397,32 @@ function executionCheckClassName(state: string) {
         ? 'border-animal-green bg-[#ecffd9] text-[#3d6d17]'
         : 'border-animal-border bg-[#fffdf5] text-animal-text-body',
   )
+}
+
+function traceTabClassName(active: boolean) {
+  return classNames(
+    'rounded-[var(--animal-radius-pill)] border-2 px-3 py-1 text-[0.68rem] font-[850] transition',
+    active
+      ? 'border-animal-green bg-[#ecffd9] text-animal-text shadow-[0_3px_0_var(--animal-success-shadow)]'
+      : 'border-animal-border bg-[#fffdf5] text-[var(--animal-text-muted)] hover:text-animal-text',
+  )
+}
+
+function traceRowClassName(status: string) {
+  return classNames(
+    'grid min-w-0 gap-1 rounded-[16px] border-2 p-2 [overflow-wrap:anywhere]',
+    status === 'error'
+      ? 'border-[#d46a4c] bg-[#ffe7dc]'
+      : status === 'blocked'
+        ? 'border-[#e1a44f] bg-[#fff1c9]'
+        : status === 'active'
+          ? 'border-animal-green bg-[#ecffd9]'
+          : 'border-animal-border bg-[#fffdf5]',
+  )
+}
+
+const traceStepButtonClassName = 'rounded-[var(--animal-radius-pill)] border-2 border-animal-border bg-white px-2 py-1 text-[0.68rem] font-[850] text-animal-text disabled:cursor-not-allowed disabled:opacity-45'
+
+function truncate(value: string, limit: number) {
+  return value.length > limit ? `${value.slice(0, limit)}...` : value
 }

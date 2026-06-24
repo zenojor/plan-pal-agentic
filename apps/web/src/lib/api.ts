@@ -1,4 +1,4 @@
-import type { AgentEvent, CommandResult, FictionalPoi, MerchantOffering, MerchantServiceCategory, MockRouteEstimate, Plan, PlanCommand, SegmentPhase } from '@planpal/domain'
+import type { AgentEvent, AgentTraceSnapshot, CommandResult, FictionalPoi, MerchantOffering, MerchantServiceCategory, MockRouteEstimate, Plan, PlanCommand, SegmentPhase, TraceRunSummary } from '@planpal/domain'
 import type { StoredModelConfig } from './modelConfig'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
@@ -21,6 +21,15 @@ export type PlanEnvelope = {
 
 export type PlanListResult = {
   plans: Plan[]
+}
+
+export type AgentRunSummary = TraceRunSummary & {
+  checkpointId?: string
+}
+
+export type AgentRunListResult = {
+  planId: string
+  runs: AgentRunSummary[]
 }
 
 export type MockPoiSearchResult = {
@@ -132,6 +141,23 @@ export async function getPlan(planId: string): Promise<PlanEnvelope> {
   const response = await fetch(`${API_BASE}/api/plans/${planId}`)
   if (!response.ok) throw new Error(await parseError(response))
   return (await response.json()) as PlanEnvelope
+}
+
+export async function listAgentRuns(planId: string): Promise<AgentRunListResult> {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/runs`, {
+    method: 'GET',
+  }, '加载 Agent runs 失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  return (await response.json()) as AgentRunListResult
+}
+
+export async function getAgentRunTrace(planId: string, runId: string): Promise<AgentTraceSnapshot> {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/runs/${runId}/trace`, {
+    method: 'GET',
+  }, '加载 Agent trace 失败')
+  if (!response.ok) throw new Error(await parseError(response))
+  const data = (await response.json()) as { trace: AgentTraceSnapshot }
+  return data.trace
 }
 
 export async function deletePlan(planId: string): Promise<{ ok: true; planId: string }> {
@@ -364,7 +390,7 @@ function publicErrorMessage(error: unknown, fallback: string) {
 function redactUiError(value: string) {
   return value
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi, 'Bearer [redacted]')
 }
 
 async function readSse<T>(body: ReadableStream<Uint8Array>, onEvent: (event: T) => void) {

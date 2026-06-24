@@ -80,7 +80,7 @@ export function MapColumn({
                   type="button"
                   onClick={() => onSelectSegment(node.id)}
                 >
-                  <strong className="grid h-6 w-6 place-items-center rounded-full bg-animal-primary text-[0.72rem] font-[950] text-white">{index + 1}</strong>
+                  <strong className="grid h-6 w-6 place-items-center rounded-full bg-animal-primary text-[0.72rem] font-[850] text-white">{index + 1}</strong>
                   <span className="max-w-[92px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] font-[900] text-animal-text">{node.place}</span>
                 </button>
               )
@@ -110,7 +110,7 @@ export function MapColumn({
                   <span className={chipClassName(index)} key={item}>{item}</span>
                 ))}
               </div>
-              <div className="grid grid-cols-[repeat(4,minmax(0,1fr))] gap-[0.34rem] max-[520px]:grid-cols-2" role="group" aria-label="路线方式">
+              <div className={workspacePrimitives.routeModeGroup} role="group" aria-label="路线方式">
                 <button
                   className={workspacePrimitives.routeModeButton(!hasExplicitChoice)}
                   type="button"
@@ -122,10 +122,10 @@ export function MapColumn({
                 </button>
                 {estimate.options.map((option) => (
                   <button
-                    className={workspacePrimitives.routeModeButton(selectedMode === option.mode)}
+                    className={workspacePrimitives.routeModeButton(hasExplicitChoice && selectedMode === option.mode)}
                     key={option.mode}
                     type="button"
-                    disabled={commandBusy || selectedMode === option.mode}
+                    disabled={commandBusy || (hasExplicitChoice && selectedMode === option.mode)}
                     onClick={() => onRouteModeChange(estimate, option.mode)}
                   >
                     <strong className={workspacePrimitives.routeModeStrong}>{option.label}</strong>

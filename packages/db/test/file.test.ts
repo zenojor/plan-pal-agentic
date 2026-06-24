@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createId, createPlanFromPrompt, nowIso, type AgentEvent, type AgentRun, type ToolCallRecord } from '@planpal/domain'
-import { createFileBackedStores } from '../src'
+import { createFileBackedStores, createInMemoryStores } from '../src'
 
 const tempDirs: string[] = []
 
@@ -58,6 +58,8 @@ describe('file-backed PlanPal stores', () => {
     await expect(second.plans.listPlans()).resolves.toEqual([savedPlan])
     await expect(second.plans.listPlanVersions(plan.id)).resolves.toEqual([plan, savedPlan])
     await expect(second.agents.getRun(run.id)).resolves.toEqual(run)
+    await expect(second.agents.listRuns(plan.id)).resolves.toEqual([run])
+    await expect(second.agents.listToolCalls(run.id)).resolves.toEqual([toolCall])
     const persistedEvents = await second.agents.listEvents(plan.id)
     expect(persistedEvents[0]).toMatchObject({
       message: 'done [redacted] [redacted]',
@@ -78,8 +80,57 @@ describe('file-backed PlanPal stores', () => {
     await expect(third.plans.listPlans()).resolves.toEqual([])
     await expect(third.plans.listPlanVersions(plan.id)).resolves.toEqual([])
     await expect(third.agents.getRun(run.id)).resolves.toBeNull()
+    await expect(third.agents.listRuns(plan.id)).resolves.toEqual([])
+    await expect(third.agents.listToolCalls(run.id)).resolves.toEqual([])
     await expect(third.agents.listEvents(plan.id)).resolves.toEqual([])
     await expect(third.plans.deletePlan(plan.id)).resolves.toBe(false)
+  })
+
+  it('lists in-memory runs and tool calls by plan and run id', async () => {
+    const stores = createInMemoryStores()
+    const plan = await stores.plans.createPlan(createPlanFromPrompt('下午两个人看电影'))
+    const otherPlan = await stores.plans.createPlan(createPlanFromPrompt('晚上吃饭'))
+    const firstRun: AgentRun = {
+      id: createId('run'),
+      planId: plan.id,
+      status: 'completed',
+      inputMessage: '看电影',
+      createdAt: '2026-06-23T10:00:00.000Z',
+    }
+    const secondRun: AgentRun = {
+      id: createId('run'),
+      planId: plan.id,
+      status: 'completed',
+      inputMessage: '买票',
+      createdAt: '2026-06-23T10:01:00.000Z',
+    }
+    const otherRun: AgentRun = {
+      id: createId('run'),
+      planId: otherPlan.id,
+      status: 'completed',
+      inputMessage: '换饭店',
+      createdAt: '2026-06-23T09:59:00.000Z',
+    }
+    const toolCall: ToolCallRecord = {
+      id: createId('tool'),
+      runId: secondRun.id,
+      toolName: 'offering.search',
+      effect: 'read-only',
+      argsJson: '{}',
+      resultJson: '{"ok":true}',
+      status: 'success',
+      durationMs: 3,
+    }
+
+    await stores.agents.createRun(secondRun)
+    await stores.agents.createRun(otherRun)
+    await stores.agents.createRun(firstRun)
+    await stores.agents.appendToolCall(toolCall)
+
+    await expect(stores.agents.listRuns(plan.id)).resolves.toEqual([firstRun, secondRun])
+    await expect(stores.agents.listRuns(otherPlan.id)).resolves.toEqual([otherRun])
+    await expect(stores.agents.listToolCalls(secondRun.id)).resolves.toEqual([toolCall])
+    await expect(stores.agents.listToolCalls(firstRun.id)).resolves.toEqual([])
   })
 })
 

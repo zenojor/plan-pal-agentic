@@ -24,7 +24,8 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - 候选、初始方案和 fallback POI 使用扩展后的具体虚构地点，不接真实商家、真实地图或真实预订。
 - 本地 mock API 支持 POI/merchant/offering 查询、计划路线估算和 sandbox receipt 演示闭环。
 - 商家可带 `MerchantOffering` 商品/服务项；酒店房型、电影场次、票务、花礼、SPA 等仍是 fictional local mock。
-- Trace 列展示 Agent / model / tool / command 事件和版本历史。
+- Trace 列展示 Agent / model / tool / command 事件、版本历史、run 级 trace replay 和安全检查。
+- `packages/eval` 提供离线 golden suite 与可选 DeepSeek live smoke，默认不读取真实 key、不发外部网络请求。
 - 本地 demo 默认用文件存储，测试环境使用内存存储。
 
 ## 技术栈
@@ -47,8 +48,10 @@ packages/
   domain/     Plan 类型、命令、seed/mock POI、确定性计划变更
   db/         repository、file store、memory store、Drizzle schema
   agent/      模型适配、planner、router、runtime、工具注册
+  eval/       本地 Agent golden eval、trace 报告和可选 live smoke
 docs/
   agent-flow.md  Agent 链路说明
+  agent-case-study.md  面试向架构说明
 ```
 
 这个项目不是传统的 `frontend/` + `backend/` 拆法。真正重要的边界是：
@@ -125,9 +128,13 @@ pnpm dev:web
 pnpm build:domain
 pnpm build:db
 pnpm build:agent
+pnpm build:eval
 pnpm build:api
 pnpm build:web
 pnpm build:new
+
+pnpm eval:agent -- --suite golden
+pnpm eval:agent -- --suite live-smoke --provider deepseek
 
 pnpm --dir packages/domain test
 pnpm --dir packages/db test
@@ -191,6 +198,8 @@ $env:PLANPAL_STORE_MODE="memory"
 - `POST /api/plans/stream`
 - `GET /api/plans/:planId`
 - `GET /api/plans/:planId/mock/routes`
+- `GET /api/plans/:planId/agent/runs`
+- `GET /api/plans/:planId/agent/runs/:runId/trace`
 - `DELETE /api/plans/:planId`
 - `POST /api/plans/:planId/commands`
 - `POST /api/plans/:planId/agent/runs`
@@ -242,7 +251,26 @@ $env:PLANPAL_STORE_MODE="memory"
 10. 改路线模式，检查 `SET_ROUTE_CHOICE` 写入和 Trace 事件。
 11. 在 Merchant 面板选择一个电影票/房型/套餐，调整数量或移除，检查 Plan version 与 receipt 项目同步。
 12. 打开确认弹窗，生成 sandbox 模拟确认单，检查 receipt id、mock 商户、模拟项目和非真实预订/支付声明。
-13. 在 1440、820、390px 宽度下检查工作台无横向溢出。
+13. 打开 Trace 列，切换 Timeline / Tools / Replay / Safety，确认 run、tool call、command write 和 redaction 检查可解释。
+14. 在 1440、820、390px 宽度下检查工作台无横向溢出。
+
+## Agent Eval
+
+默认 golden suite 使用 fake model、in-memory store 和本地 mock 数据，覆盖候选、服务项、sandbox order、fallback、redaction 和 command gate：
+
+```powershell
+pnpm eval:agent -- --suite golden
+```
+
+DeepSeek live smoke 是可选手测路径。只有显式设置环境变量时才会联网调用；报告只写 redacted provider 信息：
+
+```powershell
+$env:PLANPAL_EVAL_API_KEY="<your temporary key>"
+pnpm eval:agent -- --suite live-smoke --provider deepseek
+Remove-Item Env:\PLANPAL_EVAL_API_KEY
+```
+
+报告输出在 `docs/evals/`，面试叙事见 [docs/agent-case-study.md](docs/agent-case-study.md)。
 
 ## 开发守则
 

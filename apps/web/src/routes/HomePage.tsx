@@ -53,6 +53,7 @@ export function HomePage() {
   const [quickOpen, setQuickOpen] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showAllRecent, setShowAllRecent] = useState(false)
   const [creationEvents, setCreationEvents] = useState<AgentEvent[]>([])
   const config = useStoredModelConfig()
   const recentPlansQuery = useQuery({ queryKey: ['plans'], queryFn: listPlans })
@@ -63,6 +64,7 @@ export function HomePage() {
     },
   })
   const recentPlans = (recentPlansQuery.data ?? []).slice(0, 6)
+  const visibleRecentPlans = showAllRecent ? recentPlans : recentPlans.slice(0, 3)
 
   async function submit(customPrompt = prompt) {
     const nextPrompt = customPrompt.trim()
@@ -94,45 +96,55 @@ export function HomePage() {
 
   return (
     <main className={homeClasses.root}>
-      <header className={homeClasses.topbar}>
-        <Link className={homeClasses.brand} to="/">
-          <span className={homeClasses.brandMark} aria-hidden="true">P</span>
-          <strong>PlanPal</strong>
-        </Link>
-        <Link className={homeClasses.modelLink(Boolean(config))} to="/settings/model">
-          {config ? `${config.model} · ${maskApiKey(config.apiKey)}` : '离线 fallback 可用'}
-        </Link>
-      </header>
-
       <section className={homeClasses.launchPad} aria-label="创建计划">
-        <div className={homeClasses.launchCopy}>
+        <div className={homeClasses.launchHeader}>
           <span className={appClasses.eyebrow}>Start</span>
+          <Link className={homeClasses.modelLink(Boolean(config))} to="/settings/model">
+            {config ? `${config.model} · ${maskApiKey(config.apiKey)}` : '离线 fallback 可用'}
+          </Link>
+        </div>
+        <div className={homeClasses.launchCopy}>
           <h1 className={homeClasses.launchTitle}>今天想怎么安排？</h1>
           <p className={homeClasses.launchText}>把时间、人数和偏好说清楚。PlanPal 会先给 3 个方向，选定后进入多列工作台继续改。</p>
         </div>
 
         <div className={homeClasses.inputStack}>
-          <textarea
-            className={homeClasses.textarea}
-            aria-label="计划开局要求"
-            value={prompt}
-            placeholder="比如：明天下午 2 个人，附近轻松玩到晚上，晚饭别太远..."
-            onChange={(event) => setPrompt(event.target.value)}
-          />
+          <div className={homeClasses.promptLabel}>
+            <span className={homeClasses.promptLabelText}>计划开局要求</span>
+            <section className={homeClasses.promptShell} aria-label="计划开局要求">
+              <textarea
+                aria-label="计划开局要求"
+                className={homeClasses.textarea}
+                value={prompt}
+                placeholder="比如：明天下午 2 个人，附近轻松玩到晚上，晚饭别太远..."
+                onChange={(event) => setPrompt(event.target.value)}
+              />
+              <div className={homeClasses.promptActions}>
+                <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
+                  <span aria-hidden="true">✦</span>
+                  {isSubmitting ? '创建中' : '生成计划'}
+                </button>
+              </div>
+            </section>
+          </div>
 
           <section className={homeClasses.quickPanel(quickOpen)} aria-label="快速参数生成">
-            <button
-              className={homeClasses.quickToggle}
-              type="button"
-              aria-expanded={quickOpen}
-              onClick={() => setQuickOpen((open) => !open)}
-            >
+            <div className={homeClasses.quickToggle}>
+              <span className={homeClasses.quickToggleIcon} aria-hidden="true">↯</span>
               <span className={homeClasses.quickToggleCopy}>
                 <strong className={homeClasses.quickToggleTitle}>快速参数生成</strong>
                 <small className={homeClasses.quickToggleHint}>可选辅助：用结构化参数拼一条完整开局描述。</small>
               </span>
-              <em className={homeClasses.quickToggleState}>{quickOpen ? '收起' : '展开'}</em>
-            </button>
+              <button
+                className={homeClasses.quickToggleState}
+                type="button"
+                aria-expanded={quickOpen}
+                onClick={() => setQuickOpen((open) => !open)}
+              >
+                <span className={homeClasses.quickToggleStateLabel}>{quickOpen ? '收起' : '展开'}</span>
+                <span className={homeClasses.quickToggleChevron(quickOpen)} aria-hidden="true">▾</span>
+              </button>
+            </div>
 
             {quickOpen && (
               <div className={homeClasses.quickBody}>
@@ -214,12 +226,6 @@ export function HomePage() {
               </div>
             )}
           </section>
-
-          <div className={homeClasses.actionRow}>
-            <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
-              {isSubmitting ? '创建中' : '创建计划'}
-            </button>
-          </div>
         </div>
 
         {(isSubmitting || creationEvents.length > 0) && (
@@ -229,11 +235,17 @@ export function HomePage() {
       </section>
 
       <section className={homeClasses.promptRail} aria-label="复杂任务示例">
-        <span className={homeClasses.promptRailLabel}>试试</span>
-        {demoPromptExamples.map((preset) => (
+        <div className={homeClasses.sectionHeading}>
+          <strong className={homeClasses.sectionTitle}>试试这些方向</strong>
+        </div>
+        {demoPromptExamples.map((preset, index) => (
           <button className={homeClasses.promptButton} key={preset.title} type="button" onClick={() => setPrompt(preset.prompt)}>
-            <strong className={homeClasses.promptButtonTitle}>{preset.title}</strong>
-            <small className={homeClasses.promptButtonSummary}>{preset.summary}</small>
+            <span className={homeClasses.promptButtonIcon} aria-hidden="true">{formatHomeIndex(index)}</span>
+            <span className={homeClasses.promptButtonCopy}>
+              <strong className={homeClasses.promptButtonTitle}>{preset.title}</strong>
+              <small className={homeClasses.promptButtonSummary}>{preset.summary}</small>
+            </span>
+            <span className={homeClasses.promptButtonArrow} aria-hidden="true">→</span>
           </button>
         ))}
       </section>
@@ -243,12 +255,14 @@ export function HomePage() {
           <strong className={homeClasses.recentHeadingTitle}>最近计划</strong>
           <small className={homeClasses.recentHeadingMeta}>{recentPlans.length > 0 ? `${recentPlans.length} 条` : '暂无历史'}</small>
         </div>
-        {recentPlans.length > 0 ? (
+        {visibleRecentPlans.length > 0 ? (
           <div className={homeClasses.recentList}>
-            {recentPlans.map((plan) => (
+            {visibleRecentPlans.map((plan, index) => (
               <article className={homeClasses.recentItem} key={plan.id}>
+                <span className={homeClasses.recentIcon} aria-hidden="true">{formatHomeIndex(index)}</span>
                 <Link className={homeClasses.recentLink} to="/plans/$planId" params={{ planId: plan.id }}>
                   <strong className={homeClasses.recentTitle}>{plan.title}</strong>
+                  <span className={homeClasses.recentType}>{formatPlanType(plan.title)}</span>
                   <span className={homeClasses.recentMeta}>{formatPlanStatus(plan.status)} · V{plan.currentVersion} · {plan.segments.length} 节点</span>
                   <time className={homeClasses.recentMeta} dateTime={plan.updatedAt}>{formatRecentPlanTime(plan.updatedAt)}</time>
                 </Link>
@@ -260,11 +274,49 @@ export function HomePage() {
                 >
                   清理
                 </button>
+                <span className={homeClasses.recentMore} aria-hidden="true">•••</span>
               </article>
             ))}
+            {recentPlans.length > 3 && (
+              <button
+                aria-expanded={showAllRecent}
+                className={homeClasses.recentFooter}
+                type="button"
+                onClick={() => setShowAllRecent((current) => !current)}
+              >
+                <span className={homeClasses.recentFooterCopy}>
+                  <strong className={homeClasses.recentFooterTitle}>
+                    {showAllRecent ? '收起计划列表' : '展开全部计划'}
+                  </strong>
+                  <small className={homeClasses.recentFooterHint}>
+                    {showAllRecent ? `当前显示全部 ${recentPlans.length} 条` : `已显示 3 条，还有 ${recentPlans.length - 3} 条可展开`}
+                  </small>
+                </span>
+                <span className={homeClasses.recentFooterAction}>
+                  {showAllRecent ? '收起' : '展开'}
+                  <span className={homeClasses.recentFooterIcon} aria-hidden="true">{showAllRecent ? '▴' : '▾'}</span>
+                </span>
+              </button>
+            )}
           </div>
         ) : (
-          <p className={homeClasses.note}>创建第一个计划后，这里会保留最近工作台入口。</p>
+          <div className={homeClasses.recentEmpty}>
+            <span className={homeClasses.recentEmptyIcon} aria-hidden="true">00</span>
+            <span className={homeClasses.recentEmptyCopy}>
+              <strong className={homeClasses.recentEmptyTitle}>还没有最近计划</strong>
+              <small className={homeClasses.recentEmptyHint}>
+                生成第一个计划后，这里会保留最近工作台入口，方便继续修改、确认和回放。
+              </small>
+            </span>
+            <button
+              className={homeClasses.recentEmptyAction}
+              type="button"
+              disabled={isSubmitting || !prompt.trim()}
+              onClick={() => void submit()}
+            >
+              {isSubmitting ? '创建中' : '生成当前计划'}
+            </button>
+          </div>
         )}
         {deletePlanMutation.isError && (
           <p className={appClasses.errorText}>{deletePlanMutation.error.message}</p>
@@ -360,6 +412,16 @@ function formatPlanStatus(status: string) {
     ready: '可编辑',
   }
   return labels[status] ?? status
+}
+
+function formatHomeIndex(index: number) {
+  return String(index + 1).padStart(2, '0')
+}
+
+function formatPlanType(title: string) {
+  if (/客户|接待|工作|产品|复盘/.test(title)) return '工作计划'
+  if (/生日|约会|亲子|朋友|玩/.test(title)) return '生活计划'
+  return '个人计划'
 }
 
 function formatRecentPlanTime(value: string) {

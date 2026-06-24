@@ -13,6 +13,8 @@ import {
   getAgentChatDisabledReason,
   getChatExecutionPathLabel,
   lastAttachedActionMessageIndex,
+  lastVariantSelectionMessageIndex,
+  visiblePlanVariantSelectionFromState,
   type AgentProgressItem,
   type ChatMessage,
 } from './workspaceModel'
@@ -70,7 +72,20 @@ export function AgentChatColumn({
   const disabledReason = getAgentChatDisabledReason(config, draft, isStreaming)
   const pathLabel = getChatExecutionPathLabel(config, draft)
   const contextLabel = selectedSegment ? selectedSegment.title : '全局计划'
-  const attachedActionIndex = lastAttachedActionMessageIndex(messages, pendingAction)
+  const visibleVariantSelection = visiblePlanVariantSelectionFromState(
+    pendingAction?.kind === 'plan-variant-selection' || !pendingAction ? pendingAction : undefined,
+    variantSelection,
+  )
+  const attachedActionIndex = pendingAction?.kind && pendingAction.kind !== 'plan-variant-selection'
+    ? lastAttachedActionMessageIndex(messages, pendingAction)
+    : -1
+  const attachedVariantIndex = lastVariantSelectionMessageIndex(messages, visibleVariantSelection)
+  const topPendingAction = pendingAction && pendingAction.kind !== 'plan-variant-selection' && attachedActionIndex < 0
+    ? pendingAction
+    : undefined
+  const topVariantSelection = visibleVariantSelection && attachedVariantIndex < 0
+    ? visibleVariantSelection
+    : undefined
   const statusLabel = pendingAction ? '等待选择' : isStreaming ? '处理中' : '可对话'
 
   useEffect(() => {
@@ -104,14 +119,7 @@ export function AgentChatColumn({
     if (action.kind === 'plan-variant-selection') {
       const selection = activePlanVariantSelectionFromAction(action, variantSelection)
       if (!selection) return null
-      return (
-        <VariantDecisionTicket
-          busy={isStreaming || commandBusy}
-          selection={selection}
-          onDismiss={onPendingActionDismiss}
-          onVariantSelect={onVariantSelect}
-        />
-      )
+      return renderVariantSelectionTicket(selection)
     }
     if (action.kind === 'candidate-selection') {
       return (
@@ -138,7 +146,30 @@ export function AgentChatColumn({
         />
       )
     }
+    if (action.kind === 'clarification') {
+      return (
+        <ClarificationTicket
+          action={action}
+          busy={isStreaming || commandBusy}
+          onDismiss={onPendingActionDismiss}
+        />
+      )
+    }
     return null
+  }
+
+  function renderVariantSelectionTicket(selection: PlanVariantSelection) {
+    const canDismiss = pendingAction?.kind === 'plan-variant-selection'
+      && pendingAction.id === selection.actionId
+      && !selection.selectedVariantId
+    return (
+      <VariantDecisionTicket
+        busy={isStreaming || commandBusy}
+        selection={selection}
+        onDismiss={canDismiss ? onPendingActionDismiss : undefined}
+        onVariantSelect={onVariantSelect}
+      />
+    )
   }
 
   return (
@@ -162,7 +193,16 @@ export function AgentChatColumn({
           </div>
         </section>
 
-        {messages.length === 0 && !pendingAction && (
+        {(topPendingAction || topVariantSelection) && (
+          <div className={agentChatClasses.pendingDock}>
+            <span className={agentChatClasses.pendingDockLabel}>
+              {topVariantSelection?.selectedVariantId ? '当前方案' : '待处理决策'}
+            </span>
+            {topVariantSelection ? renderVariantSelectionTicket(topVariantSelection) : topPendingAction ? renderPendingActionTicket(topPendingAction) : null}
+          </div>
+        )}
+
+        {messages.length === 0 && !pendingAction && !topVariantSelection && (
           <div className={agentChatClasses.emptyState}>
             <Icon name="icon-miles" size={28} />
             <div>
@@ -175,9 +215,14 @@ export function AgentChatColumn({
         <div className={agentChatClasses.thread} aria-live="polite">
           {messages.map((message, index) => {
             const activeAction = index === attachedActionIndex ? pendingAction : undefined
+            const activeVariantSelection = index === attachedVariantIndex ? visibleVariantSelection : undefined
             return (
               <div
-                className={agentChatClasses.turn({ role: message.role, receipt: message.receipt, hasAction: Boolean(activeAction) })}
+                className={agentChatClasses.turn({
+                  role: message.role,
+                  receipt: message.receipt,
+                  hasAction: Boolean(activeAction || activeVariantSelection),
+                })}
                 key={`${message.role}-${index}`}
               >
                 <div
@@ -190,21 +235,15 @@ export function AgentChatColumn({
                   )}
                   <p className={agentChatClasses.bubbleText}>{message.content}</p>
                 </div>
-                {activeAction && (
+                {(activeAction || activeVariantSelection) && (
                   <div className={agentChatClasses.actionAttachment()}>
-                    {renderPendingActionTicket(activeAction)}
+                    {activeVariantSelection ? renderVariantSelectionTicket(activeVariantSelection) : activeAction ? renderPendingActionTicket(activeAction) : null}
                   </div>
                 )}
               </div>
             )
           })}
         </div>
-
-        {attachedActionIndex < 0 && pendingAction && (
-          <div className={agentChatClasses.actionAttachment(true)}>
-            {renderPendingActionTicket(pendingAction)}
-          </div>
-        )}
 
         {isStreaming && progressItems.length > 0 && (
           <div className={agentChatClasses.progressCard} aria-live="polite">
@@ -289,6 +328,32 @@ export function AgentChatColumn({
         {disabledReason && <p className={agentChatClasses.disabledReason}>{disabledReason}</p>}
       </div>
     </div>
+  )
+}
+
+function ClarificationTicket({
+  action,
+  busy,
+  onDismiss,
+}: {
+  action: Extract<PendingAction, { kind: 'clarification' }>
+  busy: boolean
+  onDismiss: (actionId: string) => void
+}) {
+  return (
+    <Card className={agentChatClasses.decisionTicket} color="app-teal">
+      <DecisionTicketHeader title={action.title} description={action.description} />
+      <div className={workspacePrimitives.chipRow}>
+        {action.requiredFields.map((field, index) => (
+          <span className={chipClassName(index)} key={field}>{field}</span>
+        ))}
+      </div>
+      <div className={agentChatClasses.footer}>
+        <Button size="small" type="dashed" disabled={busy} onClick={() => onDismiss(action.id)}>
+          暂不处理
+        </Button>
+      </div>
+    </Card>
   )
 }
 

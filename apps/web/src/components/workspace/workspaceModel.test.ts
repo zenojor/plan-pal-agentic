@@ -49,6 +49,7 @@ import {
   getDefaultWorkspaceColumns,
   initialChatMessagesFromPlanEvents,
   lastAttachedActionMessageIndex,
+  lastVariantSelectionMessageIndex,
   getSegmentActionState,
   getWorkspaceBoardStyle,
   moveWorkspaceColumn,
@@ -63,6 +64,7 @@ import {
   shouldOpenChatForAgentEvent,
   shouldRefreshPlanForAgentEvent,
   shouldOpenChatForCommandResult,
+  visiblePlanVariantSelectionFromState,
 } from './workspaceModel'
 
 describe('workspace model helpers', () => {
@@ -616,6 +618,26 @@ describe('workspace model helpers', () => {
       actionId: variantAction.id,
     })
     expect(activePlanVariantSelectionFromAction(undefined, selectedPlan.variantSelection)).toBeUndefined()
+    const visiblePendingVariant = visiblePlanVariantSelectionFromState(variantAction, planWithVariants.variantSelection)
+    expect(visiblePendingVariant).toMatchObject({
+      actionId: variantAction.id,
+    })
+    expect(visiblePendingVariant?.selectedVariantId).toBeUndefined()
+    expect(visiblePlanVariantSelectionFromState(undefined, selectedPlan.variantSelection)).toMatchObject({
+      actionId: variantAction.id,
+      selectedVariantId: variantAction.variants[0]!.id,
+    })
+    expect(deriveVariantTicketDisplay(selectedPlan.variantSelection!)).toMatchObject({
+      expandedByDefault: false,
+      selectedVariantId: variantAction.variants[0]!.id,
+      title: `当前：${variantAction.variants[0]!.title}`,
+    })
+
+    const variantAnchored = attachPendingActionToLatestPlanpalMessage([
+      { role: 'user', content: '给我三个方向' },
+      { role: 'planpal', content: '我准备了三个方向。' },
+    ], variantAction)
+    expect(lastVariantSelectionMessageIndex(variantAnchored, selectedPlan.variantSelection)).toBe(1)
   })
 
   it('keeps generated plan variant receipts out of the chat thread', () => {

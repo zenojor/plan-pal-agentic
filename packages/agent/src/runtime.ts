@@ -1,4 +1,4 @@
-import { applyPlanCommand, createId, nowIso, type AgentEvent, type AgentRun, type Plan, type PlanCommand } from '@planpal/domain'
+import { applyPlanCommand, createId, deriveCandidateSearchIntent, nowIso, summarizeCandidateSearchIntent, type AgentEvent, type AgentRun, type Plan, type PlanCommand } from '@planpal/domain'
 import type { PlanPalStores } from '@planpal/db'
 import type { CoreMessage } from 'ai'
 import {
@@ -93,9 +93,11 @@ export class PlanPalAgentRuntime {
 
     if (route.kind === 'candidate-search') {
       const isAddAfter = route.mode === 'add-after'
+      const intentSummary = candidateIntentSummaryForRoute(plan, route)
       await emit('tool.called', isAddAfter ? 'Searching add-after candidates' : 'Searching replacement candidates', {
         toolName: 'poi.search',
         effect: 'read-only',
+        intentSummary,
       })
       const call = await this.tools.run(run.id, 'poi.search', {
         plan,
@@ -105,7 +107,11 @@ export class PlanPalAgentRuntime {
         query: route.query,
       }, ['read-only'])
       await this.stores.agents.appendToolCall(call)
-      await emit('tool.result', isAddAfter ? 'Add-after candidates ready' : 'Replacement candidates ready', call)
+      await emit('tool.result', isAddAfter ? 'Add-after candidates ready' : 'Replacement candidates ready', {
+        ...call,
+        intentSummary,
+        rankingSignals: intentSummary?.rankingSignals,
+      })
 
       const command: PlanCommand = isAddAfter
         ? {
@@ -125,6 +131,8 @@ export class PlanPalAgentRuntime {
       await this.stores.plans.savePlan(result.plan, 'agent')
       await emit('plan.patch.proposed', isAddAfter ? 'Agent proposed an add-after workflow' : 'Agent proposed a replacement workflow', {
         patch: result.patch,
+        intentSummary,
+        rankingSignals: intentSummary?.rankingSignals,
         model,
         routeSource: routed.source,
         usedModel: routed.source === 'model',
@@ -133,6 +141,40 @@ export class PlanPalAgentRuntime {
         attemptedEndpoints,
       })
       await emit('action.required', result.plan.pendingAction?.title ?? 'Choose an option', {
+        action: result.plan.pendingAction,
+        intentSummary,
+        rankingSignals: intentSummary?.rankingSignals,
+        model,
+        routeSource: routed.source,
+        usedModel: routed.source === 'model',
+        fallbackUsed: routed.source !== 'model',
+        error: routed.modelError,
+        attemptedEndpoints,
+      })
+      await this.stores.agents.saveRun({ ...run, status: 'waiting_for_user' })
+      return { runId: run.id, status: 'waiting_for_user' as const }
+    }
+
+    if (route.kind === 'clarification') {
+      const command: PlanCommand = {
+        type: 'REQUEST_CLARIFICATION',
+        source: 'agent',
+        title: route.title,
+        description: route.description,
+        requiredFields: route.requiredFields,
+      }
+      const result = applyPlanCommand(plan, command, run.id)
+      await this.stores.plans.savePlan(result.plan, 'agent')
+      await emit('plan.patch.proposed', route.reason, {
+        patch: result.patch,
+        model,
+        routeSource: routed.source,
+        usedModel: routed.source === 'model',
+        fallbackUsed: routed.source !== 'model',
+        error: routed.modelError,
+        attemptedEndpoints,
+      })
+      await emit('action.required', result.plan.pendingAction?.title ?? 'Need clarification', {
         action: result.plan.pendingAction,
         model,
         routeSource: routed.source,
@@ -211,7 +253,12 @@ export class PlanPalAgentRuntime {
         error: routed.modelError,
         attemptedEndpoints,
       })
-      await emit('plan.updated', result.patch.summary, { plan: result.plan, version: result.version })
+      await emit('plan.updated', result.patch.summary, {
+        command: route.command,
+        patch: result.patch,
+        plan: result.plan,
+        version: result.version,
+      })
       await emit('agent.finished', 'Agent command finished', {
         runId: run.id,
         model,
@@ -301,16 +348,20 @@ export class PlanPalAgentRuntime {
       return { route: fallback, source: 'fallback', modelError: error }
     }
 
+    const modelRoute = routeModelTurnIntent(plan, input.message, intent, input.selectedSegmentId)
+    const intentSummary = candidateIntentSummaryForRoute(plan, modelRoute)
     await emit('agent.model.finished', 'Model intent interpreted', {
       model,
       phase: 'intent',
       usedModel: true,
       fallbackUsed: false,
       intent,
+      intentSummary,
+      rankingSignals: intentSummary?.rankingSignals,
       attemptedEndpoints,
     })
     return {
-      route: routeModelTurnIntent(plan, input.message, intent, input.selectedSegmentId),
+      route: modelRoute,
       source: 'model',
     }
   }
@@ -431,7 +482,12 @@ export class PlanPalAgentRuntime {
       type: 'plan.updated',
       sequence: 1,
       message: command.type === 'SELECT_SERVICE_ITEM' ? 'Service item selected' : 'Candidate applied',
-      payload: { plan: result.plan, version: result.version },
+      payload: {
+        command,
+        patch: result.patch,
+        plan: result.plan,
+        version: result.version,
+      },
       createdAt: nowIso(),
     }
     await this.stores.agents.appendEvent(event)
@@ -447,8 +503,25 @@ export class PlanPalAgentRuntime {
     }
     await this.stores.agents.appendEvent(finished)
     await sink(finished)
+    const run = await this.stores.agents.getRun(input.runId)
+    if (run) {
+      await this.stores.agents.saveRun({ ...run, status: 'completed', finishedAt: nowIso() })
+    }
     return { status: 'completed' as const }
   }
+}
+
+function candidateIntentSummaryForRoute(plan: Plan, route: RoutedTurn) {
+  if (route.kind !== 'candidate-search') return undefined
+  const target = route.mode === 'replace'
+    ? plan.segments.find((segment) => segment.id === route.segmentId)
+    : undefined
+  const intent = deriveCandidateSearchIntent(route.query, {
+    mode: route.mode,
+    phase: target?.phase,
+    serviceCategory: target?.serviceCategory,
+  })
+  return summarizeCandidateSearchIntent(intent)
 }
 
 function shouldDirectAnswerWithModel(message: string, fallback: RoutedTurn) {
@@ -502,6 +575,21 @@ const commandLikeKeywords = [
   '涮肉',
   '锅底',
   'hotpot',
+  '想吃辣',
+  '吃辣',
+  '辣的',
+  '辣味',
+  '麻辣',
+  '香辣',
+  '川菜',
+  '湘菜',
+  '川湘',
+  '串串',
+  '不吃辣',
+  '不要辣',
+  '不辣',
+  '少辣',
+  '清淡',
   '删除',
   '删掉',
   '去掉',
@@ -556,7 +644,7 @@ function buildIntentMessages(model: PublicModelConfig, message: string, plan: Pl
         'You are PlanPal intent interpreter.',
         `The current configured model is ${model.model} via ${model.baseURL}.`,
         'Return only one JSON object. No markdown.',
-        'Schema: {"action":"qa|replace|add|rewrite|delete|confirm|service","targetSegmentId":"optional segment id","targetPhase":"activity|dining|drinks|leisure|transit optional","category":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other for service item search","query":"optional rewrite/search text","answer":"optional answer for qa","reason":"short reason"}. Use add when the user wants another stop inserted into the plan instead of replacing an existing stop. Use service when the user wants to choose a room type, movie ticket, package, or merchant service item for an existing segment.',
+        'Schema: {"action":"qa|replace|add|rewrite|delete|confirm|service|clarify","targetSegmentId":"optional segment id","targetPhase":"activity|dining|drinks|leisure|transit optional","category":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other for service item search","query":"optional rewrite/search text","answer":"optional answer for qa","reason":"short reason"}. Use replace for dining preference changes such as spicy, Sichuan/Hunan, skewers, mild/no-spicy, quiet chat, family friendly, or business dinner when an existing meal segment should change. Use add when the user wants another stop inserted into the plan instead of replacing an existing stop. Use service when the user wants to choose a room type, movie ticket, package, or merchant service item for an existing segment. Use clarify only when action type or target cannot be determined.',
         'Do not include secrets or API keys.',
       ].join(' '),
     },
@@ -592,7 +680,7 @@ function redactModelError(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error || 'Model call failed')
   return raw
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi, 'Bearer [redacted]')
 }
 
 
