@@ -84,6 +84,18 @@ export type AgentEventType =
   | 'agent.finished'
   | 'agent.error'
 
+export type CommandConfirmationSeverity = 'normal' | 'destructive' | 'finalizing'
+
+export type CommandConfirmationPreview = {
+  affectedSegmentIds: string[]
+  affectedSegmentTitles: string[]
+  beforeVersion: number
+  summary: string
+  riskNotes: string[]
+  beforeOrder?: string[]
+  afterOrder?: string[]
+}
+
 export type PendingAction =
   | {
       id: string
@@ -120,6 +132,17 @@ export type PendingAction =
       title: string
       description: string
       requiredFields: string[]
+    }
+  | {
+      id: string
+      kind: 'command-confirmation'
+      title: string
+      description: string
+      severity: CommandConfirmationSeverity
+      confirmLabel: string
+      cancelLabel: string
+      commands: ConfirmablePlanCommand[]
+      preview: CommandConfirmationPreview
     }
 
 export type CandidateOption = {
@@ -308,6 +331,35 @@ export type AgentRun = {
 
 export type PlanCommand =
   | {
+      type: 'REQUEST_COMMAND_CONFIRMATION'
+      source: CommandSource
+      title: string
+      description: string
+      severity: CommandConfirmationSeverity
+      confirmLabel: string
+      cancelLabel: string
+      commands: ConfirmablePlanCommand[]
+      preview?: Partial<CommandConfirmationPreview>
+    }
+  | {
+      type: 'CONFIRM_COMMAND_ACTION'
+      source: CommandSource
+      actionId: string
+    }
+  | {
+      type: 'CLEAR_PLAN_SEGMENTS'
+      source: CommandSource
+      segmentIds?: string[]
+      includeLocked?: boolean
+      reason?: string
+    }
+  | {
+      type: 'RESTORE_PLAN_VERSION'
+      source: CommandSource
+      version: number
+      reason?: string
+    }
+  | {
       type: 'REORDER_SEGMENT'
       source: CommandSource
       segmentId: string
@@ -436,6 +488,13 @@ export type PlanCommand =
       offeringId?: string
       quantity: number
     }
+
+export type ConfirmablePlanCommand = Exclude<
+  PlanCommand,
+  | { type: 'REQUEST_COMMAND_CONFIRMATION' }
+  | { type: 'CONFIRM_COMMAND_ACTION' }
+  | { type: 'RESTORE_PLAN_VERSION' }
+>
 
 export type CommandResult = {
   plan: Plan

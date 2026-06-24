@@ -99,7 +99,7 @@ export function buildAgentTraceSnapshot(input: {
   const toolCalls = input.toolCalls.map(summarizeToolCall)
   const steps = runEvents.map((event) => stepFromEvent(event))
   const commandWrites = runEvents
-    .map(commandWriteFromEvent)
+    .flatMap(commandWritesFromEvent)
     .filter((item): item is TraceCommandWrite => Boolean(item))
   return {
     planId: input.run.planId,
@@ -209,14 +209,14 @@ function summarizeToolCall(call: ToolCallRecord): TraceToolCallSummary {
   }
 }
 
-function commandWriteFromEvent(event: AgentEvent): TraceCommandWrite | null {
-  if (event.type !== 'plan.updated') return null
+function commandWritesFromEvent(event: AgentEvent): TraceCommandWrite[] {
+  if (event.type !== 'plan.updated') return []
   const payload = readObject(event.payload)
   const command = readCommand(payload.command)
   const patch = readPatch(payload.patch)
   const commandType = command?.type ?? patch?.operation
-  if (!commandType) return null
-  return {
+  if (!commandType) return []
+  const primary: TraceCommandWrite = {
     id: `write_${event.id}`,
     eventId: event.id,
     commandType,
@@ -225,6 +225,20 @@ function commandWriteFromEvent(event: AgentEvent): TraceCommandWrite | null {
     patchSummary: patch?.summary ? redactTraceText(patch.summary) : redactTraceText(event.message),
     sequence: event.sequence,
   }
+  const confirmed = readCommandArray(payload.confirmedCommands)
+  if (!confirmed.length) return [primary]
+  return [
+    primary,
+    ...confirmed.map((item, index) => ({
+      id: `write_${event.id}_confirmed_${index}`,
+      eventId: event.id,
+      commandType: item.type,
+      source: item.source,
+      version: readNumber(payload.version),
+      patchSummary: patch?.summary ? redactTraceText(patch.summary) : redactTraceText(event.message),
+      sequence: event.sequence,
+    })),
+  ]
 }
 
 function buildSafetyFindings(input: {
@@ -351,6 +365,11 @@ function readToolEffect(value: unknown): ToolEffect | undefined {
 function readCommand(value: unknown): PlanCommand | undefined {
   const input = readObject(value)
   return typeof input.type === 'string' ? value as PlanCommand : undefined
+}
+
+function readCommandArray(value: unknown): PlanCommand[] {
+  if (!Array.isArray(value)) return []
+  return value.map(readCommand).filter((command): command is PlanCommand => Boolean(command))
 }
 
 function readPatch(value: unknown): PlanPatch | undefined {

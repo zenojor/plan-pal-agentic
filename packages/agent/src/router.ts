@@ -94,6 +94,16 @@ export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSe
       reason: 'add-after request',
     }
   }
+  if (isReorderRequest(normalized)) {
+    const command = createReorderCommand(plan, normalized, selectedSegmentId, target)
+    if (command) {
+      return {
+        kind: 'command',
+        reason: 'reorder request',
+        command,
+      }
+    }
+  }
   if (isAmbiguousChangeRequest(normalized)) {
     return {
       kind: 'clarification',
@@ -119,6 +129,17 @@ export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSe
       segmentId: target.id,
       query: message,
       reason: 'replacement-like request',
+    }
+  }
+  if (isClearPlanRequest(normalized)) {
+    return {
+      kind: 'command',
+      reason: 'clear plan request',
+      command: {
+        type: 'CLEAR_PLAN_SEGMENTS',
+        source: 'agent',
+        reason: message,
+      },
     }
   }
   if (containsAny(normalized, ['删除', '删掉', '去掉', '不要', 'remove', 'delete'])) {
@@ -244,6 +265,17 @@ export function routeModelTurnIntent(
     }
   }
   if (intent.action === 'delete') {
+    if (isClearPlanRequest(message.trim().toLowerCase())) {
+      return {
+        kind: 'command',
+        reason: intent.reason || 'model interpreted clear plan request',
+        command: {
+          type: 'CLEAR_PLAN_SEGMENTS',
+          source: 'agent',
+          reason: intent.query?.trim() || message,
+        },
+      }
+    }
     return {
       kind: 'command',
       reason: intent.reason || 'model interpreted delete request',
@@ -266,6 +298,16 @@ export function routeModelTurnIntent(
   }
   if (intent.action === 'rewrite') {
     const rewriteText = intent.query?.trim() || intent.reason?.trim() || message
+    if (isReorderRequest(message.trim().toLowerCase())) {
+      const reorderCommand = createReorderCommand(plan, message.trim().toLowerCase(), selectedSegmentId, target)
+      if (reorderCommand) {
+        return {
+          kind: 'command',
+          reason: intent.reason || 'model interpreted reorder request',
+          command: reorderCommand,
+        }
+      }
+    }
     return {
       kind: 'command',
       reason: intent.reason || 'model interpreted rewrite request',
@@ -376,6 +418,81 @@ function isAmbiguousChangeRequest(value: string) {
     '近一点',
     '近点',
   ])
+}
+
+function isClearPlanRequest(value: string) {
+  return containsAny(value, [
+    '删除所有',
+    '删掉所有',
+    '删除全部',
+    '全部删掉',
+    '清空计划',
+    '清空拼图',
+    '所有节点',
+    '全部节点',
+    '所有安排',
+    'clear plan',
+    'clear all',
+  ])
+}
+
+function isReorderRequest(value: string) {
+  return containsAny(value, [
+    '重排',
+    '重新排',
+    '重新安排顺序',
+    '调整顺序',
+    '优化顺序',
+    '放到饭后',
+    '放在饭后',
+    '移到饭后',
+    '移到最后',
+  ])
+}
+
+function createReorderCommand(
+  plan: Plan,
+  normalized: string,
+  selectedSegmentId: string | undefined,
+  fallbackTarget: PlanSegment,
+): PlanCommand | undefined {
+  const executable = plan.segments.filter((segment) => !segment.isTransit)
+  if (executable.length < 2) return undefined
+  const selected = selectedSegmentId ? executable.find((segment) => segment.id === selectedSegmentId) : undefined
+  const dining = executable.find((segment) => segment.phase === 'dining')
+  const dessertLike = executable.find((segment) => containsAny(`${segment.title} ${segment.place} ${segment.reason}`.toLowerCase(), ['甜品', '饮品', '收尾', '咖啡', '酒', '清吧']))
+  const target = selected
+    ?? (containsAny(normalized, ['甜品', '饮品', '收尾', '咖啡', '酒', '清吧']) ? dessertLike : undefined)
+    ?? fallbackTarget
+  if (!target || target.locked) return undefined
+  if (containsAny(normalized, ['饭后', '餐后', '吃完']) && dining && dining.id !== target.id) {
+    return {
+      type: 'REORDER_SEGMENT',
+      source: 'agent',
+      segmentId: target.id,
+      anchorSegmentId: dining.id,
+      position: 'AFTER',
+    }
+  }
+  const last = executable.at(-1)
+  if (!last || last.id === target.id) {
+    const first = executable[0]
+    if (!first || first.id === target.id) return undefined
+    return {
+      type: 'REORDER_SEGMENT',
+      source: 'agent',
+      segmentId: target.id,
+      anchorSegmentId: first.id,
+      position: 'BEFORE',
+    }
+  }
+  return {
+    type: 'REORDER_SEGMENT',
+    source: 'agent',
+    segmentId: target.id,
+    anchorSegmentId: last.id,
+    position: 'AFTER',
+  }
 }
 
 const diningPreferenceKeywords = [

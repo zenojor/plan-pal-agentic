@@ -23,7 +23,7 @@ import {
 type EvalSuite = 'golden' | 'live-smoke'
 type EvalProvider = 'deepseek'
 type SetupKind = 'default' | 'movie' | 'hotel' | 'locked-dining'
-type ResumeMode = 'candidate-first' | 'service-first'
+type ResumeMode = 'candidate-first' | 'service-first' | 'confirm-command'
 
 type EvalExpectation = {
   commandTypes?: string[]
@@ -429,6 +429,9 @@ function resumePayload(action: PendingAction, mode: ResumeMode) {
       candidateId: action.candidates[0]?.id ?? '',
     }
   }
+  if (mode === 'confirm-command' && action.kind === 'command-confirmation') {
+    return { confirmed: true }
+  }
   return {}
 }
 
@@ -522,6 +525,7 @@ function goldenScenarios(): EvalScenario[] {
       tags: ['golden', 'order', 'sandbox'],
       initialPrompt: '晚上两个人附近吃饭',
       message: '可以模拟下单了',
+      resume: 'confirm-command',
       expect: { commandTypes: ['CREATE_SANDBOX_ORDER'], finalStatus: 'confirmed', runStatus: 'completed', toolNames: ['order.preview'] },
     },
     {
@@ -530,6 +534,7 @@ function goldenScenarios(): EvalScenario[] {
       tags: ['golden', 'confirm'],
       initialPrompt: '下午两个人附近轻松玩',
       message: '确认这个计划',
+      resume: 'confirm-command',
       expect: { commandTypes: ['CONFIRM_PLAN'], finalStatus: 'confirmed', runStatus: 'completed', toolNames: ['order.preview'] },
     },
     {
@@ -538,7 +543,17 @@ function goldenScenarios(): EvalScenario[] {
       tags: ['golden', 'command'],
       initialPrompt: '下午两个人附近轻松玩',
       message: '删除这个安排',
+      resume: 'confirm-command',
       expect: { commandTypes: ['DELETE_SEGMENT'], runStatus: 'completed' },
+    },
+    {
+      id: 'golden-clear-plan-command',
+      title: 'Clear all nodes pauses for confirmation before clearing',
+      tags: ['golden', 'command', 'destructive'],
+      initialPrompt: '下午两个人附近轻松玩',
+      message: '删除所有节点',
+      resume: 'confirm-command',
+      expect: { commandTypes: ['CLEAR_PLAN_SEGMENTS'], runStatus: 'completed' },
     },
     {
       id: 'golden-rewrite-command',
@@ -546,6 +561,7 @@ function goldenScenarios(): EvalScenario[] {
       tags: ['golden', 'command'],
       initialPrompt: '下午两个人附近轻松玩',
       message: '改成轻松一点',
+      resume: 'confirm-command',
       expect: { commandTypes: ['REWRITE_SEGMENT'], runStatus: 'completed' },
     },
     {
@@ -588,6 +604,7 @@ function goldenScenarios(): EvalScenario[] {
       message: '改成轻松一点',
       setup: 'locked-dining',
       selectedPhase: 'dining',
+      resume: 'confirm-command',
       expect: { errorIncludes: 'Locked segments cannot be rewritten' },
     },
     {
@@ -621,6 +638,7 @@ function goldenScenarios(): EvalScenario[] {
       initialPrompt: '下午两个人附近轻松玩',
       message: '把第一个安排调轻松点',
       modelReply: JSON.stringify({ action: 'rewrite', targetPhase: 'activity', query: '节奏放慢', reason: 'user wants slower pace' }),
+      resume: 'confirm-command',
       useModel: true,
       expect: { commandTypes: ['REWRITE_SEGMENT'], runStatus: 'completed' },
     },
@@ -641,6 +659,7 @@ function goldenScenarios(): EvalScenario[] {
       initialPrompt: '晚上两个人附近吃饭',
       message: '帮我预订',
       modelReply: JSON.stringify({ action: 'confirm', query: '预订', reason: 'user wants sandbox order' }),
+      resume: 'confirm-command',
       useModel: true,
       expect: { commandTypes: ['CREATE_SANDBOX_ORDER'], finalStatus: 'confirmed', runStatus: 'completed', toolNames: ['order.preview'] },
     },
@@ -669,12 +688,13 @@ function goldenScenarios(): EvalScenario[] {
       initialPrompt: '下午两个人附近轻松玩',
       message: '删掉第一个安排',
       modelReply: JSON.stringify({ action: 'delete', targetPhase: 'activity', reason: 'user wants removal' }),
+      resume: 'confirm-command',
       useModel: true,
       expect: { commandTypes: ['DELETE_SEGMENT'], runStatus: 'completed' },
     },
   ]
-  if (scenarios.length !== 41) {
-    throw new Error(`Golden suite must contain 41 scenarios, got ${scenarios.length}`)
+  if (scenarios.length !== 42) {
+    throw new Error(`Golden suite must contain 42 scenarios, got ${scenarios.length}`)
   }
   return scenarios
 }

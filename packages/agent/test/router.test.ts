@@ -79,6 +79,24 @@ describe('agent natural language router', () => {
     }
   })
 
+  it('routes clear-plan wording to a bulk clear command', () => {
+    const plan = createPlanFromPrompt('下午两个人逛逛')
+    const route = routeNaturalLanguageTurn(plan, '删除所有节点')
+    expect(route.kind).toBe('command')
+    if (route.kind === 'command') {
+      expect(route.command.type).toBe('CLEAR_PLAN_SEGMENTS')
+    }
+  })
+
+  it('routes reorder wording to a deterministic reorder command', () => {
+    const plan = createPlanFromPrompt('下午两个人逛逛')
+    const route = routeNaturalLanguageTurn(plan, '帮我重排一下')
+    expect(route.kind).toBe('command')
+    if (route.kind === 'command') {
+      expect(route.command.type).toBe('REORDER_SEGMENT')
+    }
+  })
+
   it('routes booking-like wording to sandbox order generation', () => {
     const plan = createPlanFromPrompt('下午两个人逛逛')
     const route = routeNaturalLanguageTurn(plan, '可以模拟下单了')

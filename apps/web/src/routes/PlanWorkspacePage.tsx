@@ -17,9 +17,11 @@ import {
   assistantDeltaFromAgentEvent,
   buildCandidateCommand,
   buildCandidateRefreshCommand,
+  buildConfirmCommandActionCommand,
   buildClearRouteChoiceCommand,
   buildDismissPendingActionCommand,
   buildPlanVariantCommand,
+  buildRestorePlanVersionCommand,
   buildRouteChoiceCommand,
   buildRouteEstimates,
   buildSandboxOrderCommand,
@@ -187,7 +189,7 @@ export function PlanWorkspacePage() {
       setMessages((prev) => [...prev, chatMessageFromCommandError(command, error)])
     },
     onSuccess: (result, command) => {
-      if (command.type === 'CHOOSE_CANDIDATE' || command.type === 'DISMISS_PENDING_ACTION') setPendingActionRunId(null)
+      if (command.type === 'CHOOSE_CANDIDATE' || command.type === 'DISMISS_PENDING_ACTION' || command.type === 'CONFIRM_COMMAND_ACTION') setPendingActionRunId(null)
       if (!result.plan.pendingAction) {
         setStreamPendingAction(undefined)
         setPendingActionRunId(null)
@@ -202,7 +204,13 @@ export function PlanWorkspacePage() {
         setColumns((current) => addWorkspaceColumn(current, 'chat'))
       }
       const chatMessage = chatMessageFromCommandResult(command, result)
-      if (chatMessage) setMessages((prev) => [...prev, chatMessage])
+      const undoVersion = previous?.plan.currentVersion
+      if (chatMessage) {
+        setMessages((prev) => [...prev, {
+          ...chatMessage,
+          undoVersion: shouldAttachUndo(command, undoVersion, result.version) ? undoVersion : chatMessage.undoVersion,
+        }])
+      }
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey })
@@ -294,6 +302,33 @@ export function PlanWorkspacePage() {
 
   function dismissPendingAction(actionId: string) {
     commandMutation.mutate(buildDismissPendingActionCommand(actionId))
+  }
+
+  async function confirmCommandAction(action: Extract<PendingAction, { kind: 'command-confirmation' }>, confirmed: boolean) {
+    if (pendingActionRunId) {
+      setIsStreaming(true)
+      try {
+        await streamAgentResume(planId, {
+          runId: pendingActionRunId,
+          actionId: action.id,
+          payload: { confirmed },
+        }, handleStreamEvent)
+      } catch (error) {
+        setColumns((current) => addWorkspaceColumn(current, 'chat'))
+        setMessages((prev) => [...prev, chatMessageFromAgentFailure('resume', error)])
+      } finally {
+        setPendingActionRunId(null)
+        setIsStreaming(false)
+      }
+      return
+    }
+    commandMutation.mutate(confirmed
+      ? buildConfirmCommandActionCommand(action.id)
+      : buildDismissPendingActionCommand(action.id))
+  }
+
+  function restoreVersion(version: number) {
+    commandMutation.mutate(buildRestorePlanVersionCommand(version))
   }
 
   function handleStreamEvent(event: AgentEvent) {
@@ -470,10 +505,12 @@ export function PlanWorkspacePage() {
             onCandidateSelect={chooseCandidate}
             onCandidateRefresh={refreshCandidates}
             onChatContextChange={handleChatContextChange}
+            onCommandConfirm={(action, confirmed) => void confirmCommandAction(action, confirmed)}
             onDraftChange={setDraft}
             onPendingActionDismiss={dismissPendingAction}
             onSend={() => void runChat()}
             onServiceOfferingSelect={(action, offering, quantity) => void chooseServiceOffering(action, offering, quantity)}
+            onUndo={restoreVersion}
             onVariantSelect={choosePlanVariant}
           />
         ),
@@ -581,6 +618,17 @@ function eventMergeKey(event: AgentEvent) {
     return `${event.runId}:${event.type}:${event.message}`
   }
   return event.id
+}
+
+function shouldAttachUndo(command: PlanCommand, undoVersion: number | undefined, currentVersion: number) {
+  if (!undoVersion || undoVersion >= currentVersion) return false
+  return ![
+    'REQUEST_COMMAND_CONFIRMATION',
+    'DISMISS_PENDING_ACTION',
+    'REFRESH_CANDIDATES',
+    'REFRESH_SERVICE_ITEMS',
+    'RESTORE_PLAN_VERSION',
+  ].includes(command.type)
 }
 
 

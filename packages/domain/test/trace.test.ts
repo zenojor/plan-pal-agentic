@@ -16,7 +16,7 @@ describe('agent trace snapshot', () => {
     const target = plan.segments.find((segment) => segment.phase === 'dining') ?? plan.segments[0]!
     const commandResult = applyPlanCommand(plan, {
       type: 'REWRITE_SEGMENT',
-      source: 'agent',
+      source: 'action-card',
       segmentId: target.id,
       changes: { notes: '别太赶' },
     }, 'run_trace_test')
@@ -56,7 +56,7 @@ describe('agent trace snapshot', () => {
     expect(snapshot.toolCalls[0]?.resultSummary).not.toContain('sk-secret-for-test')
     expect(snapshot.commandWrites).toEqual([expect.objectContaining({
       commandType: 'REWRITE_SEGMENT',
-      source: 'agent',
+      source: 'action-card',
       version: commandResult.version,
     })])
     expect(snapshot.replayFrames[0]?.description).toContain('REWRITE_SEGMENT')

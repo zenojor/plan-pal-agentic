@@ -12,8 +12,10 @@ import {
   nowIso,
   searchMerchantOfferings,
   searchFictionalPois,
+  summarizeCommand,
   type AgentEvent,
   type AgentRun,
+  type CommandResult,
   type MerchantServiceCategory,
   type Plan,
   type PlanCommand,
@@ -336,6 +338,14 @@ app.post('/api/plans/:planId/commands', async (context) => {
   if (!plan) return context.json({ error: 'Plan not found' }, 404)
   try {
     const command = await readJson<PlanCommand>(context)
+    if (command.type === 'RESTORE_PLAN_VERSION') {
+      const result = await restorePlanVersion(plan, command)
+      await stores.plans.savePlan(result.plan, 'command')
+      for (const event of result.events) {
+        await stores.agents.appendEvent(event)
+      }
+      return context.json(result)
+    }
     const result = applyPlanCommand(plan, command)
     await stores.plans.savePlan(result.plan, 'command')
     for (const event of result.events) {
@@ -412,6 +422,55 @@ app.post('/api/plans/:planId/agent/resume', async (context) => {
     }
   })
 })
+
+async function restorePlanVersion(
+  current: Plan,
+  command: Extract<PlanCommand, { type: 'RESTORE_PLAN_VERSION' }>,
+): Promise<CommandResult> {
+  const versions = await stores.plans.listPlanVersions(current.id)
+  const target = versions.find((version) => version.currentVersion === command.version)
+  if (!target) {
+    throw new Error(`Plan version V${command.version} was not found`)
+  }
+  if (target.currentVersion === current.currentVersion) {
+    throw new Error('Plan is already at that version')
+  }
+  const restored: Plan = {
+    ...target,
+    currentVersion: current.currentVersion + 1,
+    createdAt: current.createdAt,
+    updatedAt: nowIso(),
+    pendingAction: undefined,
+  }
+  const patch = {
+    operation: command.type,
+    summary: summarizeCommand(command),
+    beforeVersion: current.currentVersion,
+    afterVersion: restored.currentVersion,
+  }
+  const event: AgentEvent = {
+    id: createId('evt'),
+    runId: createId('cmd'),
+    planId: current.id,
+    type: 'plan.updated',
+    sequence: 1,
+    message: patch.summary,
+    payload: {
+      command,
+      patch,
+      restoredFromVersion: current.currentVersion,
+      restoredToVersion: target.currentVersion,
+      version: restored.currentVersion,
+    },
+    createdAt: nowIso(),
+  }
+  return {
+    plan: restored,
+    events: [event],
+    version: restored.currentVersion,
+    patch,
+  }
+}
 
 function summarizePlanVersion(plan: Plan): PlanVersionSummary {
   return {

@@ -76,7 +76,7 @@ export function PuzzleColumn({
           </span>
           <span className={appClasses.eyebrow}>等待计划</span>
           <h3 className={puzzleClasses.emptyTitle}>还没有拼图节点</h3>
-          <p className={puzzleClasses.emptyText}>创建计划后，活动、晚餐和收尾节点会出现在这里。</p>
+          <p className={puzzleClasses.emptyText}>计划已清空或尚未生成节点。可以回到对话，让 Agent 重新安排后再确认。</p>
         </Card>
       )}
       {displayItems.map((item) => {
@@ -272,6 +272,7 @@ function SegmentCard({
   onSetDragOverSegment: (segmentId: string | null) => void
 }) {
   const [rewriteOpen, setRewriteOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [draft, setDraft] = useState(segment.notes ?? '')
   const actions = getSegmentActionState(segment)
   const canDelete = actions.canDelete && executableCount > 1
@@ -450,16 +451,38 @@ function SegmentCard({
             type="dashed"
             disabled={!canDelete || commandBusy}
             title={canDelete ? '删除这个节点' : '至少保留一个可执行节点'}
-            onClick={() =>
-              stopAndCommand({
-                type: 'DELETE_SEGMENT',
-                source: 'puzzle',
-                segmentId: segment.id,
-              })
-            }
+            onClick={() => setDeleteConfirmOpen(true)}
           >
             删除
           </Button>
+          {deleteConfirmOpen && (
+            <>
+              <Button
+                size="small"
+                type="dashed"
+                disabled={commandBusy}
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                取消
+              </Button>
+              <Button
+                danger
+                size="small"
+                type="primary"
+                disabled={!canDelete || commandBusy}
+                onClick={() => {
+                  stopAndCommand({
+                    type: 'DELETE_SEGMENT',
+                    source: 'puzzle',
+                    segmentId: segment.id,
+                  })
+                  setDeleteConfirmOpen(false)
+                }}
+              >
+                确定删除
+              </Button>
+            </>
+          )}
         </div>
       </article>
     </article>

@@ -1,13 +1,16 @@
-import type { AgentEvent, CommandResult, MerchantOffering, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanServiceSelection, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
+import type { AgentEvent, CommandResult, ConfirmablePlanCommand, MerchantOffering, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanServiceSelection, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
 import { createId, nowIso } from './ids'
 import { createAddSegmentCandidates, createReplacementCandidates } from './seed'
 import { getFictionalPoiById, getFictionalPoiByName, getMerchantOfferingById, searchMerchantOfferings, pickFictionalPoi } from './poiCatalog'
 import { createSandboxOrderReceipt } from './mockServices'
 
 export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = createId('cmd')): CommandResult {
+  if (requiresAgentConfirmation(command)) {
+    throw new Error('Agent mutations require user confirmation')
+  }
   const beforeVersion = plan.currentVersion
   const updated = applyCommand(plan, command)
-  const event = createPlanUpdatedEvent(updated, runId, command)
+  const event = createPlanUpdatedEvent(plan, updated, runId, command)
   const patch: PlanPatch = {
     operation: command.type,
     targetSegmentId: 'segmentId' in command ? command.segmentId : undefined,
@@ -26,6 +29,14 @@ export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = creat
 
 function applyCommand(plan: Plan, command: PlanCommand): Plan {
   switch (command.type) {
+    case 'REQUEST_COMMAND_CONFIRMATION':
+      return requestCommandConfirmation(plan, command)
+    case 'CONFIRM_COMMAND_ACTION':
+      return confirmCommandAction(plan, command)
+    case 'CLEAR_PLAN_SEGMENTS':
+      return clearPlanSegments(plan, command)
+    case 'RESTORE_PLAN_VERSION':
+      throw new Error('Plan version restore must be handled by the plan repository')
     case 'REORDER_SEGMENT':
       return touch(plan, { segments: reorderPlanSegmentsWithTime(plan.segments, command.segmentId, command.anchorSegmentId, command.position) })
     case 'DELETE_SEGMENT':
@@ -80,6 +91,7 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
     case 'UPDATE_SERVICE_ITEM_QUANTITY':
       return updateServiceItemQuantity(plan, command)
     case 'CONFIRM_PLAN':
+      assertExecutablePlan(plan)
       return touch(plan, {
         status: 'confirmed',
         pendingAction: undefined,
@@ -89,6 +101,7 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
         }),
       })
     case 'CREATE_SANDBOX_ORDER':
+      assertExecutablePlan(plan)
       return touch(plan, {
         status: 'confirmed',
         pendingAction: undefined,
@@ -100,6 +113,75 @@ function applyCommand(plan: Plan, command: PlanCommand): Plan {
     default:
       return assertNever(command)
   }
+}
+
+function requestCommandConfirmation(plan: Plan, command: Extract<PlanCommand, { type: 'REQUEST_COMMAND_CONFIRMATION' }>) {
+  if (!command.commands.length) {
+    throw new Error('Confirmation requires at least one command')
+  }
+  for (const item of command.commands) {
+    assertConfirmableCommand(item)
+  }
+  const inferred = inferCommandPreview(plan, command.commands)
+  const action: PendingAction = {
+    id: createId('action'),
+    kind: 'command-confirmation',
+    title: command.title,
+    description: command.description,
+    severity: command.severity,
+    confirmLabel: command.confirmLabel,
+    cancelLabel: command.cancelLabel,
+    commands: command.commands,
+    preview: {
+      ...inferred,
+      ...command.preview,
+      affectedSegmentIds: command.preview?.affectedSegmentIds ?? inferred.affectedSegmentIds,
+      affectedSegmentTitles: command.preview?.affectedSegmentTitles ?? inferred.affectedSegmentTitles,
+      riskNotes: command.preview?.riskNotes ?? inferred.riskNotes,
+      summary: command.preview?.summary ?? inferred.summary,
+      beforeVersion: command.preview?.beforeVersion ?? plan.currentVersion,
+    },
+  }
+  return touch(plan, { pendingAction: action })
+}
+
+function confirmCommandAction(plan: Plan, command: Extract<PlanCommand, { type: 'CONFIRM_COMMAND_ACTION' }>) {
+  const pending = plan.pendingAction
+  if (!pending || pending.kind !== 'command-confirmation' || pending.id !== command.actionId) {
+    throw new Error('Command confirmation is no longer active')
+  }
+  let next: Plan = { ...plan, pendingAction: undefined }
+  for (const item of pending.commands) {
+    assertConfirmableCommand(item)
+    next = applyCommand(next, markConfirmedCommand(item))
+  }
+  return next
+}
+
+function clearPlanSegments(plan: Plan, command: Extract<PlanCommand, { type: 'CLEAR_PLAN_SEGMENTS' }>) {
+  const requestedIds = command.segmentIds?.length ? new Set(command.segmentIds) : undefined
+  const includeLocked = Boolean(command.includeLocked)
+  const targets = plan.segments.filter((segment) => {
+    if (segment.isTransit) return false
+    if (requestedIds && !requestedIds.has(segment.id)) return false
+    if (segment.locked && !includeLocked) return false
+    return true
+  })
+  if (targets.length === 0) {
+    throw new Error('No unlocked plan segments can be cleared')
+  }
+  const targetIds = new Set(targets.map((segment) => segment.id))
+  const nextSegments = plan.segments.filter((segment) => {
+    if (targetIds.has(segment.id)) return false
+    if (!requestedIds && segment.isTransit) return false
+    return true
+  })
+  return touch(plan, {
+    segments: nextSegments,
+    serviceSelections: (plan.serviceSelections ?? []).filter((selection) => !targetIds.has(selection.segmentId)),
+    pendingAction: undefined,
+    variantSelection: undefined,
+  })
 }
 
 function replaceSegment(plan: Plan, command: Extract<PlanCommand, { type: 'REPLACE_SEGMENT' }>) {
@@ -564,7 +646,12 @@ function addMinutes(value: string, minutes: number) {
   return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
 }
 
-function createPlanUpdatedEvent(plan: Plan, runId: string, command: PlanCommand): AgentEvent {
+function createPlanUpdatedEvent(before: Plan, plan: Plan, runId: string, command: PlanCommand): AgentEvent {
+  const confirmedCommands = command.type === 'CONFIRM_COMMAND_ACTION'
+    && before.pendingAction?.kind === 'command-confirmation'
+    && before.pendingAction.id === command.actionId
+    ? before.pendingAction.commands
+    : undefined
   return {
     id: createId('evt'),
     runId,
@@ -572,13 +659,21 @@ function createPlanUpdatedEvent(plan: Plan, runId: string, command: PlanCommand)
     type: 'plan.updated',
     sequence: 1,
     message: summarizeCommand(command),
-    payload: { command, version: plan.currentVersion },
+    payload: { command, confirmedCommands, version: plan.currentVersion },
     createdAt: nowIso(),
   }
 }
 
 export function summarizeCommand(command: PlanCommand) {
   switch (command.type) {
+    case 'REQUEST_COMMAND_CONFIRMATION':
+      return '等待用户确认修改'
+    case 'CONFIRM_COMMAND_ACTION':
+      return '已应用确认修改'
+    case 'CLEAR_PLAN_SEGMENTS':
+      return '已清空拼图节点'
+    case 'RESTORE_PLAN_VERSION':
+      return `已撤销到 V${command.version}`
     case 'REORDER_SEGMENT':
       return '已重排拼图节点并更新时间'
     case 'DELETE_SEGMENT':
@@ -621,6 +716,119 @@ export function summarizeCommand(command: PlanCommand) {
       return '已生成模拟确认单'
     default:
       return assertNever(command)
+  }
+}
+
+function requiresAgentConfirmation(command: PlanCommand) {
+  if (command.source !== 'agent') return false
+  if (command.type === 'REQUEST_COMMAND_CONFIRMATION') return false
+  if (command.type === 'REQUEST_CLARIFICATION') return false
+  if (command.type === 'REFRESH_CANDIDATES') return false
+  if (command.type === 'REFRESH_SERVICE_ITEMS') return false
+  if (command.type === 'REPLACE_SEGMENT' && !command.replacement) return false
+  return true
+}
+
+function assertConfirmableCommand(command: ConfirmablePlanCommand) {
+  switch (command.type) {
+    case 'REFRESH_CANDIDATES':
+    case 'REQUEST_CLARIFICATION':
+    case 'REFRESH_SERVICE_ITEMS':
+    case 'CHOOSE_CANDIDATE':
+    case 'CHOOSE_PLAN_VARIANT':
+      throw new Error(`${command.type} cannot be wrapped in a command confirmation`)
+    case 'REPLACE_SEGMENT':
+      if (!command.replacement) {
+        throw new Error('Candidate search cannot be wrapped in a command confirmation')
+      }
+      return
+    default:
+      return
+  }
+}
+
+function markConfirmedCommand(command: ConfirmablePlanCommand): ConfirmablePlanCommand {
+  return { ...command, source: 'action-card' } as ConfirmablePlanCommand
+}
+
+function inferCommandPreview(plan: Plan, commands: ConfirmablePlanCommand[]) {
+  const affectedIds = new Set<string>()
+  const riskNotes = new Set<string>()
+  let afterOrder: string[] | undefined
+  for (const command of commands) {
+    switch (command.type) {
+      case 'CLEAR_PLAN_SEGMENTS': {
+        const requested = command.segmentIds?.length ? new Set(command.segmentIds) : undefined
+        for (const segment of plan.segments) {
+          if (segment.isTransit) continue
+          if (requested && !requested.has(segment.id)) continue
+          if (segment.locked && !command.includeLocked) {
+            riskNotes.add(`“${segment.title}”已锁定，不会被清空`)
+            continue
+          }
+          affectedIds.add(segment.id)
+        }
+        riskNotes.add('确认后会移除相关路线和服务项选择')
+        break
+      }
+      case 'DELETE_SEGMENT':
+      case 'REPLACE_SEGMENT':
+      case 'REWRITE_SEGMENT':
+      case 'LOCK_SEGMENT':
+      case 'UNLOCK_SEGMENT':
+        affectedIds.add(command.segmentId)
+        if (command.type === 'DELETE_SEGMENT') riskNotes.add('删除后可通过版本撤销恢复')
+        break
+      case 'ADD_SEGMENT':
+        riskNotes.add(`将新增“${command.segment.title}”节点`)
+        break
+      case 'REORDER_SEGMENT': {
+        affectedIds.add(command.segmentId)
+        try {
+          afterOrder = reorderPlanSegmentsWithTime(plan.segments, command.segmentId, command.anchorSegmentId, command.position)
+            .filter((segment) => !segment.isTransit)
+            .map((segment) => segment.title)
+        } catch {
+          afterOrder = undefined
+        }
+        break
+      }
+      case 'SET_ROUTE_CHOICE':
+      case 'CLEAR_ROUTE_CHOICE':
+        affectedIds.add(command.fromSegmentId)
+        affectedIds.add(command.toSegmentId)
+        break
+      case 'SELECT_SERVICE_ITEM':
+      case 'REMOVE_SERVICE_ITEM':
+      case 'UPDATE_SERVICE_ITEM_QUANTITY':
+        if ('segmentId' in command && command.segmentId) affectedIds.add(command.segmentId)
+        break
+      case 'CONFIRM_PLAN':
+      case 'CREATE_SANDBOX_ORDER':
+        riskNotes.add('确认后计划会进入已确认状态')
+        break
+      default:
+        break
+    }
+  }
+  const affectedSegmentIds = [...affectedIds].filter((id) => plan.segments.some((segment) => segment.id === id))
+  const affectedSegmentTitles = affectedSegmentIds
+    .map((id) => plan.segments.find((segment) => segment.id === id)?.title)
+    .filter((title): title is string => Boolean(title))
+  return {
+    affectedSegmentIds,
+    affectedSegmentTitles,
+    beforeVersion: plan.currentVersion,
+    summary: commands.map(summarizeCommand).join('，'),
+    riskNotes: [...riskNotes],
+    beforeOrder: plan.segments.filter((segment) => !segment.isTransit).map((segment) => segment.title),
+    afterOrder,
+  }
+}
+
+function assertExecutablePlan(plan: Plan) {
+  if (plan.segments.filter((segment) => !segment.isTransit).length < 1) {
+    throw new Error('At least one executable plan segment is required')
   }
 }
 

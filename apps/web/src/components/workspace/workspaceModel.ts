@@ -17,6 +17,7 @@ export type ChatMessage = {
   action?: PendingAction
   streaming?: boolean
   receipt?: boolean
+  undoVersion?: number
 }
 
 export type AgentProgressItem = {
@@ -1210,6 +1211,22 @@ export function buildDismissPendingActionCommand(actionId: string): PlanCommand 
   }
 }
 
+export function buildConfirmCommandActionCommand(actionId: string): PlanCommand {
+  return {
+    type: 'CONFIRM_COMMAND_ACTION',
+    source: 'action-card',
+    actionId,
+  }
+}
+
+export function buildRestorePlanVersionCommand(version: number): PlanCommand {
+  return {
+    type: 'RESTORE_PLAN_VERSION',
+    source: 'action-card',
+    version,
+  }
+}
+
 export function buildRouteChoiceCommand(route: RouteEstimate, mode: WorkspaceRouteMode): PlanCommand {
   return {
     type: 'SET_ROUTE_CHOICE',
@@ -1444,6 +1461,13 @@ function readPayloadString(event: AgentEvent, key: string) {
   return typeof value === 'string' ? value : ''
 }
 
+function readPayloadNumber(event: AgentEvent, key: string) {
+  const payload = event.payload
+  if (!payload || typeof payload !== 'object' || !(key in payload)) return undefined
+  const value = (payload as Record<string, unknown>)[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 export function assistantDeltaFromAgentEvent(event: AgentEvent) {
   if (event.type !== 'agent.message.delta') return ''
   const payload = event.payload
@@ -1540,7 +1564,17 @@ export function visiblePlanVariantSelectionFromState(
 }
 
 export function chatMessageFromAgentEvent(event: AgentEvent): ChatMessage | null {
-  if (event.type === 'agent.finished') return { role: 'planpal', content: event.message }
+  if (event.type === 'agent.finished') {
+    if (isHiddenAgentFinished(event)) return null
+    const undoVersion = readPayloadNumber(event, 'undoVersion')
+    if (!undoVersion) return { role: 'planpal', content: event.message }
+    return {
+      role: 'planpal',
+      content: event.message,
+      receipt: true,
+      undoVersion,
+    }
+  }
   if (event.type === 'agent.error') {
     return {
       role: 'planpal',
@@ -1578,6 +1612,19 @@ export function shouldOpenChatForAgentEvent(event: AgentEvent) {
 
 export function chatMessageFromCommandResult(command: PlanCommand, result: CommandResult): ChatMessage | null {
   switch (command.type) {
+    case 'REQUEST_COMMAND_CONFIRMATION':
+      return {
+        role: 'planpal',
+        content: result.plan.pendingAction ? pendingActionReceipt(result.plan.pendingAction) : '修改提案已准备 · 待确认',
+        action: result.plan.pendingAction?.kind === 'command-confirmation' ? result.plan.pendingAction : undefined,
+        receipt: true,
+      }
+    case 'CONFIRM_COMMAND_ACTION':
+      return commandReceipt(result.version, '已应用修改')
+    case 'CLEAR_PLAN_SEGMENTS':
+      return commandReceipt(result.version, '计划已清空')
+    case 'RESTORE_PLAN_VERSION':
+      return commandReceipt(result.version, `已撤销到 V${command.version}`)
     case 'CHOOSE_PLAN_VARIANT':
       return commandReceipt(result.version, '方案已应用')
     case 'REORDER_SEGMENT':
@@ -1630,11 +1677,12 @@ export function chatMessageFromCommandResult(command: PlanCommand, result: Comma
   }
 }
 
-function commandReceipt(version: number, label: string): ChatMessage {
+function commandReceipt(version: number, label: string, undoVersion?: number): ChatMessage {
   return {
     role: 'planpal',
     content: `V${version} · ${label}`,
     receipt: true,
+    undoVersion,
   }
 }
 
@@ -1647,7 +1695,10 @@ export function chatMessageFromCommandError(command: PlanCommand, error: unknown
 
 export function shouldOpenChatForCommandResult(command: PlanCommand, result: CommandResult) {
   if (!result.plan.pendingAction) return false
-  return command.type === 'REPLACE_SEGMENT' || command.type === 'REFRESH_CANDIDATES' || command.type === 'REFRESH_SERVICE_ITEMS'
+  return command.type === 'REQUEST_COMMAND_CONFIRMATION'
+    || command.type === 'REPLACE_SEGMENT'
+    || command.type === 'REFRESH_CANDIDATES'
+    || command.type === 'REFRESH_SERVICE_ITEMS'
 }
 
 export function initialChatMessagesFromPlanEvents(_plan: Plan, _events: AgentEvent[]): ChatMessage[] {
@@ -1661,6 +1712,14 @@ function containsAny(value: string, needles: string[]) {
 
 function commandFailurePrefix(command: PlanCommand) {
   switch (command.type) {
+    case 'REQUEST_COMMAND_CONFIRMATION':
+      return '修改提案生成失败'
+    case 'CONFIRM_COMMAND_ACTION':
+      return '确认应用失败'
+    case 'CLEAR_PLAN_SEGMENTS':
+      return '清空计划失败'
+    case 'RESTORE_PLAN_VERSION':
+      return '撤销失败'
     case 'CHOOSE_CANDIDATE':
       return '候选应用失败'
     case 'CHOOSE_PLAN_VARIANT':
@@ -1714,6 +1773,10 @@ function isPendingAction(value: unknown): value is PendingAction {
   if (kind === 'clarification') {
     return Array.isArray((value as { requiredFields?: unknown }).requiredFields)
   }
+  if (kind === 'command-confirmation') {
+    return Array.isArray((value as { commands?: unknown }).commands)
+      && Boolean((value as { preview?: unknown }).preview)
+  }
   return false
 }
 
@@ -1739,7 +1802,14 @@ function pendingActionReceipt(action: PendingAction) {
   }
   if (action.kind === 'service-item-selection') return serviceItemActionReceipt(action)
   if (action.kind === 'plan-variant-selection') return `${action.title} · ${action.variants.length} 个方向`
+  if (action.kind === 'command-confirmation') return `${action.title} · 待确认`
   return action.title || '需要补充信息'
+}
+
+function isHiddenAgentFinished(event: AgentEvent) {
+  if (event.message === 'Agent command finished' || event.message === 'Agent run resumed and finished') return true
+  const payload = event.payload
+  return Boolean(payload && typeof payload === 'object' && (payload as { uiHidden?: unknown }).uiHidden)
 }
 
 function lastMessageIndex(messages: ChatMessage[], predicate: (message: ChatMessage, index: number) => boolean) {

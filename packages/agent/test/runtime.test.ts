@@ -172,7 +172,7 @@ describe('agent runtime model transparency', () => {
     expect(updated?.pendingAction?.kind).toBe('clarification')
   })
 
-  it('previews a sandbox receipt before applying an order command', async () => {
+  it('previews a sandbox receipt before asking the user to confirm an order command', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => {
         throw new Error('no model call expected')
@@ -184,17 +184,55 @@ describe('agent runtime model transparency', () => {
       events.push(event)
     })
 
-    expect(result.status).toBe('completed')
+    expect(result.status).toBe('waiting_for_user')
     expect(events.map((event) => event.type)).toContain('tool.called')
     expect(events.map((event) => event.type)).toContain('tool.result')
+    expect(events.map((event) => event.type)).toContain('action.required')
     expect(events.find((event) => event.type === 'tool.called')?.payload).toMatchObject({
       toolName: 'order.preview',
       effect: 'read-only',
     })
+    const action = commandActionFromEvent(events.find((event) => event.type === 'action.required'))
+    expect(action.severity).toBe('finalizing')
     const updated = await stores.plans.getPlan(plan.id)
-    expect(updated?.status).toBe('confirmed')
-    expect(updated?.sandboxOrder?.status).toBe('sandbox_generated')
-    expect(updated?.sandboxOrder?.disclaimer).toContain('不代表真实预订')
+    expect(updated?.status).toBe('ready')
+    expect(updated?.sandboxOrder).toBeUndefined()
+  })
+
+  it('gates destructive agent commands until resume confirmation', async () => {
+    const { plan, runtime, stores } = await createRuntime({
+      generateAssistantReply: async () => {
+        throw new Error('no model call expected')
+      },
+    })
+    const events: AgentEvent[] = []
+
+    const run = await runtime.run({ planId: plan.id, message: '删除所有节点' }, (event) => {
+      events.push(event)
+    })
+
+    expect(run.status).toBe('waiting_for_user')
+    const action = commandActionFromEvent(events.find((event) => event.type === 'action.required'))
+    expect(action.commands[0]?.type).toBe('CLEAR_PLAN_SEGMENTS')
+    expect(action.severity).toBe('destructive')
+    const beforeConfirm = await stores.plans.getPlan(plan.id)
+    expect(beforeConfirm?.segments).toHaveLength(plan.segments.length)
+
+    const resumeEvents: AgentEvent[] = []
+    await runtime.resume({
+      planId: plan.id,
+      runId: run.runId,
+      actionId: action.id,
+      payload: { confirmed: true },
+    }, (event) => {
+      resumeEvents.push(event)
+    })
+
+    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
+    expect(resumeEvents.at(-1)?.message).toBe('已应用修改，可撤销')
+    const afterConfirm = await stores.plans.getPlan(plan.id)
+    expect(afterConfirm?.segments).toEqual([])
+    expect(afterConfirm?.pendingAction).toBeUndefined()
   })
 
   it('resumes candidate selection and persists the chosen segment through commands', async () => {
@@ -374,6 +412,20 @@ function serviceActionFromEvent(event: AgentEvent | undefined) {
   expect(action?.kind).toBe('service-item-selection')
   if (!action || action.kind !== 'service-item-selection') {
     throw new Error('expected service-item-selection action')
+  }
+  return action
+}
+
+function commandActionFromEvent(event: AgentEvent | undefined) {
+  expect(event?.type).toBe('action.required')
+  const payload = event?.payload
+  if (!payload || typeof payload !== 'object' || !('action' in payload)) {
+    throw new Error('action.required payload is missing action')
+  }
+  const action = (payload as { action?: PendingAction }).action
+  expect(action?.kind).toBe('command-confirmation')
+  if (!action || action.kind !== 'command-confirmation') {
+    throw new Error('expected command-confirmation action')
   }
   return action
 }

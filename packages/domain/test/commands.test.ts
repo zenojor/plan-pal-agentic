@@ -90,6 +90,82 @@ describe('PlanCommand deterministic handler', () => {
     ).toThrow(/At least one/)
   })
 
+  it('requires confirmation for agent-originated mutations', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+
+    expect(() =>
+      applyPlanCommand(plan, {
+        type: 'DELETE_SEGMENT',
+        source: 'agent',
+        segmentId: plan.segments[0]!.id,
+      }),
+    ).toThrow(/require user confirmation/)
+  })
+
+  it('creates a command-confirmation action before applying destructive agent changes', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const requested = applyPlanCommand(plan, {
+      type: 'REQUEST_COMMAND_CONFIRMATION',
+      source: 'agent',
+      title: '确认清空计划',
+      description: '我准备清空当前计划。',
+      severity: 'destructive',
+      confirmLabel: '确定清空',
+      cancelLabel: '取消',
+      commands: [{
+        type: 'CLEAR_PLAN_SEGMENTS',
+        source: 'agent',
+        reason: '删除所有节点',
+      }],
+    }).plan
+
+    expect(requested.segments).toEqual(plan.segments)
+    expect(requested.pendingAction?.kind).toBe('command-confirmation')
+    if (requested.pendingAction?.kind !== 'command-confirmation') throw new Error('missing confirmation')
+    expect(requested.pendingAction.preview.affectedSegmentTitles).toHaveLength(plan.segments.length)
+
+    const confirmed = applyPlanCommand(requested, {
+      type: 'CONFIRM_COMMAND_ACTION',
+      source: 'action-card',
+      actionId: requested.pendingAction.id,
+    }).plan
+    expect(confirmed.segments).toEqual([])
+    expect(confirmed.pendingAction).toBeUndefined()
+  })
+
+  it('clears unlocked segments while preserving locked segments by default', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const locked = applyPlanCommand(plan, {
+      type: 'LOCK_SEGMENT',
+      source: 'puzzle',
+      segmentId: plan.segments[0]!.id,
+    }).plan
+
+    const cleared = applyPlanCommand(locked, {
+      type: 'CLEAR_PLAN_SEGMENTS',
+      source: 'action-card',
+    }).plan
+
+    expect(cleared.segments).toHaveLength(1)
+    expect(cleared.segments[0]?.id).toBe(plan.segments[0]!.id)
+    expect(cleared.segments[0]?.locked).toBe(true)
+  })
+
+  it('blocks sandbox confirmation for an empty plan', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const cleared = applyPlanCommand(plan, {
+      type: 'CLEAR_PLAN_SEGMENTS',
+      source: 'action-card',
+    }).plan
+
+    expect(() =>
+      applyPlanCommand(cleared, {
+        type: 'CREATE_SANDBOX_ORDER',
+        source: 'puzzle',
+      }),
+    ).toThrow(/At least one executable/)
+  })
+
   it('keeps domain seed concrete and fictional while preserving richer intent hints', () => {
     const rainy = createPlanFromPrompt('明天下雨，2 个人下午到晚上约会，室内优先，晚饭别排队')
     expect(rainy.segments).toHaveLength(3)

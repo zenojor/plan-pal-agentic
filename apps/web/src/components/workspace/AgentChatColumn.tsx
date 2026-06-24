@@ -34,10 +34,12 @@ type AgentChatColumnProps = {
   onCandidateSelect: (actionId: string, candidate: CandidateOption) => void
   onCandidateRefresh: (action: Extract<PendingAction, { kind: 'candidate-selection' }>, searchQuery?: string) => void
   onChatContextChange: (segmentId?: string) => void
+  onCommandConfirm: (action: Extract<PendingAction, { kind: 'command-confirmation' }>, confirmed: boolean) => void
   onDraftChange: (draft: string) => void
   onPendingActionDismiss: (actionId: string) => void
   onSend: () => void
   onServiceOfferingSelect: (action: Extract<PendingAction, { kind: 'service-item-selection' }>, offering: MerchantOffering, quantity: number) => void
+  onUndo?: (version: number) => void
   onVariantSelect: (actionId: string, variant: PlanVariantOption) => void
 }
 
@@ -56,10 +58,12 @@ export function AgentChatColumn({
   onCandidateSelect,
   onCandidateRefresh,
   onChatContextChange,
+  onCommandConfirm,
   onDraftChange,
   onPendingActionDismiss,
   onSend,
   onServiceOfferingSelect,
+  onUndo,
   onVariantSelect,
 }: AgentChatColumnProps) {
   const [candidateRequirement, setCandidateRequirement] = useState('')
@@ -155,6 +159,15 @@ export function AgentChatColumn({
         />
       )
     }
+    if (action.kind === 'command-confirmation') {
+      return (
+        <CommandConfirmationTicket
+          action={action}
+          busy={isStreaming || commandBusy}
+          onConfirm={onCommandConfirm}
+        />
+      )
+    }
     return null
   }
 
@@ -234,6 +247,16 @@ export function AgentChatColumn({
                     </span>
                   )}
                   <p className={agentChatClasses.bubbleText}>{message.content}</p>
+                  {message.undoVersion && onUndo && (
+                    <Button
+                      size="small"
+                      type="dashed"
+                      disabled={commandBusy || isStreaming}
+                      onClick={() => onUndo(message.undoVersion!)}
+                    >
+                      撤销
+                    </Button>
+                  )}
                 </div>
                 {(activeAction || activeVariantSelection) && (
                   <div className={agentChatClasses.actionAttachment()}>
@@ -331,6 +354,59 @@ export function AgentChatColumn({
   )
 }
 
+function CommandConfirmationTicket({
+  action,
+  busy,
+  onConfirm,
+}: {
+  action: Extract<PendingAction, { kind: 'command-confirmation' }>
+  busy: boolean
+  onConfirm: (action: Extract<PendingAction, { kind: 'command-confirmation' }>, confirmed: boolean) => void
+}) {
+  const preview = action.preview
+  const destructive = action.severity === 'destructive'
+  const commandLabels = action.commands.map(commandProposalLabel)
+  return (
+    <Card className={agentChatClasses.decisionTicket} color={destructive ? 'app-yellow' : 'app-teal'}>
+      <DecisionTicketHeader title={action.title} description={action.description} />
+      <p className={agentChatClasses.activeQuery}>Agent 建议修改拼图，确认后才会写入。</p>
+      <div className={workspacePrimitives.chipRow}>
+        <span className={chipClassName(0)}>基于 V{preview.beforeVersion}</span>
+        <span className={chipClassName(1)}>{commandLabels.join(' + ')}</span>
+        <span className={chipClassName(2)}>{preview.affectedSegmentTitles.length || preview.affectedSegmentIds.length} 个影响节点</span>
+      </div>
+      {preview.affectedSegmentTitles.length > 0 && (
+        <p className={agentChatClasses.cardText}>影响：{preview.affectedSegmentTitles.join('、')}</p>
+      )}
+      {preview.beforeOrder && preview.afterOrder && (
+        <div className={agentChatClasses.choiceList}>
+          <article className={agentChatClasses.serviceCard(false)}>
+            <strong className={agentChatClasses.cardTitle}>当前顺序</strong>
+            <small className={agentChatClasses.cardMeta}>{preview.beforeOrder.join(' → ')}</small>
+          </article>
+          <article className={agentChatClasses.serviceCard(true)}>
+            <strong className={agentChatClasses.cardTitle}>应用后</strong>
+            <small className={agentChatClasses.cardMeta}>{preview.afterOrder.join(' → ') || '空计划'}</small>
+          </article>
+        </div>
+      )}
+      {preview.riskNotes.length > 0 && (
+        <ul className={agentChatClasses.reasons}>
+          {preview.riskNotes.map((note) => <li className={agentChatClasses.reason} key={note}>{note}</li>)}
+        </ul>
+      )}
+      <div className={agentChatClasses.footer}>
+        <Button size="small" type="dashed" disabled={busy} onClick={() => onConfirm(action, false)}>
+          {action.cancelLabel}
+        </Button>
+        <Button size="small" type="primary" danger={destructive} disabled={busy} onClick={() => onConfirm(action, true)}>
+          {action.confirmLabel}
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
 function ClarificationTicket({
   action,
   busy,
@@ -355,6 +431,40 @@ function ClarificationTicket({
       </div>
     </Card>
   )
+}
+
+function commandProposalLabel(command: Extract<PendingAction, { kind: 'command-confirmation' }>['commands'][number]) {
+  switch (command.type) {
+    case 'CLEAR_PLAN_SEGMENTS':
+      return '清空'
+    case 'DELETE_SEGMENT':
+      return '删除'
+    case 'REORDER_SEGMENT':
+      return '重排'
+    case 'REPLACE_SEGMENT':
+      return '替换'
+    case 'REWRITE_SEGMENT':
+      return '改写'
+    case 'ADD_SEGMENT':
+      return '新增'
+    case 'LOCK_SEGMENT':
+      return '锁定'
+    case 'UNLOCK_SEGMENT':
+      return '解锁'
+    case 'SET_ROUTE_CHOICE':
+    case 'CLEAR_ROUTE_CHOICE':
+      return '路线'
+    case 'SELECT_SERVICE_ITEM':
+    case 'REMOVE_SERVICE_ITEM':
+    case 'UPDATE_SERVICE_ITEM_QUANTITY':
+      return '服务项'
+    case 'CONFIRM_PLAN':
+      return '确认计划'
+    case 'CREATE_SANDBOX_ORDER':
+      return '确认单'
+    default:
+      return '修改'
+  }
 }
 
 function ServiceItemDecisionTicket({

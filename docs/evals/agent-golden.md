@@ -1,10 +1,14 @@
 # PlanPal Agent golden Eval
-Generated: 2026-06-24T04:21:57.903Z
-Summary: 36/36 passed
+Generated: 2026-06-24T15:16:07.826Z
+Summary: 42/42 passed
 | Scenario | Result | Checks |
 | --- | --- | --- |
 | golden-replace-nearby | PASS | 5 checks passed |
 | golden-replace-hotpot | PASS | 5 checks passed |
+| golden-replace-spicy | PASS | 5 checks passed |
+| golden-replace-no-spicy | PASS | 5 checks passed |
+| golden-replace-family-chuanxiang | PASS | 5 checks passed |
+| golden-replace-chatty-spicy | PASS | 5 checks passed |
 | golden-replace-quiet | PASS | 5 checks passed |
 | golden-replace-budget | PASS | 5 checks passed |
 | golden-replace-photo | PASS | 5 checks passed |
@@ -17,6 +21,7 @@ Summary: 36/36 passed
 | golden-add-walk | PASS | 5 checks passed |
 | golden-add-hotel | PASS | 5 checks passed |
 | golden-add-movie | PASS | 5 checks passed |
+| golden-add-movie-after-dinner | PASS | 5 checks passed |
 | golden-add-rainy | PASS | 5 checks passed |
 | golden-add-gift | PASS | 5 checks passed |
 | golden-movie-ticket | PASS | 6 checks passed |
@@ -25,6 +30,7 @@ Summary: 36/36 passed
 | golden-order-preview | PASS | 6 checks passed |
 | golden-confirm-command | PASS | 6 checks passed |
 | golden-delete-command | PASS | 4 checks passed |
+| golden-clear-plan-command | PASS | 4 checks passed |
 | golden-rewrite-command | PASS | 4 checks passed |
 | golden-qa-stream | PASS | 3 checks passed |
 | golden-model-invalid-intent-fallback | PASS | 5 checks passed |
