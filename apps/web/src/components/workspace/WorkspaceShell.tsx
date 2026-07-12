@@ -272,7 +272,7 @@ function WorkspaceHeader({
         <strong className={workspaceShellClasses.homeLinkText}>首页</strong>
       </Link>
       <div className={workspaceShellClasses.headerCopy}>
-        <span className="text-[0.7rem] font-[850] uppercase tracking-[0.08em] text-[var(--animal-primary-active)]">PlanPal Board</span>
+        <span className={workspaceShellClasses.headerEyebrow}>PlanPal Board</span>
         <strong className={workspaceShellClasses.headerTitle}>{planTitle || '为你推荐'}</strong>
         <small className={workspaceShellClasses.headerSummary}>{planSummary || '选一个方向后，拼图主轴会变成可编辑计划。'}</small>
       </div>
@@ -285,13 +285,14 @@ function WorkspaceHeader({
         </span>
       </div>
       <button
+        aria-label={confirmLabel}
         className={workspaceShellClasses.headerConfirm}
         type="button"
         disabled={confirmDisabled || commandBusy}
         title={confirmLabel}
         onClick={onConfirm}
       >
-        {confirmLabel}
+        <span aria-hidden="true">✓</span>
       </button>
     </header>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Icon } from 'animal-island-ui'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentTraceSnapshot, Plan, TraceReplayFrame, TraceSafetyFinding, TraceStep, TraceToolCallSummary } from '@planpal/domain'
@@ -7,6 +7,8 @@ import { getAgentRunTrace, listAgentRuns, type AgentRunSummary, type PlanVersion
 import { appClasses } from '../../lib/appClasses'
 import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import { derivePlanReceiptDisplay, type PlanExecutionBrief } from './workspaceModel'
+
+const emptyAgentRuns: AgentRunSummary[] = []
 
 type TraceColumnProps = {
   commandBusy: boolean
@@ -24,29 +26,36 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
   const [activeTab, setActiveTab] = useState<'timeline' | 'tools' | 'replay' | 'safety'>('timeline')
   const [selectedRunId, setSelectedRunId] = useState('')
   const [replayIndex, setReplayIndex] = useState(0)
-  const latestEvents = events.filter((event) => event.type !== 'agent.message.delta').slice(-10).reverse()
-  const latestVersions = versions.slice(-4).reverse()
-  const receipt = derivePlanReceiptDisplay(plan)
+  const receiptResetTimerRef = useRef<number | null>(null)
+  const timelineEvents = useMemo(
+    () => events.filter((event) => event.type !== 'agent.message.delta'),
+    [events],
+  )
+  const latestEvents = useMemo(() => timelineEvents.slice(-10).reverse(), [timelineEvents])
+  const latestVersions = useMemo(() => versions.slice(-4).reverse(), [versions])
+  const receipt = useMemo(() => derivePlanReceiptDisplay(plan), [plan])
+  const traceRevision = timelineEvents.at(-1)?.id ?? ''
   const runsQuery = useQuery({
-    queryKey: ['agent-runs', plan.id, events.length, plan.currentVersion],
-    queryFn: () => listAgentRuns(plan.id),
+    queryKey: ['agent-runs', plan.id, traceRevision, plan.currentVersion],
+    queryFn: ({ signal }) => listAgentRuns(plan.id, signal),
   })
-  const runs = runsQuery.data?.runs ?? []
+  const runs = runsQuery.data?.runs ?? emptyAgentRuns
   const activeRunId = runs.find((run) => run.id === selectedRunId)?.id ?? runs.at(-1)?.id ?? ''
   const traceQuery = useQuery({
     enabled: Boolean(activeRunId),
-    queryKey: ['agent-run-trace', plan.id, activeRunId, events.length, plan.currentVersion],
-    queryFn: () => getAgentRunTrace(plan.id, activeRunId),
+    queryKey: ['agent-run-trace', plan.id, activeRunId, traceRevision, plan.currentVersion],
+    queryFn: ({ signal }) => getAgentRunTrace(plan.id, activeRunId, signal),
   })
   const trace = traceQuery.data
 
   useEffect(() => {
-    if (!runs.length) {
+    const latestRun = runs.at(-1)
+    if (!latestRun) {
       if (selectedRunId) setSelectedRunId('')
       return
     }
     if (!selectedRunId || !runs.some((run) => run.id === selectedRunId)) {
-      setSelectedRunId(runs.at(-1)!.id)
+      setSelectedRunId(latestRun.id)
     }
   }, [runs, selectedRunId])
 
@@ -54,9 +63,17 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
     setReplayIndex(0)
   }, [activeRunId])
 
+  useEffect(() => () => {
+    if (receiptResetTimerRef.current !== null) {
+      window.clearTimeout(receiptResetTimerRef.current)
+      receiptResetTimerRef.current = null
+    }
+  }, [])
+
   async function copyReceipt() {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
       setReceiptCopyState('failed')
+      scheduleReceiptCopyReset()
       return
     }
     try {
@@ -65,9 +82,18 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
     } catch {
       setReceiptCopyState('failed')
     }
-    if (typeof window !== 'undefined') {
-      window.setTimeout(() => setReceiptCopyState('idle'), 1400)
+    scheduleReceiptCopyReset()
+  }
+
+  function scheduleReceiptCopyReset() {
+    if (typeof window === 'undefined') return
+    if (receiptResetTimerRef.current !== null) {
+      window.clearTimeout(receiptResetTimerRef.current)
     }
+    receiptResetTimerRef.current = window.setTimeout(() => {
+      receiptResetTimerRef.current = null
+      setReceiptCopyState('idle')
+    }, 1400)
   }
 
   return (
@@ -83,10 +109,10 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
             <small className={workspacePrimitives.headingSubtitle}>{executionBrief.complexityLabel} · {executionBrief.durationLabel}</small>
           </div>
         </div>
-        <div className="grid gap-[0.38rem]">
+        <div className="grid gap-2">
           {executionBrief.checks.map((check) => (
             <article className={executionCheckClassName(check.state)} key={check.id}>
-              <span className="grid h-8 min-w-[42px] place-items-center rounded-[var(--animal-radius-pill)] bg-[#fffdf5] px-2 text-[0.68rem] font-[850]">{check.state === 'ok' ? 'OK' : check.state === 'blocked' ? '阻塞' : '提醒'}</span>
+              <span className="grid h-8 min-w-[46px] place-items-center rounded-[var(--animal-radius-pill)] bg-[#fffdf5] px-2.5 text-xs font-bold leading-none shadow-[0_2px_0_rgba(61,52,40,0.12)]">{check.state === 'ok' ? 'OK' : check.state === 'blocked' ? '阻塞' : '提醒'}</span>
               <div>
                 <strong className={workspacePrimitives.listTitle}>{check.label}</strong>
                 <small className={workspacePrimitives.listMeta}>{check.detail}</small>
@@ -106,7 +132,7 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
       </section>
 
       <section className={workspacePrimitives.panelCard} aria-label="版本状态">
-        <div className="grid gap-[0.36rem]">
+        <div className="grid gap-2">
           <div>
             <span className={appClasses.eyebrow}>Plan Version</span>
             <strong className={workspacePrimitives.headingTitle}>V{plan.currentVersion}</strong>
@@ -115,7 +141,7 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
           <p className={workspacePrimitives.note}>{plan.summary}</p>
         </div>
         {latestVersions.length > 0 && (
-          <div className="grid gap-[0.38rem]" aria-label="Plan version history">
+          <div className="grid gap-2" aria-label="Plan version history">
             {latestVersions.map((version) => (
               <article
                 className={workspacePrimitives.listItem(version.version === plan.currentVersion)}
@@ -233,12 +259,12 @@ function TraceExplorer({
     ['safety', 'Safety'],
   ] as const
   return (
-    <div className="grid gap-2">
-      <div className="grid gap-2 rounded-[18px] border-2 border-animal-border bg-[#fffdf5] p-2">
-        <label className="grid gap-1 text-[0.72rem] font-[900] text-[var(--animal-text-muted)]">
+    <div className="grid gap-3">
+      <div className="grid gap-2 rounded-[18px] border-2 border-animal-border bg-[#fff8dd] p-3 shadow-[0_2px_0_var(--animal-shadow-input)]">
+        <label className="grid gap-1.5 text-xs font-bold leading-4 text-[var(--animal-text-muted)]">
           Agent Run
           <select
-            className="min-w-0 rounded-[14px] border-2 border-animal-border bg-white px-2 py-2 text-[0.76rem] font-[850] text-animal-text outline-none"
+            className="min-h-10 min-w-0 rounded-[14px] border-2 border-animal-border bg-[#fffdf5] px-3 py-2 text-[0.8125rem] font-semibold text-animal-text shadow-[0_2px_0_var(--animal-shadow-input)] outline-none transition focus:border-[var(--animal-focus-yellow)] focus:shadow-[0_2px_0_var(--animal-focus-yellow-d),0_0_0_3px_rgba(255,204,0,0.15)]"
             disabled={!runs.length}
             value={selectedRunId}
             onChange={(event) => onRunChange(event.target.value)}
@@ -251,7 +277,7 @@ function TraceExplorer({
             ))}
           </select>
         </label>
-        <div className="flex min-w-0 flex-wrap gap-1">
+        <div className="flex min-w-0 flex-wrap gap-1.5">
           {tabs.map(([id, label]) => (
             <button
               className={traceTabClassName(activeTab === id)}
@@ -289,7 +315,7 @@ function TraceTimeline({ events, steps }: { events: AgentEvent[]; steps: TraceSt
           <article className={traceRowClassName(step.status)} key={step.id}>
             <span className={chipClassName(step.status === 'error' ? 3 : step.status === 'active' ? 1 : 0)}>{step.kind}</span>
             <strong className={workspacePrimitives.listTitle}>{step.label}</strong>
-            <p className="m-0 text-[0.74rem] font-[780] leading-[1.45] text-animal-text-body">{step.summary}</p>
+            <p className="m-0 text-[0.8125rem] font-medium leading-[1.55] text-animal-text-body">{step.summary}</p>
             <small className={workspacePrimitives.listMeta}>
               #{step.sequence}
               {step.toolName ? ` · ${step.toolName}` : ''}
@@ -304,9 +330,9 @@ function TraceTimeline({ events, steps }: { events: AgentEvent[]; steps: TraceSt
   return (
     <div className={workspacePrimitives.list}>
       {events.map((event) => (
-        <article className="grid gap-1 rounded-[16px] bg-[#fffdf5] p-2" key={event.id}>
+        <article className="grid gap-2 rounded-[16px] border-2 border-[rgba(196,184,158,0.5)] bg-[#fffdf5] p-3 shadow-[0_2px_0_var(--animal-shadow-input)]" key={event.id}>
           <span className={chipClassName(0)}>{event.type}</span>
-          <p className="m-0 text-[0.76rem] font-[820] leading-[1.45] text-animal-text-body">{event.message}</p>
+          <p className="m-0 text-[0.8125rem] font-medium leading-[1.55] text-animal-text-body">{event.message}</p>
           <small className={workspacePrimitives.listMeta}>{new Date(event.createdAt).toLocaleTimeString()}</small>
         </article>
       ))}
@@ -347,7 +373,7 @@ function TraceReplay({
   const index = Math.max(0, Math.min(replayIndex, frames.length - 1))
   const frame = frames[index]!
   return (
-    <div className="grid gap-2 rounded-[18px] border-2 border-animal-border bg-[#fffdf5] p-3">
+    <div className="grid gap-3 rounded-[18px] border-2 border-animal-border bg-[#fffdf5] p-3 shadow-[0_2px_0_var(--animal-shadow-input)]">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className={chipClassName(0)}>Frame {index + 1}/{frames.length}</span>
         <div className="flex gap-1">
@@ -390,7 +416,7 @@ function formatVersionTime(value: string) {
 
 function executionCheckClassName(state: string) {
   return classNames(
-    'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-[16px] border-2 p-2',
+    'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-[16px] border-2 p-2.5 shadow-[0_2px_0_rgba(61,52,40,0.1)]',
     state === 'blocked'
       ? 'border-[#d46a4c] bg-[#ffe7dc] text-[#a43b24]'
       : state === 'ok'
@@ -401,16 +427,16 @@ function executionCheckClassName(state: string) {
 
 function traceTabClassName(active: boolean) {
   return classNames(
-    'rounded-[var(--animal-radius-pill)] border-2 px-3 py-1 text-[0.68rem] font-[850] transition',
+    'min-h-8 rounded-[var(--animal-radius-pill)] border-2 px-3 py-1.5 text-xs font-bold leading-none transition duration-200 hover:-translate-y-px active:translate-y-[2px]',
     active
       ? 'border-animal-green bg-[#ecffd9] text-animal-text shadow-[0_3px_0_var(--animal-success-shadow)]'
-      : 'border-animal-border bg-[#fffdf5] text-[var(--animal-text-muted)] hover:text-animal-text',
+      : 'border-animal-border bg-[#fffdf5] text-[var(--animal-text-muted)] shadow-[0_2px_0_var(--animal-shadow-input)] hover:border-[var(--animal-border-hover)] hover:text-animal-text',
   )
 }
 
 function traceRowClassName(status: string) {
   return classNames(
-    'grid min-w-0 gap-1 rounded-[16px] border-2 p-2 [overflow-wrap:anywhere]',
+    'grid min-w-0 gap-2 rounded-[16px] border-2 p-3 shadow-[0_2px_0_rgba(61,52,40,0.1)] [overflow-wrap:anywhere]',
     status === 'error'
       ? 'border-[#d46a4c] bg-[#ffe7dc]'
       : status === 'blocked'
@@ -421,7 +447,7 @@ function traceRowClassName(status: string) {
   )
 }
 
-const traceStepButtonClassName = 'rounded-[var(--animal-radius-pill)] border-2 border-animal-border bg-white px-2 py-1 text-[0.68rem] font-[850] text-animal-text disabled:cursor-not-allowed disabled:opacity-45'
+const traceStepButtonClassName = 'min-h-8 rounded-[var(--animal-radius-pill)] border-2 border-animal-border bg-[#fffdf5] px-3 py-1.5 text-xs font-bold leading-none text-animal-text shadow-[0_2px_0_var(--animal-shadow-input)] transition hover:-translate-y-px hover:border-[var(--animal-border-hover)] active:translate-y-[2px] disabled:cursor-not-allowed disabled:opacity-45'
 
 function truncate(value: string, limit: number) {
   return value.length > limit ? `${value.slice(0, limit)}...` : value

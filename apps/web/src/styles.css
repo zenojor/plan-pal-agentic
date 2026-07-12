@@ -39,10 +39,13 @@
 
 @utility bg-animal-grid {
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.42) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42) 1px, transparent 1px),
+    radial-gradient(circle at 8% 4%, rgba(255, 231, 144, 0.28), transparent 22rem),
+    radial-gradient(circle at 92% 12%, rgba(25, 200, 185, 0.12), transparent 26rem),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.36) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.36) 1px, transparent 1px),
     var(--animal-bg);
-  background-size: 42px 42px;
+  background-size: auto, auto, 48px 48px, 48px 48px, auto;
+  background-attachment: fixed;
 }
 
 :root {
@@ -85,6 +88,9 @@
 
 html {
   background: var(--animal-bg);
+  color-scheme: light;
+  scrollbar-color: var(--animal-border) transparent;
+  scrollbar-width: thin;
 }
 
 body {
@@ -92,6 +98,11 @@ body {
   min-height: 100svh;
   margin: 0;
   background: var(--animal-bg);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button,
@@ -104,6 +115,60 @@ button {
   color: inherit;
 }
 
+.planpal-primary-cta,
+.planpal-primary-cta:disabled {
+  color: #fff;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid rgba(255, 204, 0, 0.72);
+  outline-offset: 3px;
+}
+
+textarea,
+input {
+  caret-color: var(--animal-primary-active);
+}
+
+::placeholder {
+  color: var(--animal-text-disabled);
+  opacity: 1;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--animal-radius-pill);
+  background: rgba(159, 146, 125, 0.56);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(121, 79, 39, 0.5);
+  background-clip: padding-box;
+}
+
 input[type="range"] {
   accent-color: var(--animal-primary);
 }
@@ -114,4 +179,15 @@ input[type="range"] {
 
 ::selection {
   background: rgba(25, 200, 185, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

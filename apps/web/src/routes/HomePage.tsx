@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AgentEvent } from '@planpal/domain'
+import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/CaretRight'
+import { ChatCircleDotsIcon as ChatCircleDots } from '@phosphor-icons/react/ChatCircleDots'
+import { SlidersHorizontalIcon as SlidersHorizontal } from '@phosphor-icons/react/SlidersHorizontal'
+import { SparkleIcon as Sparkle } from '@phosphor-icons/react/Sparkle'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { deletePlan, listPlans, streamCreatePlan } from '../lib/api'
+import { deletePlan, isAbortError, listPlans, streamCreatePlan } from '../lib/api'
 import { appClasses, homeClasses } from '../lib/appClasses'
-import { maskApiKey } from '../lib/modelConfig'
 import { buildQuickPlanPrompt, formatHourLabel, type QuickPlanState } from '../lib/quickPlan'
 import { useStoredModelConfig } from '../lib/useStoredModelConfig'
 
@@ -21,66 +24,79 @@ const defaultQuickPlan: QuickPlanState = {
 const demoPromptExamples = [
   {
     title: '雨天约会',
-    summary: '室内优先 · 少走路',
     prompt: '明天下雨，2 个人下午到晚上约会，室内优先，少走路，晚饭别排队，最后想有一个安静收尾。',
   },
   {
     title: '客户接待',
-    summary: '稳妥路线 · 留复盘',
     prompt: '周五下午接待 4 位客户，从产品演示到晚餐和简短复盘，路线要稳，不能太赶，预算中高。',
   },
   {
-    title: '生日多人',
-    summary: '惊喜节点 · 预算可控',
+    title: '生日聚会',
     prompt: '周末给朋友过生日，6 个人，从下午玩到晚上，需要一个小惊喜，晚餐适合聊天，预算别失控。',
   },
   {
     title: '亲子半日',
-    summary: '低风险 · 可跳过',
     prompt: '周日上午亲子 3 人室内半日计划，孩子 6 岁，节奏轻松，要有休息点，尽量不依赖天气。',
   },
 ] satisfies Array<{
   prompt: string
-  summary: string
   title: string
 }>
 
 export function HomePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [prompt, setPrompt] = useState('明天下午 2 个人想在附近轻松玩到晚上，晚饭别太远')
+  const [prompt, setPrompt] = useState('')
   const [quickPlan, setQuickPlan] = useState<QuickPlanState>(defaultQuickPlan)
   const [quickOpen, setQuickOpen] = useState(false)
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showAllRecent, setShowAllRecent] = useState(false)
   const [creationEvents, setCreationEvents] = useState<AgentEvent[]>([])
+  const createPlanAbortRef = useRef<AbortController | null>(null)
   const config = useStoredModelConfig()
-  const recentPlansQuery = useQuery({ queryKey: ['plans'], queryFn: listPlans })
+  const recentPlansQuery = useQuery({
+    queryKey: ['plans'],
+    queryFn: ({ signal }) => listPlans(signal),
+  })
   const deletePlanMutation = useMutation({
     mutationFn: deletePlan,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['plans'] })
     },
   })
-  const recentPlans = (recentPlansQuery.data ?? []).slice(0, 6)
-  const visibleRecentPlans = showAllRecent ? recentPlans : recentPlans.slice(0, 3)
+  const recentPlans = recentPlansQuery.data ?? []
+  const visibleRecentPlans = showAllRecent ? recentPlans : recentPlans.slice(0, 4)
+
+  useEffect(() => () => {
+    const activeRequest = createPlanAbortRef.current
+    createPlanAbortRef.current = null
+    activeRequest?.abort()
+  }, [])
 
   async function submit(customPrompt = prompt) {
     const nextPrompt = customPrompt.trim()
     if (!nextPrompt || isSubmitting) return
+    const abortController = new AbortController()
+    createPlanAbortRef.current?.abort()
+    createPlanAbortRef.current = abortController
     setIsSubmitting(true)
     setError('')
     setCreationEvents([])
     try {
       const result = await streamCreatePlan(nextPrompt, config, (event) => {
         setCreationEvents((current) => mergeCreationEvent(current, event))
-      })
+      }, abortController.signal)
       await navigate({ to: '/plans/$planId', params: { planId: result.planId } })
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : '创建计划失败')
+      if (!isAbortError(createError)) {
+        setError(createError instanceof Error ? createError.message : '创建计划失败')
+      }
     } finally {
-      setIsSubmitting(false)
+      if (createPlanAbortRef.current === abortController) {
+        createPlanAbortRef.current = null
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -88,62 +104,69 @@ export function HomePage() {
     setQuickPlan((current) => ({ ...current, [field]: value }))
   }
 
-  function submitQuickPlan() {
+  function applyQuickPlan() {
     const nextPrompt = buildQuickPlanPrompt(quickPlan)
     setPrompt(nextPrompt)
-    void submit(nextPrompt)
+    setQuickOpen(false)
   }
 
   return (
     <main className={homeClasses.root}>
       <section className={homeClasses.launchPad} aria-label="创建计划">
-        <div className={homeClasses.launchHeader}>
-          <span className={appClasses.eyebrow}>Start</span>
-          <Link className={homeClasses.modelLink(Boolean(config))} to="/settings/model">
-            {config ? `${config.model} · ${maskApiKey(config.apiKey)}` : '离线 fallback 可用'}
-          </Link>
-        </div>
         <div className={homeClasses.launchCopy}>
-          <h1 className={homeClasses.launchTitle}>今天想怎么安排？</h1>
-          <p className={homeClasses.launchText}>把时间、人数和偏好说清楚。PlanPal 会先给 3 个方向，选定后进入多列工作台继续改。</p>
+          <h1 className={homeClasses.launchTitle}>
+            <span>今天想安排什么？</span>
+            <span className={homeClasses.launchSparkles} aria-hidden="true">
+              <Sparkle className={homeClasses.launchSparkleLarge} size={30} weight="fill" />
+              <Sparkle className={homeClasses.launchSparkleSmall} size={16} weight="fill" />
+            </span>
+          </h1>
+          <p className={homeClasses.launchText}>把时间、人数和偏好告诉我</p>
         </div>
-
-        <div className={homeClasses.inputStack}>
-          <div className={homeClasses.promptLabel}>
-            <span className={homeClasses.promptLabelText}>计划开局要求</span>
-            <section className={homeClasses.promptShell} aria-label="计划开局要求">
-              <textarea
-                aria-label="计划开局要求"
-                className={homeClasses.textarea}
-                value={prompt}
-                placeholder="比如：明天下午 2 个人，附近轻松玩到晚上，晚饭别太远..."
-                onChange={(event) => setPrompt(event.target.value)}
-              />
-              <div className={homeClasses.promptActions}>
-                <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
-                  <span aria-hidden="true">✦</span>
-                  {isSubmitting ? '创建中' : '生成计划'}
-                </button>
+        <div className={homeClasses.heroMain}>
+          <div className={homeClasses.inputStack}>
+            <div className={homeClasses.promptLabel}>
+              <span className={homeClasses.promptLabelText}>描述你的计划</span>
+              <section className={homeClasses.promptShell} aria-label="计划开局要求">
+                <textarea
+                  aria-label="计划开局要求"
+                  className={homeClasses.textarea}
+                  value={prompt}
+                  placeholder="描述你的计划"
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
+                <div className={homeClasses.promptActions}>
+                  <div className={homeClasses.actionMeta}>
+                    <button
+                      className={homeClasses.quickToggleState}
+                      type="button"
+                      aria-expanded={quickOpen}
+                      onClick={() => setQuickOpen((open) => !open)}
+                    >
+                      <SlidersHorizontal aria-hidden="true" size={18} weight="bold" />
+                      {quickOpen ? '收起条件' : '按条件填写'}
+                    </button>
+                  </div>
+                  <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
+                    <Sparkle aria-hidden="true" size={18} weight="fill" />
+                    {isSubmitting ? '创建中' : '生成计划'}
+                  </button>
+                </div>
+              </section>
+              <div className={homeClasses.promptSuggestions} aria-label="常用计划示例">
+                <span className={homeClasses.promptSuggestionLabel}>常用计划示例</span>
+                {demoPromptExamples.map((preset) => (
+                  <button
+                    className={homeClasses.promptSuggestionButton}
+                    key={preset.title}
+                    type="button"
+                    onClick={() => setPrompt(preset.prompt)}
+                  >
+                    <ChatCircleDots aria-hidden="true" className={homeClasses.promptSuggestionIcon} size={17} weight="bold" />
+                    {preset.title}
+                  </button>
+                ))}
               </div>
-            </section>
-          </div>
-
-          <section className={homeClasses.quickPanel(quickOpen)} aria-label="快速参数生成">
-            <div className={homeClasses.quickToggle}>
-              <span className={homeClasses.quickToggleIcon} aria-hidden="true">↯</span>
-              <span className={homeClasses.quickToggleCopy}>
-                <strong className={homeClasses.quickToggleTitle}>快速参数生成</strong>
-                <small className={homeClasses.quickToggleHint}>可选辅助：用结构化参数拼一条完整开局描述。</small>
-              </span>
-              <button
-                className={homeClasses.quickToggleState}
-                type="button"
-                aria-expanded={quickOpen}
-                onClick={() => setQuickOpen((open) => !open)}
-              >
-                <span className={homeClasses.quickToggleStateLabel}>{quickOpen ? '收起' : '展开'}</span>
-                <span className={homeClasses.quickToggleChevron(quickOpen)} aria-hidden="true">▾</span>
-              </button>
             </div>
 
             {quickOpen && (
@@ -218,113 +241,77 @@ export function HomePage() {
                 <button
                   type="button"
                   className={homeClasses.quickSubmit}
-                  onClick={submitQuickPlan}
-                  disabled={isSubmitting}
+                  onClick={applyQuickPlan}
                 >
-                  {isSubmitting ? '生成中' : '用快速参数生成'}
+                  填入描述
                 </button>
               </div>
             )}
-          </section>
+          </div>
+          {(isSubmitting || creationEvents.length > 0) && (
+            <CreationProgress events={creationEvents} hasModelConfig={Boolean(config)} />
+          )}
+          {error && <p className={homeClasses.launchError}>{error}</p>}
         </div>
-
-        {(isSubmitting || creationEvents.length > 0) && (
-          <CreationProgress events={creationEvents} hasModelConfig={Boolean(config)} />
-        )}
-        {error && <p className={homeClasses.launchError}>{error}</p>}
       </section>
 
-      <section className={homeClasses.promptRail} aria-label="复杂任务示例">
-        <div className={homeClasses.sectionHeading}>
-          <strong className={homeClasses.sectionTitle}>试试这些方向</strong>
-        </div>
-        {demoPromptExamples.map((preset, index) => (
-          <button className={homeClasses.promptButton} key={preset.title} type="button" onClick={() => setPrompt(preset.prompt)}>
-            <span className={homeClasses.promptButtonIcon} aria-hidden="true">{formatHomeIndex(index)}</span>
-            <span className={homeClasses.promptButtonCopy}>
-              <strong className={homeClasses.promptButtonTitle}>{preset.title}</strong>
-              <small className={homeClasses.promptButtonSummary}>{preset.summary}</small>
+      {recentPlans.length > 0 && (
+        <section className={homeClasses.recentRail} aria-label="最近计划">
+          <div className={homeClasses.recentHeading}>
+            <span className={homeClasses.recentHeadingCopy}>
+              <strong className={homeClasses.recentHeadingTitle}>最近计划</strong>
             </span>
-            <span className={homeClasses.promptButtonArrow} aria-hidden="true">→</span>
-          </button>
-        ))}
-      </section>
-
-      <section className={homeClasses.recentRail} aria-label="最近计划">
-        <div className={homeClasses.recentHeading}>
-          <strong className={homeClasses.recentHeadingTitle}>最近计划</strong>
-          <small className={homeClasses.recentHeadingMeta}>{recentPlans.length > 0 ? `${recentPlans.length} 条` : '暂无历史'}</small>
-        </div>
-        {visibleRecentPlans.length > 0 ? (
-          <div className={homeClasses.recentList}>
-            {visibleRecentPlans.map((plan, index) => (
-              <article className={homeClasses.recentItem} key={plan.id}>
-                <span className={homeClasses.recentIcon} aria-hidden="true">{formatHomeIndex(index)}</span>
-                <Link className={homeClasses.recentLink} to="/plans/$planId" params={{ planId: plan.id }}>
-                  <strong className={homeClasses.recentTitle}>{plan.title}</strong>
-                  <span className={homeClasses.recentType}>{formatPlanType(plan.title)}</span>
-                  <span className={homeClasses.recentMeta}>{formatPlanStatus(plan.status)} · V{plan.currentVersion} · {plan.segments.length} 节点</span>
-                  <time className={homeClasses.recentMeta} dateTime={plan.updatedAt}>{formatRecentPlanTime(plan.updatedAt)}</time>
-                </Link>
+          </div>
+          {visibleRecentPlans.length > 0 && (
+            <div className={homeClasses.recentList}>
+              {visibleRecentPlans.map((plan) => (
+                <article className={homeClasses.recentItem} key={plan.id}>
+                  <Link className={homeClasses.recentLink} to="/plans/$planId" params={{ planId: plan.id }}>
+                    <strong className={homeClasses.recentTitle}>{plan.title}</strong>
+                    <time className={homeClasses.recentMeta} dateTime={plan.updatedAt}>{formatRecentPlanTime(plan.updatedAt)}</time>
+                    <span className={homeClasses.recentChevron} aria-hidden="true">
+                      <CaretRight size={18} weight="bold" />
+                    </span>
+                  </Link>
+                  <button
+                    className={homeClasses.recentDelete}
+                    type="button"
+                    aria-label={`删除计划：${plan.title}`}
+                    disabled={deletePlanMutation.isPending}
+                    onClick={() => deletePlanMutation.mutate(plan.id)}
+                  >
+                    删除
+                  </button>
+                </article>
+              ))}
+              {recentPlans.length > 4 && (
                 <button
-                  className={homeClasses.recentDelete}
+                  aria-expanded={showAllRecent}
+                  className={homeClasses.recentFooter}
                   type="button"
-                  disabled={deletePlanMutation.isPending}
-                  onClick={() => deletePlanMutation.mutate(plan.id)}
+                  onClick={() => setShowAllRecent((current) => !current)}
                 >
-                  清理
+                  <span className={homeClasses.recentFooterCopy}>
+                    <strong className={homeClasses.recentFooterTitle}>
+                      {showAllRecent ? '收起计划列表' : '展开全部计划'}
+                    </strong>
+                    <small className={homeClasses.recentFooterHint}>
+                      {showAllRecent ? `当前显示全部 ${recentPlans.length} 条` : `还有 ${recentPlans.length - 4} 条计划`}
+                    </small>
+                  </span>
+                  <span className={homeClasses.recentFooterAction}>{showAllRecent ? '收起' : '展开'}</span>
                 </button>
-                <span className={homeClasses.recentMore} aria-hidden="true">•••</span>
-              </article>
-            ))}
-            {recentPlans.length > 3 && (
-              <button
-                aria-expanded={showAllRecent}
-                className={homeClasses.recentFooter}
-                type="button"
-                onClick={() => setShowAllRecent((current) => !current)}
-              >
-                <span className={homeClasses.recentFooterCopy}>
-                  <strong className={homeClasses.recentFooterTitle}>
-                    {showAllRecent ? '收起计划列表' : '展开全部计划'}
-                  </strong>
-                  <small className={homeClasses.recentFooterHint}>
-                    {showAllRecent ? `当前显示全部 ${recentPlans.length} 条` : `已显示 3 条，还有 ${recentPlans.length - 3} 条可展开`}
-                  </small>
-                </span>
-                <span className={homeClasses.recentFooterAction}>
-                  {showAllRecent ? '收起' : '展开'}
-                  <span className={homeClasses.recentFooterIcon} aria-hidden="true">{showAllRecent ? '▴' : '▾'}</span>
-                </span>
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className={homeClasses.recentEmpty}>
-            <span className={homeClasses.recentEmptyIcon} aria-hidden="true">00</span>
-            <span className={homeClasses.recentEmptyCopy}>
-              <strong className={homeClasses.recentEmptyTitle}>还没有最近计划</strong>
-              <small className={homeClasses.recentEmptyHint}>
-                生成第一个计划后，这里会保留最近工作台入口，方便继续修改、确认和回放。
-              </small>
-            </span>
-            <button
-              className={homeClasses.recentEmptyAction}
-              type="button"
-              disabled={isSubmitting || !prompt.trim()}
-              onClick={() => void submit()}
-            >
-              {isSubmitting ? '创建中' : '生成当前计划'}
-            </button>
-          </div>
-        )}
-        {deletePlanMutation.isError && (
-          <p className={appClasses.errorText}>{deletePlanMutation.error.message}</p>
-        )}
-        {recentPlansQuery.isError && (
-          <p className={homeClasses.note}>最近计划暂时不可用；仍然可以直接创建新计划。</p>
-        )}
-      </section>
+              )}
+            </div>
+          )}
+          {deletePlanMutation.isError && (
+            <p className={appClasses.errorText}>{deletePlanMutation.error.message}</p>
+          )}
+        </section>
+      )}
+      {recentPlansQuery.isError && (
+        <p className={homeClasses.note}>最近计划暂时不可用；仍然可以直接创建新计划。</p>
+      )}
     </main>
   )
 }
@@ -403,34 +390,29 @@ function mergeCreationEvent(events: AgentEvent[], next: AgentEvent) {
   return [...events, next]
 }
 
-function formatPlanStatus(status: string) {
-  const labels: Record<string, string> = {
-    confirmed: '已确认',
-    draft: '草稿',
-    failed: '失败',
-    pending_confirmation: '待确认',
-    ready: '可编辑',
-  }
-  return labels[status] ?? status
-}
-
-function formatHomeIndex(index: number) {
-  return String(index + 1).padStart(2, '0')
-}
-
-function formatPlanType(title: string) {
-  if (/客户|接待|工作|产品|复盘/.test(title)) return '工作计划'
-  if (/生日|约会|亲子|朋友|玩/.test(title)) return '生活计划'
-  return '个人计划'
-}
-
 function formatRecentPlanTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '刚刚更新'
+
+  const elapsed = Math.max(0, Date.now() - date.getTime())
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  if (elapsed < minute) return '刚刚'
+  if (elapsed < hour) return `${Math.floor(elapsed / minute)} 分钟前`
+  if (elapsed < day) return `${Math.floor(elapsed / hour)} 小时前`
+  if (elapsed < 2 * day) {
+    return `昨天 ${new Intl.DateTimeFormat('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date)}`
+  }
+  if (elapsed < 7 * day) return `${Math.floor(elapsed / day)} 天前`
+
   return new Intl.DateTimeFormat('zh-CN', {
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
     month: '2-digit',
   }).format(date)
 }

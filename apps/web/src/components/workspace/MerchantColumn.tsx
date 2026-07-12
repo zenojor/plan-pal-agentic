@@ -144,7 +144,7 @@ export function MerchantColumn({
                               >
                                 -
                               </button>
-                              <strong className="grid h-[30px] min-w-[30px] place-items-center rounded-full bg-[var(--animal-focus-yellow)] text-[0.78rem] font-[850] text-animal-text">{offering.quantity}</strong>
+                              <strong className="grid h-8 min-w-8 place-items-center rounded-full bg-[var(--animal-focus-yellow)] text-[0.8125rem] font-black leading-none text-animal-text shadow-[0_2px_0_var(--animal-focus-yellow-d)]">{offering.quantity}</strong>
                               <button
                                 className={workspacePrimitives.smallButton()}
                                 type="button"

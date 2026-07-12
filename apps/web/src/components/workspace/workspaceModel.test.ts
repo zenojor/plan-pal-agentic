@@ -64,6 +64,7 @@ import {
   shouldOpenChatForAgentEvent,
   shouldRefreshPlanForAgentEvent,
   shouldOpenChatForCommandResult,
+  stopAssistantStreamingMessage,
   visiblePlanVariantSelectionFromState,
 } from './workspaceModel'
 
@@ -493,6 +494,20 @@ describe('workspace model helpers', () => {
       { role: 'planpal', content: '我是 demo-chat。' },
     ])
     expect(shouldOpenChatForAgentEvent(baseEvent)).toBe(true)
+  })
+  it('finalizes partial output and adds a receipt when streaming is stopped', () => {
+    expect(stopAssistantStreamingMessage([
+      { role: 'user', content: '检查路线' },
+      { role: 'planpal', content: '我先检查', streaming: true },
+    ])).toEqual([
+      { role: 'user', content: '检查路线' },
+      { role: 'planpal', content: '我先检查' },
+      {
+        role: 'planpal',
+        content: '已停止本次生成。你可以修改输入后重新发送。',
+        receipt: true,
+      },
+    ])
   })
   it('turns transport-level agent failures into redacted chat receipts', () => {
     const runMessage = chatMessageFromAgentFailure(

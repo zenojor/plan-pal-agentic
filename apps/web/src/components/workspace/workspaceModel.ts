@@ -1495,6 +1495,20 @@ export function finalizeAssistantStreamingMessage(messages: ChatMessage[], conte
   return [...messages, { role: 'planpal', content }]
 }
 
+export function stopAssistantStreamingMessage(messages: ChatMessage[]): ChatMessage[] {
+  const last = messages.at(-1)
+  let finalized = messages
+  if (last?.role === 'planpal' && last.streaming) {
+    const { streaming: _streaming, ...rest } = last
+    finalized = [...messages.slice(0, -1), rest]
+  }
+  return [...finalized, {
+    role: 'planpal',
+    content: '已停止本次生成。你可以修改输入后重新发送。',
+    receipt: true,
+  }]
+}
+
 export function attachPendingActionToLatestPlanpalMessage(messages: ChatMessage[], action: PendingAction): ChatMessage[] {
   const existingIndex = lastMessageIndex(messages, (message) => message.action?.id === action.id)
   if (existingIndex >= 0) {

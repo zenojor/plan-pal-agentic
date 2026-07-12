@@ -1,5 +1,5 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
-import { useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useState, type DragEvent } from 'react'
 import type { PlanCommand, PlanSegment, PlanServiceSelection } from '@planpal/domain'
 import { appClasses } from '../../lib/appClasses'
 import { puzzleClasses } from './puzzleClasses'
@@ -53,9 +53,32 @@ export function PuzzleColumn({
   onSelectSegment,
   onSetDragOverSegment,
 }: PuzzleColumnProps) {
-  const executableCount = segments.filter((segment) => !segment.isTransit).length
-  const executableSegments = segments.filter((segment) => !segment.isTransit)
-  const displayItems = deriveWorkspaceDisplayItems(segments)
+  const executableSegments = useMemo(
+    () => segments.filter((segment) => !segment.isTransit),
+    [segments],
+  )
+  const executableSegmentIndexes = useMemo(
+    () => new Map(executableSegments.map((segment, index) => [segment.id, index])),
+    [executableSegments],
+  )
+  const serviceSelectionCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const selection of serviceSelections) {
+      counts.set(selection.segmentId, (counts.get(selection.segmentId) ?? 0) + 1)
+    }
+    return counts
+  }, [serviceSelections])
+  const routeEstimatesByLeg = useMemo(
+    () => new Map(routeEstimates.map((estimate) => [
+      routeLegKey(estimate.fromId, estimate.toId),
+      estimate,
+    ])),
+    [routeEstimates],
+  )
+  const displayItems = useMemo(
+    () => deriveWorkspaceDisplayItems(segments),
+    [segments],
+  )
 
   return (
     <div
@@ -81,7 +104,7 @@ export function PuzzleColumn({
       )}
       {displayItems.map((item) => {
         if (item.kind === 'transit-summary') {
-          const route = routeEstimates.find((estimate) => estimate.fromId === item.fromSegmentId && estimate.toId === item.toSegmentId)
+          const route = routeEstimatesByLeg.get(routeLegKey(item.fromSegmentId, item.toSegmentId))
           return (
             <RouteConnector
               busy={commandBusy}
@@ -120,19 +143,19 @@ export function PuzzleColumn({
             </section>
           )
         }
-        const segmentIndex = executableSegments.findIndex((segment) => segment.id === item.segment.id)
+        const segmentIndex = executableSegmentIndexes.get(item.segment.id) ?? 0
         return (
           <SegmentCard
             commandBusy={commandBusy}
             dragOverSegmentId={dragOverSegmentId}
             draggingSegmentId={draggingSegmentId}
-            executableCount={executableCount}
-            index={segmentIndex >= 0 ? segmentIndex : 0}
+            executableCount={executableSegments.length}
+            index={segmentIndex}
             key={item.segment.id}
             nextSegmentId={executableSegments[segmentIndex + 1]?.id}
             previousSegmentId={executableSegments[segmentIndex - 1]?.id}
             segment={item.segment}
-            serviceSelectionCount={serviceSelections.filter((selection) => selection.segmentId === item.segment.id).length}
+            serviceSelectionCount={serviceSelectionCounts.get(item.segment.id) ?? 0}
             selected={selectedSegmentId === item.segment.id}
             onCommand={onCommand}
             onDragEnd={onDragEnd}
@@ -159,6 +182,10 @@ export function PuzzleColumn({
       )}
     </div>
   )
+}
+
+function routeLegKey(fromId: string, toId: string) {
+  return `${fromId}:${toId}`
 }
 
 function RouteConnector({
@@ -278,6 +305,10 @@ function SegmentCard({
   const canDelete = actions.canDelete && executableCount > 1
   const ticket = deriveItineraryTicketDisplay({ ...segment, serviceSelectionCount }, index)
 
+  useEffect(() => {
+    if (!rewriteOpen) setDraft(segment.notes ?? '')
+  }, [rewriteOpen, segment.notes])
+
   function stopAndCommand(command: PlanCommand) {
     onCommand(command)
   }
@@ -354,7 +385,7 @@ function SegmentCard({
             />
             <Button
               type="primary"
-              disabled={!draft.trim() || !actions.canRewrite || commandBusy}
+              disabled={!actions.canRewrite || commandBusy || draft.trim() === (segment.notes ?? '').trim()}
               onClick={() => {
                 stopAndCommand({
                   type: 'REWRITE_SEGMENT',

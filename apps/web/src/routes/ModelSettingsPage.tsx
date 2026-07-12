@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { testModelConfig } from '../lib/api'
+import { useEffect, useRef, useState } from 'react'
+import { isAbortError, testModelConfig } from '../lib/api'
 import { appClasses, settingsClasses } from '../lib/appClasses'
 import {
   MODEL_PROVIDER_PRESETS,
@@ -28,6 +28,7 @@ export function ModelSettingsPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [status, setStatus] = useState('')
   const [testing, setTesting] = useState(false)
+  const testAbortRef = useRef<AbortController | null>(null)
   const isDirty = !modelConfigsEqual(form, savedConfig)
   const formComplete = isCompleteModelConfig(form)
   const savedPublic = publicModelConfig(savedConfig)
@@ -35,6 +36,12 @@ export function ModelSettingsPage() {
   useEffect(() => {
     if (!isEditing) setForm(savedConfig ?? defaultConfig)
   }, [isEditing, savedConfig])
+
+  useEffect(() => () => {
+    const activeRequest = testAbortRef.current
+    testAbortRef.current = null
+    activeRequest?.abort()
+  }, [])
 
   function update(field: keyof StoredModelConfig, value: string) {
     setIsEditing(true)
@@ -56,7 +63,7 @@ export function ModelSettingsPage() {
     setStatus(`已套用 ${preset.label} 预设。测试成功后再保存到 workspace。`)
   }
 
-  async function save() {
+  function save() {
     const nextConfig = normalizeModelConfig(form)
     if (!isCompleteModelConfig(nextConfig)) {
       setForm(nextConfig)
@@ -76,10 +83,13 @@ export function ModelSettingsPage() {
       setStatus('请先填写 Base URL、API Key 和 Model 后再测试。')
       return
     }
+    const abortController = new AbortController()
+    testAbortRef.current?.abort()
+    testAbortRef.current = abortController
     setTesting(true)
     setStatus('')
     try {
-      const result = await testModelConfig(testConfig)
+      const result = await testModelConfig(testConfig, abortController.signal)
       const resolvedBaseURL = result.providerInfo?.resolvedBaseURL
       if (result.ok && resolvedBaseURL) {
         const testedAt = new Date().toISOString()
@@ -91,79 +101,118 @@ export function ModelSettingsPage() {
         setStatus(`测试连接成功：${result.providerInfo?.model}。解析端点：${resolvedBaseURL}。当前表单尚未保存到 workspace。`)
         return
       }
-      setStatus(`连接失败：${result.error}`)
+      setStatus(`连接失败：${result.error ?? '响应缺少可用模型端点。'}`)
+    } catch (error) {
+      if (!isAbortError(error)) {
+        setStatus(error instanceof Error ? `连接失败：${error.message}` : '连接失败，请稍后重试。')
+      }
     } finally {
-      setTesting(false)
+      if (testAbortRef.current === abortController) {
+        testAbortRef.current = null
+        setTesting(false)
+      }
     }
   }
 
   function clear() {
+    testAbortRef.current?.abort()
+    testAbortRef.current = null
     clearModelConfig()
     setForm(defaultConfig)
     setIsEditing(false)
+    setTesting(false)
     setStatus('已从此设备清除 API Key。')
   }
 
   return (
     <main className={settingsClasses.page}>
       <section className={settingsClasses.card}>
-        <span className={appClasses.eyebrow}>BYOK</span>
-        <h1 className={settingsClasses.title}>模型设置</h1>
-        <p className={settingsClasses.paragraph}>API Key 只保存在此设备的浏览器中。请求时会临时传给 PlanPal API 代理，服务端不落库、不写日志。</p>
-        <p className={settingsClasses.hint}>Base URL 填供应商文档给出的 OpenAI-compatible 根地址或 /v1 地址；PlanPal 会自动探测可用的 Chat Completions 路径。</p>
-        <div className={settingsClasses.summary}>
-          {savedPublic ? (
-            <>
-              <strong className={settingsClasses.summaryTitle}>Workspace 当前使用：{savedPublic.model}</strong>
-              <span className={settingsClasses.summaryLine}>{savedPublic.baseURL} · {savedPublic.maskedApiKey}</span>
-              {savedPublic.resolvedBaseURL && <span className={settingsClasses.summaryLine}>上次测试端点：{savedPublic.resolvedBaseURL}</span>}
-            </>
-          ) : (
-            <>
-              <strong className={settingsClasses.summaryTitle}>Workspace 还没有保存的模型配置</strong>
-              <span className={settingsClasses.summaryLine}>测试连接只验证当前表单，保存后才会用于聊天 Agent。</span>
-            </>
-          )}
-          {isDirty && <em className={settingsClasses.dirty}>当前表单尚未保存</em>}
-        </div>
-        <div className={settingsClasses.presetGrid} aria-label="模型供应商预设">
-          {MODEL_PROVIDER_PRESETS.map((preset) => {
-            const active = normalizeModelConfig(form).baseURL === preset.baseURL
-              && normalizeModelConfig(form).model === preset.model
-            return (
-              <button
-                className={settingsClasses.presetButton(active)}
-                key={preset.id}
-                type="button"
-                onClick={() => applyPreset(preset.id)}
-              >
-                <strong className={settingsClasses.summaryTitle}>{preset.label}</strong>
-                <span className={settingsClasses.summaryLine}>{preset.model}</span>
-                <small className={settingsClasses.summaryLine}>{preset.description}</small>
+        <header className={settingsClasses.header}>
+          <span className={settingsClasses.headerIcon} aria-hidden="true">✦</span>
+          <span className={settingsClasses.headerCopy}>
+            <span className={appClasses.eyebrow}>BYOK · 模型连接</span>
+            <h1 className={settingsClasses.title}>连接你的模型</h1>
+            <p className={settingsClasses.paragraph}>选择一个供应商预设，再补齐连接信息。保存后，聊天 Agent 才会使用这组配置。</p>
+          </span>
+        </header>
+
+        <div className={settingsClasses.layout}>
+          <aside className={settingsClasses.sidebar} aria-label="配置说明">
+            <div className={settingsClasses.summary}>
+              {savedPublic ? (
+                <>
+                  <strong className={settingsClasses.summaryTitle}>当前正在使用：{savedPublic.model}</strong>
+                  <span className={settingsClasses.summaryLine}>{savedPublic.baseURL}</span>
+                  <span className={settingsClasses.summaryLine}>密钥 {savedPublic.maskedApiKey}</span>
+                  {savedPublic.resolvedBaseURL && <span className={settingsClasses.summaryLine}>已验证端点：{savedPublic.resolvedBaseURL}</span>}
+                </>
+              ) : (
+                <>
+                  <strong className={settingsClasses.summaryTitle}>还没有保存模型配置</strong>
+                  <span className={settingsClasses.summaryLine}>未配置时仍可使用本地 fallback；保存后才会启用聊天 Agent。</span>
+                </>
+              )}
+              {isDirty && <em className={settingsClasses.dirty}>当前表单尚未保存</em>}
+            </div>
+            <p className={settingsClasses.hint}>
+              <strong>密钥只留在当前浏览器。</strong>
+              <br />
+              请求时会临时传给 PlanPal API 代理，服务端不落库、不写日志。Base URL 可以填写兼容 OpenAI 的根地址或 /v1 地址。
+            </p>
+          </aside>
+
+          <div className={settingsClasses.formPanel}>
+            <div className={settingsClasses.sectionHeading}>
+              <strong className={settingsClasses.sectionTitle}>选择供应商</strong>
+              <p className={settingsClasses.sectionText}>预设会填入推荐的 Base URL 和模型名，你仍然可以继续修改。</p>
+            </div>
+            <div className={settingsClasses.presetGrid} aria-label="模型供应商预设">
+              {MODEL_PROVIDER_PRESETS.map((preset) => {
+                const active = normalizeModelConfig(form).baseURL === preset.baseURL
+                  && normalizeModelConfig(form).model === preset.model
+                return (
+                  <button
+                    className={settingsClasses.presetButton(active)}
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyPreset(preset.id)}
+                  >
+                    <strong className={settingsClasses.summaryTitle}>{preset.label}</strong>
+                    <span className={settingsClasses.summaryLine}>{preset.model}</span>
+                    <small className={settingsClasses.summaryLine}>{preset.description}</small>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className={settingsClasses.sectionHeading}>
+              <strong className={settingsClasses.sectionTitle}>连接信息</strong>
+              <p className={settingsClasses.sectionText}>建议先测试连接，确认端点可用后再保存到浏览器。</p>
+            </div>
+            <div className={settingsClasses.fields}>
+              <label className={`${settingsClasses.label} ${settingsClasses.wideField}`}>
+                Base URL
+                <input className={settingsClasses.input} value={form.baseURL} onChange={(event) => update('baseURL', event.target.value)} />
+              </label>
+              <label className={settingsClasses.label}>
+                API Key
+                <input className={settingsClasses.input} value={form.apiKey} type="password" onChange={(event) => update('apiKey', event.target.value)} />
+              </label>
+              <label className={settingsClasses.label}>
+                Model
+                <input className={settingsClasses.input} value={form.model} onChange={(event) => update('model', event.target.value)} />
+              </label>
+            </div>
+            <div className={settingsClasses.buttonRow}>
+              <button className={settingsClasses.button} type="button" onClick={save} disabled={!formComplete}>保存配置</button>
+              <button type="button" className={settingsClasses.secondaryButton} onClick={test} disabled={testing || !formComplete}>
+                {testing ? '测试中' : '测试连接'}
               </button>
-            )
-          })}
+              <button type="button" className={settingsClasses.dangerButton} onClick={clear}>清除配置</button>
+            </div>
+            {status && <p className={appClasses.statusText}>{status}</p>}
+          </div>
         </div>
-        <label className={settingsClasses.label}>
-          Base URL
-          <input className={settingsClasses.input} value={form.baseURL} onChange={(event) => update('baseURL', event.target.value)} />
-        </label>
-        <label className={settingsClasses.label}>
-          API Key
-          <input className={settingsClasses.input} value={form.apiKey} type="password" onChange={(event) => update('apiKey', event.target.value)} />
-        </label>
-        <label className={settingsClasses.label}>
-          Model
-          <input className={settingsClasses.input} value={form.model} onChange={(event) => update('model', event.target.value)} />
-        </label>
-        <div className={settingsClasses.buttonRow}>
-          <button className={settingsClasses.button} type="button" onClick={save} disabled={!formComplete}>保存到浏览器</button>
-          <button type="button" className={settingsClasses.secondaryButton} onClick={test} disabled={testing || !formComplete}>
-            {testing ? '测试中' : '测试连接'}
-          </button>
-          <button type="button" className={settingsClasses.dangerButton} onClick={clear}>清除</button>
-        </div>
-        {status && <p className={appClasses.statusText}>{status}</p>}
       </section>
     </main>
   )

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlanFromPrompt, type AgentEvent } from '@planpal/domain'
-import { createPlan, deletePlan, getMockPoi, getMockRoutes, getPlan, listPlans, searchMockPois, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
+import { createPlan, deletePlan, getMockPoi, getMockRoutes, getPlan, isAbortError, listPlans, searchMockPois, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
 import type { StoredModelConfig } from './modelConfig'
 
 const config: StoredModelConfig = {
@@ -250,6 +250,8 @@ describe('web API streaming client', () => {
 
   it('loads plan envelopes with version history summaries', async () => {
     const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const abortController = new AbortController()
+    let capturedInit: RequestInit | undefined
     const version = {
       createdAt: plan.createdAt,
       segmentCount: plan.segments.length,
@@ -259,17 +261,21 @@ describe('web API streaming client', () => {
       updatedAt: plan.updatedAt,
       version: plan.currentVersion,
     }
-    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
-      events: [],
-      plan,
-      versions: [version],
-    }), { status: 200 }))
+    vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
+      capturedInit = init
+      return new Response(JSON.stringify({
+        events: [],
+        plan,
+        versions: [version],
+      }), { status: 200 })
+    })
 
-    await expect(getPlan(plan.id)).resolves.toEqual({
+    await expect(getPlan(plan.id, abortController.signal)).resolves.toEqual({
       events: [],
       plan,
       versions: [version],
     })
+    expect(capturedInit?.signal).toBe(abortController.signal)
   })
   it('lists recent plans for the home page entry point', async () => {
     const first = createPlanFromPrompt('下午两个人附近轻松玩')
@@ -364,6 +370,26 @@ describe('web API streaming client', () => {
     expect(result.error).toContain('[redacted]')
     expect(result.error).not.toContain('abc.def')
     expect(result.error).not.toContain('sk-secret-for-test')
+  })
+
+  it('redacts network errors consistently for streamed Agent requests', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network failed for Bearer abc.def and sk-secret-for-test')
+    })
+
+    await expect(streamAgentRun('plan_1', config, { message: '你好' }, () => {})).rejects.toThrow(
+      'network failed for Bearer [redacted] and [redacted]',
+    )
+  })
+
+  it('preserves abort errors so callers can silently cancel obsolete requests', async () => {
+    const abortError = new DOMException('This operation was aborted', 'AbortError')
+    vi.stubGlobal('fetch', async () => {
+      throw abortError
+    })
+
+    expect(isAbortError(abortError)).toBe(true)
+    await expect(streamAgentRun('plan_1', config, { message: '你好' }, () => {})).rejects.toBe(abortError)
   })
 })
 

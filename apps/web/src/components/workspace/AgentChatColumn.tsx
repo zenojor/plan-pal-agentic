@@ -1,13 +1,19 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
-import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAtom, useAtomValue } from 'jotai'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { CandidateOption, MerchantOffering, PendingAction, Plan, PlanVariantOption, PlanVariantSelection } from '@planpal/domain'
-import { appClasses } from '../../lib/appClasses'
 import type { StoredModelConfig } from '../../lib/modelConfig'
+import {
+  chatDraftAtom,
+  chatMessagesAtom,
+  streamingAtom,
+} from '../../state/workspaceAtoms'
 import { agentChatClasses } from './agentChatClasses'
 import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import {
   activePlanVariantSelectionFromAction,
+  canSendAgentChat,
   deriveCandidateCardDisplay,
   deriveVariantTicketDisplay,
   getAgentChatDisabledReason,
@@ -16,16 +22,11 @@ import {
   lastVariantSelectionMessageIndex,
   visiblePlanVariantSelectionFromState,
   type AgentProgressItem,
-  type ChatMessage,
 } from './workspaceModel'
 
 type AgentChatColumnProps = {
-  canSend: boolean
   commandBusy: boolean
   config: StoredModelConfig | null
-  draft: string
-  isStreaming: boolean
-  messages: ChatMessage[]
   pendingAction?: PendingAction
   plan: Plan
   progressItems: AgentProgressItem[]
@@ -35,21 +36,17 @@ type AgentChatColumnProps = {
   onCandidateRefresh: (action: Extract<PendingAction, { kind: 'candidate-selection' }>, searchQuery?: string) => void
   onChatContextChange: (segmentId?: string) => void
   onCommandConfirm: (action: Extract<PendingAction, { kind: 'command-confirmation' }>, confirmed: boolean) => void
-  onDraftChange: (draft: string) => void
   onPendingActionDismiss: (actionId: string) => void
   onSend: () => void
   onServiceOfferingSelect: (action: Extract<PendingAction, { kind: 'service-item-selection' }>, offering: MerchantOffering, quantity: number) => void
+  onStop: () => void
   onUndo?: (version: number) => void
   onVariantSelect: (actionId: string, variant: PlanVariantOption) => void
 }
 
 export function AgentChatColumn({
-  canSend,
   commandBusy,
   config,
-  draft,
-  isStreaming,
-  messages,
   pendingAction,
   plan,
   progressItems,
@@ -59,59 +56,127 @@ export function AgentChatColumn({
   onCandidateRefresh,
   onChatContextChange,
   onCommandConfirm,
-  onDraftChange,
   onPendingActionDismiss,
   onSend,
   onServiceOfferingSelect,
+  onStop,
   onUndo,
   onVariantSelect,
 }: AgentChatColumnProps) {
+  const [draft, setDraft] = useAtom(chatDraftAtom)
+  const messages = useAtomValue(chatMessagesAtom)
+  const isStreaming = useAtomValue(streamingAtom)
   const [candidateRequirement, setCandidateRequirement] = useState('')
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
+  const [isNearBottom, setIsNearBottom] = useState(true)
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  const executableSegments = plan.segments.filter((segment) => !segment.isTransit)
-  const selectedSegment = selectedSegmentId
-    ? executableSegments.find((segment) => segment.id === selectedSegmentId)
-    : undefined
-  const disabledReason = getAgentChatDisabledReason(config, draft, isStreaming)
-  const pathLabel = getChatExecutionPathLabel(config, draft)
-  const contextLabel = selectedSegment ? selectedSegment.title : '全局计划'
-  const visibleVariantSelection = visiblePlanVariantSelectionFromState(
-    pendingAction?.kind === 'plan-variant-selection' || !pendingAction ? pendingAction : undefined,
-    variantSelection,
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const composerInputRef = useRef<HTMLTextAreaElement>(null)
+  const executableSegments = useMemo(
+    () => plan.segments.filter((segment) => !segment.isTransit),
+    [plan.segments],
   )
-  const attachedActionIndex = pendingAction?.kind && pendingAction.kind !== 'plan-variant-selection'
-    ? lastAttachedActionMessageIndex(messages, pendingAction)
-    : -1
-  const attachedVariantIndex = lastVariantSelectionMessageIndex(messages, visibleVariantSelection)
+  const selectedSegment = useMemo(
+    () => selectedSegmentId
+      ? executableSegments.find((segment) => segment.id === selectedSegmentId)
+      : undefined,
+    [executableSegments, selectedSegmentId],
+  )
+  const suggestions = useMemo(
+    () => chatSuggestions(selectedSegment?.title),
+    [selectedSegment?.title],
+  )
+  const disabledReason = getAgentChatDisabledReason(config, draft, isStreaming)
+  const composerNotice = disabledReason === '请输入要发送给 Agent 的内容' ? '' : disabledReason
+  const canSend = canSendAgentChat(config, draft, isStreaming)
+  const pathLabel = config ? getChatExecutionPathLabel(config, draft) : '聊天未启用'
+  const contextLabel = selectedSegment ? selectedSegment.title : '全局计划'
+  const visibleVariantSelection = useMemo(
+    () => visiblePlanVariantSelectionFromState(
+      pendingAction?.kind === 'plan-variant-selection' || !pendingAction ? pendingAction : undefined,
+      variantSelection,
+    ),
+    [pendingAction, variantSelection],
+  )
+  const attachedActionIndex = useMemo(
+    () => pendingAction?.kind && pendingAction.kind !== 'plan-variant-selection'
+      ? lastAttachedActionMessageIndex(messages, pendingAction)
+      : -1,
+    [messages, pendingAction],
+  )
+  const attachedVariantIndex = useMemo(
+    () => lastVariantSelectionMessageIndex(messages, visibleVariantSelection),
+    [messages, visibleVariantSelection],
+  )
   const topPendingAction = pendingAction && pendingAction.kind !== 'plan-variant-selection' && attachedActionIndex < 0
     ? pendingAction
     : undefined
   const topVariantSelection = visibleVariantSelection && attachedVariantIndex < 0
     ? visibleVariantSelection
     : undefined
-  const statusLabel = pendingAction ? '等待选择' : isStreaming ? '处理中' : '可对话'
+  const statusLabel = !config ? '未配置' : pendingAction ? '等待选择' : isStreaming ? '处理中' : '可对话'
 
   useEffect(() => {
     if (pendingAction?.kind === 'candidate-selection') setCandidateRequirement('')
   }, [pendingAction?.id, pendingAction?.kind])
 
   useEffect(() => {
-    if (typeof document === 'undefined') return
+    if (!contextMenuOpen || typeof document === 'undefined') return
+
     function handleClickOutside(event: MouseEvent) {
-      if (!contextMenuOpen) return
       if (contextMenuRef.current?.contains(event.target as Node)) return
       setContextMenuOpen(false)
     }
 
+    function handleEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setContextMenuOpen(false)
+    }
+
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
   }, [contextMenuOpen])
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Enter' && !event.nativeEvent.isComposing && canSend) {
+  useEffect(() => {
+    const input = composerInputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(input.scrollHeight, 120)}px`
+    input.style.overflowY = input.scrollHeight > 120 ? 'auto' : 'hidden'
+  }, [draft])
+
+  useEffect(() => {
+    if (!isNearBottom || messages.length === 0 || typeof window === 'undefined') return
+    const frame = window.requestAnimationFrame(() => scrollToLatest('auto'))
+    return () => window.cancelAnimationFrame(frame)
+  }, [isNearBottom, isStreaming, messages, pendingAction?.id, progressItems.length])
+
+  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault()
+      if (!canSend) return
       onSend()
     }
+  }
+
+  function updateScrollState(element: HTMLDivElement) {
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+    setIsNearBottom(distanceFromBottom < 80)
+  }
+
+  function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
+    const scroll = scrollRef.current
+    if (!scroll) return
+    scroll.scrollTo({ top: scroll.scrollHeight, behavior })
+    setIsNearBottom(true)
+  }
+
+  function useSuggestion(suggestion: string) {
+    setDraft(suggestion)
+    window.requestAnimationFrame(() => composerInputRef.current?.focus())
   }
 
   function selectContext(segmentId?: string) {
@@ -187,14 +252,18 @@ export function AgentChatColumn({
 
   return (
     <div className={agentChatClasses.root}>
-      <div className={agentChatClasses.scroll}>
+      <div
+        className={agentChatClasses.scroll}
+        ref={scrollRef}
+        onScroll={(event) => updateScrollState(event.currentTarget)}
+      >
         <section className={agentChatClasses.statusStrip} aria-label="Agent 状态">
           <div className={agentChatClasses.statusMain}>
             <span className={agentChatClasses.statusIcon} aria-hidden="true">
               <Icon name="icon-chat" size={22} bounce />
             </span>
-            <div>
-              <span className={appClasses.eyebrow}>PlanPal Agent</span>
+            <div className={agentChatClasses.statusCopy}>
+              <span className={agentChatClasses.statusKicker}>PlanPal Agent</span>
               <strong className={agentChatClasses.statusTitle}>{config ? `已连接 ${config.model}` : '需要模型配置'}</strong>
               <small className={agentChatClasses.statusMeta}>当前上下文：{contextLabel}</small>
             </div>
@@ -215,17 +284,35 @@ export function AgentChatColumn({
           </div>
         )}
 
-        {messages.length === 0 && !pendingAction && !topVariantSelection && (
-          <div className={agentChatClasses.emptyState}>
-            <Icon name="icon-miles" size={28} />
-            <div>
-              <strong className={agentChatClasses.emptyTitle}>还没有对话</strong>
-              <span className={agentChatClasses.emptyMeta}>{contextLabel} · 等待输入</span>
+        {messages.length === 0 && !pendingAction && (
+          <div className={agentChatClasses.emptyPanel}>
+            <div className={agentChatClasses.emptyState}>
+              <span className={agentChatClasses.emptyIcon} aria-hidden="true">
+                <Icon name="icon-miles" size={28} />
+              </span>
+              <div>
+                <strong className={agentChatClasses.emptyTitle}>从一个明确的小修改开始</strong>
+                <span className={agentChatClasses.emptyMeta}>{contextLabel} · 也可以直接描述最终想要的结果</span>
+              </div>
+            </div>
+            <span className={agentChatClasses.suggestionHeading}>试试这样说</span>
+            <div className={agentChatClasses.suggestionList} aria-label="快捷指令">
+              {suggestions.map((suggestion) => (
+                <button
+                  className={agentChatClasses.suggestionButton}
+                  key={suggestion}
+                  type="button"
+                  onClick={() => useSuggestion(suggestion)}
+                >
+                  <span className={agentChatClasses.suggestionIcon} aria-hidden="true">✦</span>
+                  <span>{suggestion}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        <div className={agentChatClasses.thread} aria-live="polite">
+        <div className={agentChatClasses.thread} aria-live="polite" aria-relevant="additions text" role="log">
           {messages.map((message, index) => {
             const activeAction = index === attachedActionIndex ? pendingAction : undefined
             const activeVariantSelection = index === attachedVariantIndex ? visibleVariantSelection : undefined
@@ -282,76 +369,114 @@ export function AgentChatColumn({
           </div>
         )}
         {isStreaming && progressItems.length === 0 && <div className={agentChatClasses.streamingPill}>PlanPal 正在处理...</div>}
+        {!isNearBottom && (
+          <button className={agentChatClasses.scrollToLatest} type="button" onClick={() => scrollToLatest()}>
+            ↓ 回到最新
+          </button>
+        )}
       </div>
       <div className={agentChatClasses.composer}>
-        <div className={agentChatClasses.contextAnchor} ref={contextMenuRef}>
-          <button
-            className={agentChatClasses.contextTrigger(Boolean(selectedSegment))}
-            type="button"
-            title={`当前上下文：${contextLabel}`}
-            aria-expanded={contextMenuOpen}
-            aria-haspopup="menu"
-            onClick={() => setContextMenuOpen((open) => !open)}
-          >
-            <span className={agentChatClasses.contextTriggerIcon} aria-hidden="true">@</span>
-            <strong className={agentChatClasses.contextTriggerText}>{contextLabel}</strong>
-          </button>
-          {selectedSegment && (
+        <div className={agentChatClasses.composerHeader}>
+          <span className={agentChatClasses.composerLabel}>发送给 PlanPal</span>
+          <div className={agentChatClasses.contextAnchor} ref={contextMenuRef}>
             <button
-              className={agentChatClasses.contextClear}
+              className={agentChatClasses.contextTrigger(Boolean(selectedSegment))}
               type="button"
-              aria-label="取消活动上下文，切回全局计划"
-              title="切回全局计划"
-              onClick={() => selectContext(undefined)}
+              title={`当前上下文：${contextLabel}`}
+              aria-expanded={contextMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setContextMenuOpen((open) => !open)}
             >
-              ×
+              <span className={agentChatClasses.contextTriggerIcon} aria-hidden="true">@</span>
+              <strong className={agentChatClasses.contextTriggerText}>{contextLabel}</strong>
             </button>
-          )}
-          {contextMenuOpen && (
-            <div className={agentChatClasses.contextMenu} role="menu" aria-label="选择消息上下文">
+            {selectedSegment && (
               <button
-                className={agentChatClasses.contextMenuItem(!selectedSegment)}
-                role="menuitem"
+                className={agentChatClasses.contextClear}
                 type="button"
+                aria-label="取消活动上下文，切回全局计划"
+                title="切回全局计划"
                 onClick={() => selectContext(undefined)}
               >
-                <strong className={agentChatClasses.cardTitle}>全局计划</strong>
-                <small className={agentChatClasses.cardMeta}>让 Agent 自己判断要改哪里</small>
+                ×
               </button>
-              {executableSegments.map((segment, index) => (
+            )}
+            {contextMenuOpen && (
+              <div className={agentChatClasses.contextMenu} role="menu" aria-label="选择消息上下文">
                 <button
-                  className={agentChatClasses.contextMenuItem(selectedSegment?.id === segment.id)}
-                  key={segment.id}
+                  className={agentChatClasses.contextMenuItem(!selectedSegment)}
                   role="menuitem"
-                  title={segment.title}
                   type="button"
-                  onClick={() => selectContext(segment.id)}
+                  onClick={() => selectContext(undefined)}
                 >
-                  <strong className={agentChatClasses.cardTitle}>{index + 1}. {segment.title}</strong>
-                  <small className={agentChatClasses.cardMeta}>{segment.place}</small>
+                  <strong className={agentChatClasses.cardTitle}>全局计划</strong>
+                  <small className={agentChatClasses.cardMeta}>让 Agent 自己判断要改哪里</small>
                 </button>
-              ))}
-            </div>
-          )}
+                {executableSegments.map((segment, index) => (
+                  <button
+                    className={agentChatClasses.contextMenuItem(selectedSegment?.id === segment.id)}
+                    key={segment.id}
+                    role="menuitem"
+                    title={segment.title}
+                    type="button"
+                    onClick={() => selectContext(segment.id)}
+                  >
+                    <strong className={agentChatClasses.cardTitle}>{index + 1}. {segment.title}</strong>
+                    <small className={agentChatClasses.cardMeta}>{segment.place}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className={agentChatClasses.inputShell}>
-          <Input
-            allowClear
-            shadow
+          <textarea
+            aria-describedby="agent-chat-composer-help"
+            aria-label="发送给 PlanPal 的消息"
+            className={agentChatClasses.composerInput}
+            maxLength={MAX_CHAT_DRAFT_LENGTH}
+            ref={composerInputRef}
+            rows={1}
             value={draft}
-            placeholder="告诉 PlanPal 想怎么改..."
-            onChange={(event) => onDraftChange(event.target.value)}
-            onClear={() => onDraftChange('')}
-            onKeyDown={handleKeyDown}
+            placeholder="描述你想调整的内容，或直接说最终目标…"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
           />
-          <Button type="primary" disabled={!canSend} loading={isStreaming} title={disabledReason} onClick={onSend}>
-            发送
-          </Button>
+          {isStreaming ? (
+            <Button type="primary" danger title="停止当前生成" onClick={onStop}>
+              停止
+            </Button>
+          ) : (
+            <Button type="primary" disabled={!canSend} title={disabledReason} onClick={onSend}>
+              发送
+            </Button>
+          )}
         </div>
-        {disabledReason && <p className={agentChatClasses.disabledReason}>{disabledReason}</p>}
+        <div className={agentChatClasses.composerMeta} id="agent-chat-composer-help">
+          <span>{isStreaming ? '正在生成；可以先起草下一条消息' : 'Enter 发送 · Shift+Enter 换行'}</span>
+          <span>{draft.length}/{MAX_CHAT_DRAFT_LENGTH}</span>
+        </div>
+        {composerNotice && <p className={agentChatClasses.disabledReason}>{composerNotice}</p>}
       </div>
     </div>
   )
+}
+
+const MAX_CHAT_DRAFT_LENGTH = 2_000
+
+function chatSuggestions(selectedTitle?: string) {
+  if (selectedTitle) {
+    return [
+      `把“${selectedTitle}”换成更轻松的安排`,
+      `调整“${selectedTitle}”的时间，给前后留出余量`,
+      `检查“${selectedTitle}”的预算、备注和执行条件`,
+    ]
+  }
+  return [
+    '检查整条路线是否太赶，并指出需要调整的节点',
+    '把晚饭换到离上一个地点更近的位置',
+    '检查预算、交通和待处理决策，优先修复阻塞项',
+  ]
 }
 
 function CommandConfirmationTicket({
@@ -367,17 +492,19 @@ function CommandConfirmationTicket({
   const destructive = action.severity === 'destructive'
   const commandLabels = action.commands.map(commandProposalLabel)
   return (
-    <Card className={agentChatClasses.decisionTicket} color={destructive ? 'app-yellow' : 'app-teal'}>
+    <Card className={agentChatClasses.decisionTicket(destructive)} color="default">
       <DecisionTicketHeader title={action.title} description={action.description} />
       <p className={agentChatClasses.activeQuery}>Agent 建议修改拼图，确认后才会写入。</p>
-      <div className={workspacePrimitives.chipRow}>
-        <span className={chipClassName(0)}>基于 V{preview.beforeVersion}</span>
-        <span className={chipClassName(1)}>{commandLabels.join(' + ')}</span>
-        <span className={chipClassName(2)}>{preview.affectedSegmentTitles.length || preview.affectedSegmentIds.length} 个影响节点</span>
+      <div className={agentChatClasses.commandSummary}>
+        <div className={workspacePrimitives.chipRow}>
+          <span className={chipClassName(0)}>基于 V{preview.beforeVersion}</span>
+          <span className={chipClassName(1)}>{commandLabels.join(' + ')}</span>
+          <span className={chipClassName(2)}>{preview.affectedSegmentTitles.length || preview.affectedSegmentIds.length} 个影响节点</span>
+        </div>
+        {preview.affectedSegmentTitles.length > 0 && (
+          <p className={agentChatClasses.impactText}>影响：{preview.affectedSegmentTitles.join('、')}</p>
+        )}
       </div>
-      {preview.affectedSegmentTitles.length > 0 && (
-        <p className={agentChatClasses.cardText}>影响：{preview.affectedSegmentTitles.join('、')}</p>
-      )}
       {preview.beforeOrder && preview.afterOrder && (
         <div className={agentChatClasses.choiceList}>
           <article className={agentChatClasses.serviceCard(false)}>
@@ -417,7 +544,7 @@ function ClarificationTicket({
   onDismiss: (actionId: string) => void
 }) {
   return (
-    <Card className={agentChatClasses.decisionTicket} color="app-teal">
+    <Card className={agentChatClasses.decisionTicket()} color="app-teal">
       <DecisionTicketHeader title={action.title} description={action.description} />
       <div className={workspacePrimitives.chipRow}>
         {action.requiredFields.map((field, index) => (
@@ -496,7 +623,7 @@ function ServiceItemDecisionTicket({
   }
 
   return (
-    <Card className={agentChatClasses.decisionTicket} color="app-teal">
+    <Card className={agentChatClasses.decisionTicket()} color="app-teal">
       <DecisionTicketHeader title={action.title} description={action.description} />
       {action.query && <p className={agentChatClasses.activeQuery}>当前需求：{action.query}</p>}
       <div className={agentChatClasses.choiceList}>
@@ -560,7 +687,7 @@ function VariantDecisionTicket({
   }, [selection.selectedVariantId])
 
   return (
-    <Card className={agentChatClasses.decisionTicket} color="app-teal">
+    <Card className={agentChatClasses.decisionTicket()} color="app-teal">
       <button
         className={agentChatClasses.variantSummary}
         type="button"
@@ -645,14 +772,14 @@ function CandidateDecisionTicket({
     onCandidateRequirementChange('')
   }
 
-  function handleRequirementKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleRequirementKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
     if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
     event.preventDefault()
     submitRequirement()
   }
 
   return (
-    <Card className={agentChatClasses.decisionTicket} color="app-yellow">
+    <Card className={agentChatClasses.decisionTicket()} color="app-yellow">
       <DecisionTicketHeader title={action.title} description={action.description} />
       {activeRequirement && (
         <p className={agentChatClasses.activeQuery}>
@@ -759,7 +886,7 @@ function DecisionTicketHeader({ title, description }: { title: string; descripti
         <Icon name="icon-miles" size={24} bounce />
       </span>
       <div>
-        <span className={appClasses.eyebrow}>决策票据</span>
+        <span className={agentChatClasses.decisionEyebrow}>决策票据</span>
         <strong className={agentChatClasses.decisionHeaderTitle}>{title}</strong>
         <p className={agentChatClasses.decisionHeaderText}>{description}</p>
       </div>

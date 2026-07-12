@@ -1,8 +1,15 @@
-import { createRootRouteWithContext, createRoute, createRouter, Link, Outlet, useRouterState } from '@tanstack/react-router'
+import {
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  Link,
+  Outlet,
+  useRouterState,
+} from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
+import { GearSixIcon as GearSix } from '@phosphor-icons/react/GearSix'
 import { HomePage } from './routes/HomePage'
-import { ModelSettingsPage } from './routes/ModelSettingsPage'
-import { PlanWorkspacePage } from './routes/PlanWorkspacePage'
 import { appClasses } from './lib/appClasses'
 
 type RouterContext = {
@@ -22,13 +29,19 @@ const indexRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/model',
-  component: ModelSettingsPage,
+  component: lazyRouteComponent(
+    () => import('./routes/ModelSettingsPage'),
+    'ModelSettingsPage',
+  ),
 })
 
 const planRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/plans/$planId',
-  component: PlanWorkspacePage,
+  component: lazyRouteComponent(
+    () => import('./routes/PlanWorkspacePage'),
+    'PlanWorkspacePage',
+  ),
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, settingsRoute, planRoute])
@@ -54,14 +67,18 @@ function RootLayout() {
     <div className={appClasses.shell(isWorkspaceRoute)}>
       {!isWorkspaceRoute && (
         <header className={appClasses.topbar}>
-          <Link to="/" className={appClasses.brand}>
-            <span className={appClasses.brandMark}>P</span>
-            <span>PlanPal</span>
-          </Link>
-          <nav className={appClasses.topnav}>
-            <Link to="/" className={appClasses.topnavLink()} activeProps={{ className: appClasses.topnavLink(true) }}>开始</Link>
-            <Link to="/settings/model" className={appClasses.topnavLink()} activeProps={{ className: appClasses.topnavLink(true) }}>模型设置</Link>
-          </nav>
+          <div className={appClasses.topbarInner}>
+            <Link to="/" className={appClasses.brand}>
+              <span className={appClasses.brandMark}>P</span>
+              <strong className={appClasses.brandTitle}>PlanPal</strong>
+            </Link>
+            <nav className={appClasses.topnav} aria-label="主导航">
+              <Link to="/settings/model" className={appClasses.topnavLink()} activeProps={{ className: appClasses.topnavLink(true) }}>
+                <GearSix aria-hidden="true" size={19} weight="bold" />
+                模型设置
+              </Link>
+            </nav>
+          </div>
         </header>
       )}
       <Outlet />

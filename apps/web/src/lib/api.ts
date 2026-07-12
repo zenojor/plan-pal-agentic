@@ -100,11 +100,13 @@ export async function streamCreatePlan(
   prompt: string,
   config: StoredModelConfig | null | undefined,
   onProgress: (event: AgentEvent) => void,
+  signal?: AbortSignal,
 ): Promise<CreatePlanResult> {
   const headers = config ? byokHeaders(config) : { 'Content-Type': 'application/json' }
   const response = await safeFetch(`${API_BASE}/api/plans/stream`, {
     method: 'POST',
     headers,
+    signal,
     body: JSON.stringify({
       prompt,
       modelConfigRef: 'client-byok',
@@ -137,23 +139,28 @@ export async function streamCreatePlan(
   return result
 }
 
-export async function getPlan(planId: string): Promise<PlanEnvelope> {
-  const response = await fetch(`${API_BASE}/api/plans/${planId}`)
+export async function getPlan(planId: string, signal?: AbortSignal): Promise<PlanEnvelope> {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}`, {
+    method: 'GET',
+    signal,
+  }, '加载计划失败')
   if (!response.ok) throw new Error(await parseError(response))
   return (await response.json()) as PlanEnvelope
 }
 
-export async function listAgentRuns(planId: string): Promise<AgentRunListResult> {
+export async function listAgentRuns(planId: string, signal?: AbortSignal): Promise<AgentRunListResult> {
   const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/runs`, {
     method: 'GET',
+    signal,
   }, '加载 Agent runs 失败')
   if (!response.ok) throw new Error(await parseError(response))
   return (await response.json()) as AgentRunListResult
 }
 
-export async function getAgentRunTrace(planId: string, runId: string): Promise<AgentTraceSnapshot> {
+export async function getAgentRunTrace(planId: string, runId: string, signal?: AbortSignal): Promise<AgentTraceSnapshot> {
   const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/runs/${runId}/trace`, {
     method: 'GET',
+    signal,
   }, '加载 Agent trace 失败')
   if (!response.ok) throw new Error(await parseError(response))
   const data = (await response.json()) as { trace: AgentTraceSnapshot }
@@ -167,9 +174,10 @@ export async function deletePlan(planId: string): Promise<{ ok: true; planId: st
   if (!response.ok) throw new Error(await parseError(response))
   return (await response.json()) as { ok: true; planId: string }
 }
-export async function listPlans(): Promise<Plan[]> {
+export async function listPlans(signal?: AbortSignal): Promise<Plan[]> {
   const response = await safeFetch(`${API_BASE}/api/plans`, {
     method: 'GET',
+    signal,
   }, '加载最近计划失败')
   if (!response.ok) throw new Error(await parseError(response))
   const data = (await response.json()) as PlanListResult
@@ -278,16 +286,16 @@ export async function getMockRoutes(planId: string): Promise<{ source: string; p
 }
 
 export async function sendPlanCommand(planId: string, command: PlanCommand): Promise<CommandResult> {
-  const response = await fetch(`${API_BASE}/api/plans/${planId}/commands`, {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/commands`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(command),
-  })
+  }, '执行计划命令失败')
   if (!response.ok) throw new Error(await parseError(response))
   return (await response.json()) as CommandResult
 }
 
-export async function testModelConfig(config: StoredModelConfig) {
+export async function testModelConfig(config: StoredModelConfig, signal?: AbortSignal) {
   type ModelTestResult = {
     ok: boolean
     providerInfo?: { baseURL: string; resolvedBaseURL?: string; model: string; providerMode?: string }
@@ -299,6 +307,7 @@ export async function testModelConfig(config: StoredModelConfig) {
     response = await fetch(`${API_BASE}/api/model/test`, {
       method: 'POST',
       headers: byokHeaders(config),
+      signal,
       body: JSON.stringify({
         baseURL: config.baseURL,
         model: config.model,
@@ -307,6 +316,7 @@ export async function testModelConfig(config: StoredModelConfig) {
       }),
     })
   } catch (error) {
+    if (isAbortError(error)) throw error
     return { ok: false, error: publicErrorMessage(error, '模型测试请求失败') } satisfies ModelTestResult
   }
   if (!response.ok) {
@@ -324,10 +334,12 @@ export async function streamAgentRun(
   config: StoredModelConfig,
   input: { message: string; selectedSegmentId?: string },
   onEvent: (event: AgentEvent) => void,
+  signal?: AbortSignal,
 ) {
-  const response = await fetch(`${API_BASE}/api/plans/${planId}/agent/runs`, {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/runs`, {
     method: 'POST',
     headers: byokHeaders(config),
+    signal,
     body: JSON.stringify({
       ...input,
       baseURL: config.baseURL,
@@ -335,7 +347,7 @@ export async function streamAgentRun(
       providerMode: config.providerMode,
       resolvedBaseURL: config.resolvedBaseURL,
     }),
-  })
+  }, '运行 Agent 失败')
   if (!response.ok || !response.body) throw new Error(await parseError(response))
   await readSse(response.body, onEvent)
 }
@@ -344,12 +356,14 @@ export async function streamAgentResume(
   planId: string,
   input: { runId: string; actionId: string; payload: unknown },
   onEvent: (event: AgentEvent) => void,
+  signal?: AbortSignal,
 ) {
-  const response = await fetch(`${API_BASE}/api/plans/${planId}/agent/resume`, {
+  const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/resume`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-  })
+    signal,
+  }, '继续 Agent 运行失败')
   if (!response.ok || !response.body) throw new Error(await parseError(response))
   await readSse(response.body, onEvent)
 }
@@ -378,8 +392,13 @@ async function safeFetch(input: RequestInfo | URL, init: RequestInit, fallback: 
   try {
     return await fetch(input, init)
   } catch (error) {
+    if (isAbortError(error)) throw error
     throw new Error(publicErrorMessage(error, fallback))
   }
+}
+
+export function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 function publicErrorMessage(error: unknown, fallback: string) {
