@@ -18,6 +18,10 @@ function animalIslandAssetUrlFix(): Plugin {
 }
 
 export default defineConfig({
+  build: {
+    emptyOutDir: true,
+    outDir: '../../public',
+  },
   plugins: [animalIslandAssetUrlFix(), tailwindcss(), react()],
   server: {
     port: 5174,
