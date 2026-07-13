@@ -50,6 +50,18 @@ function copyTreeDereferenced(source, destination) {
   }
 }
 
+function pruneDanglingSymlinks(directory) {
+  const prune = spawnSync('find', [directory, '-xtype', 'l', '-delete'], {
+    encoding: 'utf8',
+    shell: false,
+    stdio: 'inherit',
+  })
+
+  if (prune.status !== 0) {
+    process.exit(prune.status ?? 1)
+  }
+}
+
 function assertArchiveSafeTree(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = resolve(directory, entry.name)
@@ -73,6 +85,7 @@ for (const required of [openNext, assets, hosting, wrangler]) {
 
 rmSync(output, { force: true, recursive: true })
 mkdirSync(output, { recursive: true })
+pruneDanglingSymlinks(openNext)
 copyTreeDereferenced(openNext, resolve(output, '.open-next'))
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
