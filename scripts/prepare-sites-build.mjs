@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 
 if (process.platform === 'win32') {
@@ -44,4 +44,12 @@ cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
 cpSync(assets, output, { recursive: true })
 
-console.log('Prepared dist with OpenNext worker, Sites metadata, and static assets.')
+const serverDirectory = resolve(output, 'server')
+mkdirSync(serverDirectory, { recursive: true })
+writeFileSync(
+  resolve(serverDirectory, 'index.js'),
+  "export { default } from '../.open-next/worker.js'\n",
+  'utf8',
+)
+
+console.log('Prepared dist with Sites server entrypoint, OpenNext worker, metadata, and static assets.')
