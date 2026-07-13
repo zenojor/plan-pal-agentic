@@ -9,6 +9,9 @@ dist-ssr/
 build/
 public/
 .next/
+.open-next/
+.wrangler/
+*.tar
 .vite/
 *.tsbuildinfo
 coverage/
