@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { resolve, sep } from 'node:path'
 
 if (process.platform === 'win32') {
@@ -31,6 +38,33 @@ const assets = resolve(openNext, 'assets')
 const hosting = resolve(root, '.openai')
 const wrangler = resolve(root, 'wrangler.jsonc')
 
+function copyTreeDereferenced(source, destination) {
+  const copy = spawnSync('cp', ['-RL', source, destination], {
+    encoding: 'utf8',
+    shell: false,
+    stdio: 'inherit',
+  })
+
+  if (copy.status !== 0) {
+    process.exit(copy.status ?? 1)
+  }
+}
+
+function assertArchiveSafeTree(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = resolve(directory, entry.name)
+
+    if (entry.isDirectory()) {
+      assertArchiveSafeTree(entryPath)
+      continue
+    }
+
+    if (!entry.isFile()) {
+      throw new Error(`Unsupported archive member remains after packaging: ${entryPath}`)
+    }
+  }
+}
+
 for (const required of [openNext, assets, hosting, wrangler]) {
   if (!existsSync(required)) {
     throw new Error(`Missing required Sites build input: ${required}`)
@@ -39,10 +73,7 @@ for (const required of [openNext, assets, hosting, wrangler]) {
 
 rmSync(output, { force: true, recursive: true })
 mkdirSync(output, { recursive: true })
-cpSync(openNext, resolve(output, '.open-next'), {
-  dereference: true,
-  recursive: true,
-})
+copyTreeDereferenced(openNext, resolve(output, '.open-next'))
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
 cpSync(assets, output, {
@@ -57,5 +88,7 @@ writeFileSync(
   "export { default } from '../.open-next/worker.js'\n",
   'utf8',
 )
+
+assertArchiveSafeTree(output)
 
 console.log('Prepared dist with Sites server entrypoint, OpenNext worker, metadata, and static assets.')
