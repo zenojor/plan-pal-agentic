@@ -39,10 +39,16 @@ for (const required of [openNext, assets, hosting, wrangler]) {
 
 rmSync(output, { force: true, recursive: true })
 mkdirSync(output, { recursive: true })
-cpSync(openNext, resolve(output, '.open-next'), { recursive: true })
+cpSync(openNext, resolve(output, '.open-next'), {
+  dereference: true,
+  recursive: true,
+})
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
-cpSync(assets, output, { recursive: true })
+cpSync(assets, output, {
+  dereference: true,
+  recursive: true,
+})
 
 const serverDirectory = resolve(output, 'server')
 mkdirSync(serverDirectory, { recursive: true })
