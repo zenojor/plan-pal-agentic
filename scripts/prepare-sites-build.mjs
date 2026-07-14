@@ -89,6 +89,10 @@ const serverDirectory = resolve(output, 'server')
 mkdirSync(serverDirectory, { recursive: true })
 pruneDanglingSymlinks(openNext)
 copyTreeDereferenced(openNext, resolve(serverDirectory, 'open-next'))
+rmSync(resolve(serverDirectory, 'open-next', 'assets'), {
+  force: true,
+  recursive: true,
+})
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
 cpSync(assets, output, {
