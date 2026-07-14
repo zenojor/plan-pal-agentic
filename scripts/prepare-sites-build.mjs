@@ -85,8 +85,10 @@ for (const required of [openNext, assets, hosting, wrangler]) {
 
 rmSync(output, { force: true, recursive: true })
 mkdirSync(output, { recursive: true })
+const serverDirectory = resolve(output, 'server')
+mkdirSync(serverDirectory, { recursive: true })
 pruneDanglingSymlinks(openNext)
-copyTreeDereferenced(openNext, resolve(output, '.open-next'))
+copyTreeDereferenced(openNext, resolve(serverDirectory, 'open-next'))
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
 cpSync(assets, output, {
@@ -94,11 +96,9 @@ cpSync(assets, output, {
   recursive: true,
 })
 
-const serverDirectory = resolve(output, 'server')
-mkdirSync(serverDirectory, { recursive: true })
 writeFileSync(
   resolve(serverDirectory, 'index.js'),
-  "export { default } from '../.open-next/worker.js'\n",
+  "export { default } from './open-next/worker.js'\n",
   'utf8',
 )
 
