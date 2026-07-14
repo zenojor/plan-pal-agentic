@@ -3,11 +3,12 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { resolve, sep } from 'node:path'
+import { extname, relative, resolve, sep } from 'node:path'
 
 const root = resolve(process.cwd())
 const output = resolve(root, 'dist')
@@ -47,7 +48,7 @@ await build({
   legalComments: 'none',
   loader: { '.html': 'text' },
   mainFields: ['browser', 'module', 'main'],
-  minify: false,
+  minify: true,
   platform: 'browser',
   plugins: [{
     name: 'sites-in-memory-store',
@@ -58,6 +59,18 @@ await build({
         }
         return undefined
       })
+    },
+  }, {
+    name: 'sites-embedded-static-assets',
+    setup(build) {
+      build.onResolve({ filter: /^sites:static-assets$/ }, () => ({
+        namespace: 'sites-static-assets',
+        path: 'sites:static-assets',
+      }))
+      build.onLoad({ filter: /.*/, namespace: 'sites-static-assets' }, () => ({
+        contents: `export default ${JSON.stringify(readStaticAssets(publicDirectory))}`,
+        loader: 'js',
+      }))
     },
   }],
   sourcemap: false,
@@ -95,4 +108,49 @@ function assertArchiveSafeTree(directory) {
       throw new Error(`Unsupported archive member remains after packaging: ${entryPath}`)
     }
   }
+}
+
+function readStaticAssets(directory) {
+  const assets = {}
+  const pending = [directory]
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const entryPath = resolve(current, entry.name)
+      if (entry.isDirectory()) {
+        pending.push(entryPath)
+        continue
+      }
+      if (!entry.isFile()) {
+        throw new Error(`Unsupported static asset type: ${entryPath}`)
+      }
+
+      const pathname = `/${relative(directory, entryPath).split(sep).join('/')}`
+      assets[pathname] = {
+        body: readFileSync(entryPath).toString('base64'),
+        contentType: contentTypeFor(entryPath),
+      }
+    }
+  }
+
+  return assets
+}
+
+function contentTypeFor(path) {
+  return ({
+    '.css': 'text/css; charset=utf-8',
+    '.gif': 'image/gif',
+    '.html': 'text/html; charset=utf-8',
+    '.ico': 'image/x-icon',
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.js': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.svg': 'image/svg+xml; charset=utf-8',
+    '.webp': 'image/webp',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+  })[extname(path).toLowerCase()] ?? 'application/octet-stream'
 }
