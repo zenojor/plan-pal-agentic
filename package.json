@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "npm run build:new && next build && node scripts/prepare-sites-build.mjs",
+    "build": "npm run build:new && node scripts/prepare-sites-build.mjs",
     "build:opennext": "opennextjs-cloudflare build --skipNextBuild",
     "build:sites": "npm run build",
     "dev:web": "pnpm --dir apps/web dev",
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.20.1",
     "@types/node": "^24.12.3",
+    "esbuild": "0.28.1",
     "tsx": "^4.20.6",
     "typescript": "~6.0.2",
     "vitest": "^4.0.15",

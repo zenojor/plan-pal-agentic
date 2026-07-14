@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { build } from 'esbuild'
 import {
   cpSync,
   existsSync,
@@ -9,58 +9,78 @@ import {
 } from 'node:fs'
 import { resolve, sep } from 'node:path'
 
-if (process.platform === 'win32') {
-  console.log('Skipping OpenNext packaging on Windows; Sites runs this step on Linux.')
-  process.exit(0)
-}
-
-const result = spawnSync('npm', ['run', 'build:opennext'], {
-  cwd: process.cwd(),
-  encoding: 'utf8',
-  shell: false,
-  stdio: 'inherit',
-})
-
-if (result.status !== 0) {
-  process.exit(result.status ?? 1)
-}
-
 const root = resolve(process.cwd())
 const output = resolve(root, 'dist')
+const serverDirectory = resolve(output, 'server')
+const staticDirectory = resolve(output, 'static')
+const publicDirectory = resolve(root, 'public')
+const hosting = resolve(root, '.openai')
+const workerEntry = resolve(root, 'scripts', 'sites-worker-entry.ts')
+const workerStore = resolve(root, 'scripts', 'sites-worker-store.ts')
 const guardedPrefix = `${root}${sep}`
 
-if (!output.startsWith(guardedPrefix)) {
-  throw new Error(`Refusing to prepare output outside the workspace: ${output}`)
-}
-
-const openNext = resolve(root, '.open-next')
-const assets = resolve(openNext, 'assets')
-const hosting = resolve(root, '.openai')
-const wrangler = resolve(root, 'wrangler.jsonc')
-
-function copyTreeDereferenced(source, destination) {
-  const copy = spawnSync('cp', ['-RL', source, destination], {
-    encoding: 'utf8',
-    shell: false,
-    stdio: 'inherit',
-  })
-
-  if (copy.status !== 0) {
-    process.exit(copy.status ?? 1)
+for (const path of [output, serverDirectory, staticDirectory]) {
+  if (!path.startsWith(guardedPrefix)) {
+    throw new Error(`Refusing to prepare output outside the workspace: ${path}`)
   }
 }
 
-function pruneDanglingSymlinks(directory) {
-  const prune = spawnSync('find', [directory, '-xtype', 'l', '-delete'], {
-    encoding: 'utf8',
-    shell: false,
-    stdio: 'inherit',
-  })
-
-  if (prune.status !== 0) {
-    process.exit(prune.status ?? 1)
+for (const required of [publicDirectory, hosting, workerEntry, workerStore]) {
+  if (!existsSync(required)) {
+    throw new Error(`Missing required Sites build input: ${required}`)
   }
 }
+
+rmSync(output, { force: true, recursive: true })
+mkdirSync(serverDirectory, { recursive: true })
+cpSync(publicDirectory, output, { recursive: true })
+cpSync(publicDirectory, staticDirectory, { recursive: true })
+cpSync(hosting, resolve(output, '.openai'), { recursive: true })
+
+await build({
+  entryPoints: [workerEntry],
+  outfile: resolve(serverDirectory, 'index.js'),
+  bundle: true,
+  conditions: ['worker', 'browser', 'import', 'default'],
+  external: ['node:*'],
+  format: 'esm',
+  legalComments: 'none',
+  loader: { '.html': 'text' },
+  mainFields: ['browser', 'module', 'main'],
+  minify: false,
+  platform: 'browser',
+  plugins: [{
+    name: 'sites-in-memory-store',
+    setup(build) {
+      build.onResolve({ filter: /^\.\/store$/ }, (args) => {
+        if (args.importer === resolve(root, 'apps', 'api', 'src', 'index.ts')) {
+          return { path: workerStore }
+        }
+        return undefined
+      })
+    },
+  }],
+  sourcemap: false,
+  target: 'es2022',
+})
+
+writeFileSync(
+  resolve(output, 'wrangler.jsonc'),
+  `${JSON.stringify({
+    main: 'server/index.js',
+    compatibility_date: '2026-07-13',
+    compatibility_flags: ['nodejs_compat', 'global_fetch_strictly_public'],
+    assets: {
+      directory: 'static',
+      binding: 'ASSETS',
+    },
+  }, null, 2)}\n`,
+  'utf8',
+)
+
+assertArchiveSafeTree(output)
+
+console.log('Prepared dist with a bundled Sites worker, metadata, and static assets.')
 
 function assertArchiveSafeTree(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -76,41 +96,3 @@ function assertArchiveSafeTree(directory) {
     }
   }
 }
-
-for (const required of [openNext, assets, hosting, wrangler]) {
-  if (!existsSync(required)) {
-    throw new Error(`Missing required Sites build input: ${required}`)
-  }
-}
-
-rmSync(output, { force: true, recursive: true })
-mkdirSync(output, { recursive: true })
-const serverDirectory = resolve(output, 'server')
-mkdirSync(serverDirectory, { recursive: true })
-pruneDanglingSymlinks(openNext)
-const stagedOpenNext = resolve(serverDirectory, 'open-next')
-copyTreeDereferenced(openNext, stagedOpenNext)
-
-for (const staticDuplicate of [
-  resolve(stagedOpenNext, 'assets'),
-  resolve(stagedOpenNext, 'server-functions', 'default', 'public'),
-  resolve(stagedOpenNext, 'server-functions', 'default', '.next', 'static'),
-]) {
-  rmSync(staticDuplicate, { force: true, recursive: true })
-}
-cpSync(hosting, resolve(output, '.openai'), { recursive: true })
-cpSync(wrangler, resolve(output, 'wrangler.jsonc'))
-cpSync(assets, output, {
-  dereference: true,
-  recursive: true,
-})
-
-writeFileSync(
-  resolve(serverDirectory, 'index.js'),
-  "export { default } from './open-next/worker.js'\n",
-  'utf8',
-)
-
-assertArchiveSafeTree(output)
-
-console.log('Prepared dist with Sites server entrypoint, OpenNext worker, metadata, and static assets.')
