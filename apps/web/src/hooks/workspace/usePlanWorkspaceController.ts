@@ -53,7 +53,7 @@ type MutationContext = {
 }
 
 type UsePlanWorkspaceControllerArgs = {
-  config: StoredModelConfig | null
+  config: StoredModelConfig
   onOpenChat: () => void
   planId: string
 }
@@ -166,7 +166,7 @@ export function usePlanWorkspaceController({
     setMessages((prev) => [...prev, { role: 'user', content: message }])
     try {
       const payload = activeSelectedSegmentId ? { message, selectedSegmentId: activeSelectedSegmentId } : { message }
-      await streamAgentRun(planId, config!, payload, handleStreamEvent, abortController.signal)
+      await streamAgentRun(planId, config, payload, handleStreamEvent, abortController.signal)
     } catch (error) {
       if (!isAbortError(error)) {
         onOpenChat()
@@ -243,7 +243,7 @@ export function usePlanWorkspaceController({
   async function resumePendingAction(runId: string, actionId: string, payload: unknown) {
     const abortController = beginStreamRequest()
     try {
-      await streamAgentResume(planId, {
+      await streamAgentResume(planId, config, {
         actionId,
         payload,
         runId,

@@ -138,7 +138,9 @@ class FileBackedAgentRepository implements AgentRepository {
     return this.persistence.mutate((data) => {
       const stored = cloneForStorage(toolCall)
       const calls = data.toolCalls[stored.runId] ?? []
-      calls.push(stored)
+      const existingIndex = calls.findIndex((call) => call.id === stored.id)
+      if (existingIndex >= 0) calls[existingIndex] = stored
+      else calls.push(stored)
       data.toolCalls[stored.runId] = calls
       return cloneJson(stored)
     })

@@ -54,14 +54,18 @@ export function loadModelConfig(storage: Pick<Storage, 'getItem'> = window.local
   if (!raw) return null
   try {
     const parsed = normalizeModelConfig(JSON.parse(raw) as StoredModelConfig)
-    return isCompleteModelConfig(parsed) ? parsed : null
+    return isVerifiedModelConfig(parsed) ? parsed : null
   } catch {
     return null
   }
 }
 
 export function saveModelConfig(config: StoredModelConfig, storage: Pick<Storage, 'setItem'> = window.localStorage) {
-  storage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(normalizeModelConfig(config)))
+  const normalized = normalizeModelConfig(config)
+  if (!isVerifiedModelConfig(normalized)) {
+    throw new Error('请先完成模型连接测试，再保存配置')
+  }
+  storage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(normalized))
   notifyModelConfigUpdated(storage)
 }
 
@@ -98,7 +102,8 @@ export function modelConfigsEqual(left: StoredModelConfig | null, right: StoredM
     normalizedLeft.apiKey === normalizedRight.apiKey &&
     normalizedLeft.model === normalizedRight.model &&
     (normalizedLeft.providerMode ?? 'auto') === (normalizedRight.providerMode ?? 'auto') &&
-    (normalizedLeft.resolvedBaseURL ?? '') === (normalizedRight.resolvedBaseURL ?? '')
+    (normalizedLeft.resolvedBaseURL ?? '') === (normalizedRight.resolvedBaseURL ?? '') &&
+    (normalizedLeft.lastTestedAt ?? '') === (normalizedRight.lastTestedAt ?? '')
   )
 }
 
@@ -128,6 +133,13 @@ export function isCompleteModelConfig(config: StoredModelConfig | null | undefin
   if (!config) return false
   const normalized = normalizeModelConfig(config)
   return Boolean(normalized.baseURL && normalized.apiKey && normalized.model)
+}
+
+export function isVerifiedModelConfig(config: StoredModelConfig | null | undefined): config is StoredModelConfig {
+  if (!isCompleteModelConfig(config)) return false
+  const normalized = normalizeModelConfig(config)
+  if (!normalized.resolvedBaseURL || !normalized.lastTestedAt) return false
+  return Number.isFinite(Date.parse(normalized.lastTestedAt))
 }
 
 function notifyModelConfigUpdated(storage: unknown) {

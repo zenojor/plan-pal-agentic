@@ -1,4 +1,4 @@
-import { PlanPalAgentRuntime } from '../packages/agent/src/index'
+import { PlanPalAgentRuntime } from '../packages/agent/src/runtime'
 import { createInMemoryStores } from '../packages/db/src/memory'
 
 export const stores = createInMemoryStores()

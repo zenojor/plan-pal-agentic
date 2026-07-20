@@ -12,15 +12,6 @@ describe('plan creation variants', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses deterministic variants without model config', async () => {
-    const result = await createPlanWithVariants('下午两个人附近轻松玩')
-
-    expect(result.usedModel).toBe(false)
-    expect(result.fallbackUsed).toBe(true)
-    expect(result.plan.pendingAction?.kind).toBe('plan-variant-selection')
-    expect(JSON.stringify(result.events)).not.toContain('sk-')
-  })
-
   it('uses BYOK model output for plan variants without leaking the API key', async () => {
     vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
       choices: [{
@@ -35,7 +26,7 @@ describe('plan creation variants', () => {
                 segments: [
                   { phase: 'activity', title: '模型活动', place: '模型地点', startTime: '14:00', endTime: '15:30', reason: '轻松开始', budget: 'CNY 50-100/人', notes: '确认天气和场次', lnglat: [121.471, 31.231] },
                   { phase: 'leisure', title: '模型缓冲', place: '模型咖啡', startTime: '15:40', endTime: '16:10', reason: '吸收时间误差', budget: 'CNY 30-60/人', notes: '吸收时间误差', locked: true },
-                  { phase: 'activity', title: '模型体验', place: '模型体验店', startTime: '16:20', endTime: '17:00', reason: '增加互动', budget: 'CNY 80-160/人' },
+                  { phase: 'activity', title: '模型体验', place: '星桥陶艺实验室', startTime: '16:20', endTime: '17:00', reason: '增加互动', budget: 'CNY 80-160/人' },
                   { phase: 'dining', title: '模型晚饭', place: '模型餐厅', startTime: '17:20', endTime: '18:30', reason: '近一点', budget: 'CNY 80-120/人' },
                 ],
               },
@@ -56,14 +47,15 @@ describe('plan creation variants', () => {
 
     const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
 
-    expect(result.usedModel).toBe(true)
-    expect(result.fallbackUsed).toBe(false)
     expect(result.plan.pendingAction?.kind).toBe('plan-variant-selection')
     expect(result.plan.pendingAction?.kind === 'plan-variant-selection' && result.plan.pendingAction.variants[0]?.title).toBe('模型轻松版')
     if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
     const firstVariant = result.plan.pendingAction.variants[0]!
     expect(firstVariant.segments).toHaveLength(4)
     expect(firstVariant.segments[1]).toMatchObject({ locked: true, notes: '吸收时间误差' })
+    expect(firstVariant.segments[2]?.serviceCategory).toBe('activity')
+    expect(firstVariant.segments[2]?.poiId).toBe('model-activity-3')
+    expect(firstVariant.segments[3]?.serviceCategory).toBe('dining')
     expect(firstVariant.segments.every((segment) => segment.lnglat)).toBe(true)
     expect(JSON.stringify(result.events)).not.toContain(config.apiKey)
   })
@@ -137,8 +129,6 @@ describe('plan creation variants', () => {
     )
 
     expect(calls).toBe(2)
-    expect(result.usedModel).toBe(true)
-    expect(result.fallbackUsed).toBe(false)
     expect(result.events.some((event) => event.payload && typeof event.payload === 'object' && (event.payload as { phase?: unknown }).phase === 'repair-plan')).toBe(true)
     if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
     expect(result.plan.pendingAction.variants[0]?.title).toBe('修复方案 A')
@@ -194,7 +184,6 @@ describe('plan creation variants', () => {
     const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
     const action = result.plan.pendingAction
 
-    expect(result.usedModel).toBe(true)
     expect(action?.kind).toBe('plan-variant-selection')
     if (action?.kind !== 'plan-variant-selection') throw new Error('expected plan variants')
     const serialized = JSON.stringify(action)
@@ -213,18 +202,20 @@ describe('plan creation variants', () => {
     }
   })
 
-  it('falls back to deterministic variants when model creation fails', async () => {
+  it('fails without creating local variants when the model connection fails', async () => {
     vi.stubGlobal('fetch', async () => new Response(
       JSON.stringify({ error: { message: `bad key ${config.apiKey}` } }),
       { status: 401, statusText: 'Unauthorized' },
     ))
 
-    const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
+    const events: Array<{ type: string }> = []
+    await expect(createPlanWithVariants('下午两个人附近轻松玩', config, (event) => {
+      events.push(event)
+    })).rejects.toThrow('模型方案生成失败')
 
-    expect(result.usedModel).toBe(false)
-    expect(result.fallbackUsed).toBe(true)
-    expect(result.events.some((event) => event.type === 'agent.model.error')).toBe(true)
-    expect(JSON.stringify(result.events)).not.toContain(config.apiKey)
-    expect(JSON.stringify(result.events)).toContain('[redacted]')
+    expect(events.some((event) => event.type === 'agent.model.error')).toBe(true)
+    expect(events.some((event) => event.type === 'agent.finished')).toBe(false)
+    expect(JSON.stringify(events)).not.toContain(config.apiKey)
+    expect(JSON.stringify(events)).toContain('[redacted]')
   })
 })

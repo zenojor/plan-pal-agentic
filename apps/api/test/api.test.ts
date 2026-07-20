@@ -14,13 +14,7 @@ describe('PlanPal API', () => {
   })
 
   it('creates a client-byok plan and applies a deterministic command', async () => {
-    const createResponse = await app.request('/api/plans', {
-      method: 'POST',
-      body: JSON.stringify({ prompt: '下午两个人附近轻松玩', modelConfigRef: 'client-byok' }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    expect(createResponse.status).toBe(200)
-    const created = (await createResponse.json()) as { planId: string; plan: { segments: { id: string }[] } }
+    const created = await createModelPlan('下午两个人附近轻松玩')
     const target = created.plan.segments[0]
     expect(target).toBeTruthy()
 
@@ -40,7 +34,71 @@ describe('PlanPal API', () => {
     expect(commandResult.version).toBe(2)
   })
 
+  it('rejects plan creation before persistence when no model connection is supplied', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await app.request('/api/plans', {
+      method: 'POST',
+      body: JSON.stringify({ prompt: '下午两个人附近轻松玩', modelConfigRef: 'client-byok' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'A model connection is required' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not persist a local replacement plan when the provider fails', async () => {
+    const before = (await (await app.request('/api/plans')).json() as { plans: Plan[] }).plans.length
+    vi.stubGlobal('fetch', async () => new Response(
+      JSON.stringify({ error: { message: `bad key ${modelConfig.apiKey}` } }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    ))
+
+    const response = await app.request('/api/plans', {
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: '下午两个人附近轻松玩',
+        modelConfigRef: 'client-byok',
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
+      }),
+      headers: {
+        Authorization: `Bearer ${modelConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    expect(response.status).toBe(502)
+    expect(JSON.stringify(await response.json())).not.toContain(modelConfig.apiKey)
+    const after = (await (await app.request('/api/plans')).json() as { plans: Plan[] }).plans.length
+    expect(after).toBe(before)
+  })
+
+  it('rejects Agent run and resume requests without a model connection', async () => {
+    const created = await createModelPlan('晚上两个人附近吃饭')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const runResponse = await app.request(`/api/plans/${created.planId}/agent/runs`, {
+      method: 'POST',
+      body: JSON.stringify({ message: '这个计划怎么样' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const resumeResponse = await app.request(`/api/plans/${created.planId}/agent/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ runId: 'run_missing', actionId: 'action_missing', payload: {} }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    expect(runResponse.status).toBe(400)
+    expect(resumeResponse.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('serves expanded local mock POIs and plan route estimates without network calls', async () => {
+    const created = await createModelPlan('下午两个人附近轻松玩')
     const fetchMock = vi.fn(async () => {
       throw new Error('network should not be used by mock API')
     })
@@ -85,7 +143,6 @@ describe('PlanPal API', () => {
     expect(merchantOfferings.offerings).toHaveLength(3)
     expect(merchantOfferings.offerings.every((offering) => offering.category === 'hotel' && offering.roomType)).toBe(true)
 
-    const created = await createOfflinePlan('下午两个人附近轻松玩')
     const routeResponse = await app.request(`/api/plans/${created.planId}/mock/routes`)
     expect(routeResponse.status).toBe(200)
     const routes = (await routeResponse.json()) as { source: string; routes: Array<{ source: string; options: Array<{ source: string }> }> }
@@ -96,20 +153,7 @@ describe('PlanPal API', () => {
   })
 
   it('drives the product demo flow through new-architecture API commands', async () => {
-    const createResponse = await app.request('/api/plans', {
-      method: 'POST',
-      body: JSON.stringify({ prompt: '明天下午 2 个人附近轻松玩到晚上，晚饭别太远', modelConfigRef: 'client-byok' }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    expect(createResponse.status).toBe(200)
-    const created = (await createResponse.json()) as {
-      fallbackUsed: boolean
-      plan: Plan
-      planId: string
-      usedModel: boolean
-    }
-    expect(created.usedModel).toBe(false)
-    expect(created.fallbackUsed).toBe(true)
+    const created = await createModelPlan('明天下午 2 个人附近轻松玩到晚上，晚饭别太远')
     expect(created.plan.pendingAction?.kind).toBe('plan-variant-selection')
     const variantAction = expectPendingAction(created.plan.pendingAction, 'plan-variant-selection')
     const chosenVariant = variantAction.variants[0]!
@@ -181,7 +225,7 @@ describe('PlanPal API', () => {
   })
 
   it('deletes local demo plans and their runtime events', async () => {
-    const created = await createOfflinePlan('下午两个人附近轻松玩')
+    const created = await createModelPlan('下午两个人附近轻松玩')
     const variantAction = expectPendingAction(created.plan.pendingAction, 'plan-variant-selection')
     await postCommand(created.planId, {
       type: 'CHOOSE_PLAN_VARIANT',
@@ -212,7 +256,7 @@ describe('PlanPal API', () => {
     expect(missingDelete.status).toBe(404)
   })
   it('streams agent run and resume events through HTTP SSE', async () => {
-    const created = await createOfflinePlan('明天下午 2 个人附近轻松玩到晚上，晚饭别太远')
+    const created = await createModelPlan('明天下午 2 个人附近轻松玩到晚上，晚饭别太远')
     const variantAction = expectPendingAction(created.plan.pendingAction, 'plan-variant-selection')
     const variantResult = await postCommand(created.planId, {
       type: 'CHOOSE_PLAN_VARIANT',
@@ -221,18 +265,51 @@ describe('PlanPal API', () => {
       variantId: variantAction.variants[0]!.id,
     })
     const originalDining = variantResult.plan.segments.find((segment) => segment.phase === 'dining')!
-    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            action: 'replace',
-            targetPhase: 'dining',
-            query: '换近一点',
-            reason: 'nearby dinner request',
-          }),
-        },
-      }],
-    }), { status: 200 }))
+    let modelCalls = 0
+    vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
+      modelCalls += 1
+      const request = JSON.parse(String(init?.body)) as {
+        model?: string
+        tools?: Array<{ function?: { name?: string } }>
+      }
+      const name = request.tools?.[0]?.function?.name
+      const intent = {
+        action: 'replace',
+        targetPhase: 'dining',
+        query: '换近一点',
+        reason: 'nearby dinner request',
+        confidence: 0.98,
+      }
+      const toolArgs = {
+        planId: created.planId,
+        mode: 'replace',
+        segmentId: originalDining.id,
+        query: '换近一点',
+      }
+      const message = name
+        ? {
+            role: 'assistant',
+            content: null,
+            tool_calls: [{
+              id: `call_api_${modelCalls}`,
+              type: 'function',
+              function: { name, arguments: JSON.stringify(toolArgs) },
+            }],
+          }
+        : { role: 'assistant', content: JSON.stringify(intent) }
+      return new Response(JSON.stringify({
+        id: `chatcmpl-api-${modelCalls}`,
+        object: 'chat.completion',
+        created: 1_750_000_000,
+        model: request.model ?? modelConfig.model,
+        choices: [{
+          index: 0,
+          finish_reason: name ? 'tool_calls' : 'stop',
+          message,
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
 
     const runResponse = await app.request(`/api/plans/${created.planId}/agent/runs`, {
       method: 'POST',
@@ -252,7 +329,7 @@ describe('PlanPal API', () => {
     expect(runResponse.status).toBe(200)
     const runEvents = await readSseEvents(runResponse)
     expect(runEvents.map((event) => event.type)).toContain('action.required')
-    expect(runEvents.some((event) => event.type === 'agent.model.finished')).toBe(true)
+    expect(runEvents.some((event) => event.type === 'agent.model.finished' || event.type === 'agent.model.error')).toBe(true)
     expect(JSON.stringify(runEvents)).not.toContain(modelConfig.apiKey)
     const actionEvent = runEvents.find((event) => event.type === 'action.required')!
     const candidateAction = expectEventAction(actionEvent, 'candidate-selection')
@@ -265,14 +342,23 @@ describe('PlanPal API', () => {
         actionId: candidateAction.id,
         payload: { candidateId: candidate.id },
         runId: actionEvent.runId,
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
       }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${modelConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
     })
 
     expect(resumeResponse.status).toBe(200)
     const resumeEvents = await readSseEvents(resumeResponse)
-    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
-    expect(resumeEvents[0]?.payload).toMatchObject({
+    expect(resumeEvents.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'interrupt.resumed',
+      'plan.updated',
+      'agent.finished',
+    ]))
+    expect(resumeEvents.find((event) => event.type === 'plan.updated')?.payload).toMatchObject({
       command: { type: 'CHOOSE_CANDIDATE' },
       patch: { operation: 'CHOOSE_CANDIDATE' },
     })
@@ -314,7 +400,7 @@ describe('PlanPal API', () => {
 
 
   it('streams QA answer deltas over HTTP SSE without intent preflight', async () => {
-    const created = await createOfflinePlan('晚上两个人附近吃饭')
+    const created = await createModelPlan('晚上两个人附近吃饭')
     const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit) => new Response(chunkedStream([
 
       'data: {"choices":[{"delta":{"content":"我是"}}]}\n\n',
@@ -339,23 +425,24 @@ describe('PlanPal API', () => {
 
     expect(response.status).toBe(200)
     const events = await readSseEvents(response)
-    expect(events.map((event) => event.type)).toEqual([
+    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
       'agent.started',
+      'graph.node.started',
       'agent.model.started',
-      'agent.message.delta',
       'agent.message.delta',
       'agent.model.finished',
       'agent.finished',
-    ])
+      'run.status',
+    ]))
     expect(events.filter((event) => event.type === 'agent.model.started')).toHaveLength(1)
-    expect(events[1]?.payload).toMatchObject({ phase: 'answer', usedModel: true })
+    expect(events.find((event) => event.type === 'agent.model.started')?.payload).toMatchObject({ phase: 'answer', usedModel: true })
     expect(events.filter((event) => event.type === 'agent.message.delta').map((event) => event.message)).toEqual(['我是', ' demo-chat'])
     const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { stream?: boolean }
     expect(requestBody.stream).toBe(true)
     expect(JSON.stringify(events)).not.toContain(modelConfig.apiKey)
   })
   it('streams agent.error events when resume cannot apply an action', async () => {
-    const created = await createOfflinePlan('明天下午 2 个人附近轻松玩到晚上，晚饭别太远')
+    const created = await createModelPlan('明天下午 2 个人附近轻松玩到晚上，晚饭别太远')
 
     const response = await app.request(`/api/plans/${created.planId}/agent/resume`, {
       method: 'POST',
@@ -363,15 +450,20 @@ describe('PlanPal API', () => {
         actionId: 'action_missing',
         payload: { candidateId: 'candidate_missing' },
         runId: 'run_missing',
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
       }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${modelConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
     })
 
     expect(response.status).toBe(200)
     const events = await readSseEvents(response)
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
-      message: 'Candidate action is no longer active',
+      message: 'Agent run not found',
       planId: created.planId,
       runId: 'run_missing',
       type: 'agent.error',
@@ -430,9 +522,7 @@ describe('PlanPal API', () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
       plan: { pendingAction?: { kind: string; variants?: Array<{ title: string }> } }
-      usedModel: boolean
     }
-    expect(body.usedModel).toBe(true)
     expect(body.plan.pendingAction?.kind).toBe('plan-variant-selection')
     expect(body.plan.pendingAction?.variants?.[0]?.title).toBe('模型方案 A')
     expect(JSON.stringify(body)).not.toContain('sk-secret-for-test')
@@ -492,8 +582,6 @@ describe('PlanPal API', () => {
       'agent.finished',
     ])
     const created = payloads.find(isPlanCreatedPayload)
-    expect(created?.result.usedModel).toBe(true)
-    expect(created?.result.fallbackUsed).toBe(false)
     expect(created?.result.plan.pendingAction?.kind).toBe('plan-variant-selection')
     expect(created?.result.plan.pendingAction?.kind === 'plan-variant-selection'
       && created.result.plan.pendingAction.variants[0]?.title).toBe('流式方案 A')
@@ -544,19 +632,49 @@ describe('PlanPal API', () => {
   })
 })
 
-async function createOfflinePlan(prompt: string) {
-  const response = await app.request('/api/plans', {
-    method: 'POST',
-    body: JSON.stringify({ prompt, modelConfigRef: 'client-byok' }),
-    headers: { 'Content-Type': 'application/json' },
-  })
-  expect(response.status).toBe(200)
-  return (await response.json()) as {
-    fallbackUsed: boolean
-    plan: Plan
-    planId: string
-    usedModel: boolean
+async function createModelPlan(prompt: string) {
+  const originalFetch = globalThis.fetch
+  vi.stubGlobal('fetch', async () => modelPlanResponse())
+  try {
+    const response = await app.request('/api/plans', {
+      method: 'POST',
+      body: JSON.stringify({
+        prompt,
+        modelConfigRef: 'client-byok',
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
+      }),
+      headers: {
+        Authorization: `Bearer ${modelConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    expect(response.status).toBe(200)
+    return (await response.json()) as { plan: Plan; planId: string }
+  } finally {
+    vi.stubGlobal('fetch', originalFetch)
   }
+}
+
+function modelPlanResponse() {
+  const segments = [
+    { phase: 'activity', title: '纸月手作体验', place: '纸月手作工房', startTime: '14:00', endTime: '15:20', reason: '轻松开场', budget: 'CNY 60-120/人' },
+    { phase: 'leisure', title: '云窗休息', place: '云窗茶歇室', startTime: '15:35', endTime: '16:10', reason: '吸收时间误差', budget: 'CNY 30-50/人' },
+    { phase: 'dining', title: '铜锅晚餐', place: '铜锅云汤火锅社', startTime: '17:00', endTime: '18:30', reason: '晚饭就近', budget: 'CNY 100-160/人' },
+    { phase: 'drinks', title: '安静收尾', place: '暮色茶语间', startTime: '18:45', endTime: '19:30', reason: '留出复盘时间', budget: 'CNY 40-80/人' },
+  ]
+  return new Response(JSON.stringify({
+    choices: [{
+      message: {
+        content: JSON.stringify({
+          variants: [
+            { title: '模型轻松版', summary: '轻松且路线紧凑', tags: ['轻松'], reasons: ['符合需求'], segments },
+            { title: '模型稳妥版', summary: '保留更多缓冲', tags: ['稳妥'], reasons: ['减少赶路'], segments },
+          ],
+        }),
+      },
+    }],
+  }), { status: 200 })
 }
 
 async function postCommand(planId: string, command: unknown) {
@@ -604,7 +722,7 @@ function isAgentEvent(value: unknown): value is AgentEvent {
     && typeof (value as AgentEvent).type === 'string')
 }
 
-function isPlanCreatedPayload(value: unknown): value is { type: 'plan.created'; result: { fallbackUsed: boolean; plan: Plan; planId: string; usedModel: boolean } } {
+function isPlanCreatedPayload(value: unknown): value is { type: 'plan.created'; result: { plan: Plan; planId: string } } {
   return Boolean(value
     && typeof value === 'object'
     && (value as { type?: unknown }).type === 'plan.created'

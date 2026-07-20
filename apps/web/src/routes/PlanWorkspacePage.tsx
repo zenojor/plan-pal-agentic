@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { useEffect, useMemo } from 'react'
+import { useNavigate, useParams } from '@tanstack/react-router'
 import { AgentChatColumn } from '../components/workspace/AgentChatColumn'
 import { ConfirmPlanModal } from '../components/workspace/ConfirmPlanModal'
 import { DetailsColumn } from '../components/workspace/DetailsColumn'
@@ -27,6 +27,13 @@ const workspaceLoadingClassName = 'grid min-h-[100svh] place-items-center bg-ani
 export function PlanWorkspacePage() {
   const { planId } = useParams({ from: '/plans/$planId' })
   const config = useStoredModelConfig()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!config) void navigate({ to: '/settings/model', replace: true })
+  }, [config, navigate])
+
+  if (!config) return <main className={workspaceLoadingClassName}>模型连接不可用，正在返回模型设置...</main>
 
   return (
     <WorkspaceStateProvider key={planId} planId={planId}>
@@ -36,7 +43,7 @@ export function PlanWorkspacePage() {
 }
 
 type PlanWorkspaceContentProps = {
-  config: StoredModelConfig | null
+  config: StoredModelConfig
   planId: string
 }
 
@@ -108,11 +115,6 @@ function PlanWorkspaceContent({ config, planId }: PlanWorkspaceContentProps) {
       dragOverColumn={layout.dragOverColumn}
       draggingColumn={layout.draggingColumn}
       isColumnMenuOpen={layout.isColumnMenuOpen}
-      notice={!config ? (
-        <>
-          还没有模型配置。拼图命令仍可使用，但聊天 Agent 需要先在 <Link to="/settings/model">模型设置</Link> 里填写 API Key。
-        </>
-      ) : undefined}
       planStatus={plan.status}
       planSummary={plan.summary}
       planTitle={plan.title}

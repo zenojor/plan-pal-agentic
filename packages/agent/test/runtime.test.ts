@@ -79,7 +79,7 @@ describe('agent runtime model transparency', () => {
     })
     const events: AgentEvent[] = []
 
-    await runtime.run({ planId: plan.id, message: '你是什么模型', modelConfig: config }, (event) => {
+    const result = await runtime.run({ planId: plan.id, message: '你是什么模型', modelConfig: config }, (event) => {
       events.push(event)
     })
 
@@ -89,15 +89,14 @@ describe('agent runtime model transparency', () => {
     expect(modelErrors[0]?.message).toContain('模型调用失败')
     expect(JSON.stringify(modelErrors)).not.toContain(config.apiKey)
     expect(JSON.stringify(modelErrors)).toContain('[redacted]')
-    const finished = [...events].reverse().find((event) => event.type === 'agent.finished')
-    expect(finished?.message).toContain('模型调用失败，已切换离线 fallback')
-    expect(finished?.payload).toMatchObject({
-      usedModel: false,
-      fallbackUsed: true,
-    })
+    expect(result.status).toBe('failed')
+    expect(events.some((event) => event.type === 'agent.finished')).toBe(false)
+    const terminalError = events.filter((event) => event.type === 'agent.error').at(-1)
+    expect(terminalError?.message).toContain('模型调用失败')
+    expect(terminalError?.payload).toMatchObject({ fallbackUsed: false })
   })
 
-  it('keeps answer-phase model failures to one final fallback chat result', async () => {
+  it('keeps answer-phase model failures to one failed terminal result', async () => {
     const calls: unknown[] = []
     const { plan, runtime } = await createRuntime({
       generateAssistantReply: async (_config, messages) => {
@@ -107,16 +106,17 @@ describe('agent runtime model transparency', () => {
     })
     const events: AgentEvent[] = []
 
-    await runtime.run({ planId: plan.id, message: '你是什么模型', modelConfig: config }, (event) => {
+    const result = await runtime.run({ planId: plan.id, message: '你是什么模型', modelConfig: config }, (event) => {
       events.push(event)
     })
 
     expect(calls).toHaveLength(1)
     expect(events.filter((event) => event.type === 'agent.model.error')).toHaveLength(1)
-    const finishedEvents = events.filter((event) => event.type === 'agent.finished')
-    expect(finishedEvents).toHaveLength(1)
-    expect(finishedEvents[0]?.message).toContain('模型调用失败，已切换离线 fallback')
-    expect(JSON.stringify(finishedEvents)).not.toContain(config.apiKey)
+    expect(result.status).toBe('failed')
+    expect(events.filter((event) => event.type === 'agent.finished')).toHaveLength(0)
+    const terminalErrors = events.filter((event) => event.type === 'agent.error')
+    expect(terminalErrors.at(-1)?.message).toContain('模型调用失败')
+    expect(JSON.stringify(terminalErrors)).not.toContain(config.apiKey)
   })
 
   it('uses model intent for command-like turns while keeping plan writes deterministic', async () => {
@@ -153,12 +153,12 @@ describe('agent runtime model transparency', () => {
   it('pauses for clarification instead of guessing vague edits', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => {
-        throw new Error('no model call expected')
+        return '{invalid structured output'
       },
     })
     const events: AgentEvent[] = []
 
-    const run = await runtime.run({ planId: plan.id, message: '调整一下' }, (event) => {
+    const run = await runtime.run({ planId: plan.id, message: '调整一下', modelConfig: config }, (event) => {
       events.push(event)
     })
 
@@ -175,12 +175,12 @@ describe('agent runtime model transparency', () => {
   it('previews a sandbox receipt before asking the user to confirm an order command', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => {
-        throw new Error('no model call expected')
+        return '{invalid structured output'
       },
     })
     const events: AgentEvent[] = []
 
-    const result = await runtime.run({ planId: plan.id, message: '可以模拟下单了' }, (event) => {
+    const result = await runtime.run({ planId: plan.id, message: '可以模拟下单了', modelConfig: config }, (event) => {
       events.push(event)
     })
 
@@ -202,12 +202,12 @@ describe('agent runtime model transparency', () => {
   it('gates destructive agent commands until resume confirmation', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => {
-        throw new Error('no model call expected')
+        return '{invalid structured output'
       },
     })
     const events: AgentEvent[] = []
 
-    const run = await runtime.run({ planId: plan.id, message: '删除所有节点' }, (event) => {
+    const run = await runtime.run({ planId: plan.id, message: '删除所有节点', modelConfig: config }, (event) => {
       events.push(event)
     })
 
@@ -224,12 +224,17 @@ describe('agent runtime model transparency', () => {
       runId: run.runId,
       actionId: action.id,
       payload: { confirmed: true },
+      modelConfig: config,
     }, (event) => {
       resumeEvents.push(event)
     })
 
-    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
-    expect(resumeEvents.at(-1)?.message).toBe('已应用修改，可撤销')
+    expect(resumeEvents.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'interrupt.resumed',
+      'plan.updated',
+      'agent.finished',
+    ]))
+    expect(resumeEvents.find((event) => event.type === 'agent.finished')?.message).toBe('已应用修改，可撤销')
     const afterConfirm = await stores.plans.getPlan(plan.id)
     expect(afterConfirm?.segments).toEqual([])
     expect(afterConfirm?.pendingAction).toBeUndefined()
@@ -262,12 +267,17 @@ describe('agent runtime model transparency', () => {
       runId: run.runId,
       actionId: action.id,
       payload: { candidateId: candidate.id },
+      modelConfig: config,
     }, (event) => {
       resumeEvents.push(event)
     })
 
     expect(resumed.status).toBe('completed')
-    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
+    expect(resumeEvents.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'interrupt.resumed',
+      'plan.updated',
+      'agent.finished',
+    ]))
 
     const updated = await stores.plans.getPlan(plan.id)
     expect(updated?.currentVersion).toBe(3)
@@ -307,6 +317,7 @@ describe('agent runtime model transparency', () => {
       runId: run.runId,
       actionId: action.id,
       payload: { candidateId: candidate.id },
+      modelConfig: config,
     }, () => undefined)
 
     const updated = await stores.plans.getPlan(plan.id)
@@ -343,12 +354,12 @@ describe('agent runtime model transparency', () => {
     const plan = await stores.plans.createPlan(moviePlan)
     const runtime = new PlanPalAgentRuntime(stores, createDefaultToolRegistry(), {
       generateAssistantReply: async () => {
-        throw new Error('no model call expected')
+        return '{invalid structured output'
       },
     })
     const events: AgentEvent[] = []
 
-    const run = await runtime.run({ planId: plan.id, message: '买两张电影票' }, (event) => {
+    const run = await runtime.run({ planId: plan.id, message: '买两张电影票', modelConfig: config }, (event) => {
       events.push(event)
     })
 
@@ -367,11 +378,16 @@ describe('agent runtime model transparency', () => {
       runId: run.runId,
       actionId: action.id,
       payload: { offeringId: action.offerings[0]!.id, quantity: 2 },
+      modelConfig: config,
     }, (event) => {
       resumeEvents.push(event)
     })
 
-    expect(resumeEvents.map((event) => event.type)).toEqual(['plan.updated', 'agent.finished'])
+    expect(resumeEvents.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'interrupt.resumed',
+      'plan.updated',
+      'agent.finished',
+    ]))
     const updated = await stores.plans.getPlan(plan.id)
     expect(updated?.serviceSelections).toEqual([expect.objectContaining({
       offeringId: action.offerings[0]!.id,

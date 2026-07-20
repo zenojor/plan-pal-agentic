@@ -1,4 +1,7 @@
-import type { CoreMessage } from 'ai'
+export type CoreMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
 
 export type ClientModelConfig = {
   baseURL: string
@@ -36,10 +39,10 @@ export function sanitizeModelConfig(config: ClientModelConfig): PublicModelConfi
   }
 }
 
-export function assertClientModelConfig(config: Partial<ClientModelConfig>): ClientModelConfig {
-  const baseURL = config.baseURL?.trim()
-  const apiKey = config.apiKey?.trim()
-  const model = config.model?.trim()
+export function assertClientModelConfig(config: Partial<ClientModelConfig> | null | undefined): ClientModelConfig {
+  const baseURL = config?.baseURL?.trim()
+  const apiKey = config?.apiKey?.trim()
+  const model = config?.model?.trim()
   if (!baseURL || !apiKey || !model) {
     throw new Error('Model baseURL, API key, and model are required')
   }
@@ -47,8 +50,8 @@ export function assertClientModelConfig(config: Partial<ClientModelConfig>): Cli
     baseURL: baseURL.replace(/\/+$/, ''),
     apiKey,
     model,
-    providerMode: config.providerMode ?? 'auto',
-    resolvedBaseURL: config.resolvedBaseURL?.trim().replace(/\/+$/, ''),
+    providerMode: config?.providerMode ?? 'auto',
+    resolvedBaseURL: config?.resolvedBaseURL?.trim().replace(/\/+$/, ''),
   }
 }
 
@@ -362,30 +365,9 @@ function normalizeBaseURL(baseURL: string) {
 
 function toOpenAICompatibleMessage(message: CoreMessage) {
   return {
-    role: normalizeMessageRole(message.role),
-    content: stringifyMessageContent(message.content),
+    role: message.role,
+    content: message.content,
   }
-}
-
-function normalizeMessageRole(role: CoreMessage['role']) {
-  if (role === 'system' || role === 'user' || role === 'assistant') return role
-  return 'user'
-}
-
-function stringifyMessageContent(content: CoreMessage['content']) {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    const text = content
-      .map((part) => {
-        if (typeof part === 'string') return part
-        if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') return part.text
-        return ''
-      })
-      .filter(Boolean)
-      .join('\n')
-    if (text) return text
-  }
-  return JSON.stringify(content)
 }
 
 function extractAssistantDelta(data: unknown) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlanFromPrompt, type AgentEvent } from '@planpal/domain'
-import { createPlan, deletePlan, getMockPoi, getMockRoutes, getPlan, isAbortError, listPlans, searchMockPois, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
+import { createPlan, deletePlan, getMockPoi, getMockRoutes, getPlan, isAbortError, listPlans, searchMockPois, streamAgentResume, streamAgentRun, streamCreatePlan, testModelConfig } from './api'
 import type { StoredModelConfig } from './modelConfig'
 
 const config: StoredModelConfig = {
@@ -95,11 +95,9 @@ describe('web API streaming client', () => {
       type: 'plan.created',
       result: {
         events: [progress],
-        fallbackUsed: false,
         plan,
         planId: plan.id,
         status: plan.status,
-        usedModel: true,
       },
     }
     let capturedInput: unknown
@@ -134,10 +132,8 @@ describe('web API streaming client', () => {
     expect(JSON.stringify(body)).not.toContain(config.apiKey)
     expect(progressEvents).toEqual([progress])
     expect(result).toMatchObject({
-      fallbackUsed: false,
       planId: plan.id,
       status: plan.status,
-      usedModel: true,
     })
     expect(result.plan.id).toBe(plan.id)
   })
@@ -155,11 +151,9 @@ describe('web API streaming client', () => {
       capturedInit = init
       return new Response(JSON.stringify({
         events: [event],
-        fallbackUsed: false,
         plan,
         planId: plan.id,
         status: plan.status,
-        usedModel: true,
       }), { status: 200 })
     })
 
@@ -185,48 +179,42 @@ describe('web API streaming client', () => {
     expect(JSON.stringify(body)).not.toContain(config.apiKey)
     expect(result).toMatchObject({
       events: [event],
-      fallbackUsed: false,
       planId: plan.id,
       status: plan.status,
-      usedModel: true,
     })
     expect(result.plan.id).toBe(plan.id)
   })
 
-  it('creates fallback plans without BYOK headers when model config is missing', async () => {
-    const plan = createPlanFromPrompt('晚上两个人吃饭')
+  it('does not send a create request when model config is missing', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createPlan('晚上两个人吃饭', null as never)).rejects.toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('sends the verified BYOK connection again when resuming a graph interrupt', async () => {
     let capturedInit: RequestInit | undefined
     vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
       capturedInit = init
-      return new Response(JSON.stringify({
-        events: [],
-        fallbackUsed: true,
-        plan,
-        planId: plan.id,
-        status: plan.status,
-        usedModel: false,
-      }), { status: 200 })
+      return new Response('', { status: 200 })
     })
 
-    const result = await createPlan('晚上两个人吃饭', null)
+    await streamAgentResume('plan_1', config, {
+      runId: 'run_1',
+      actionId: 'action_1',
+      payload: { decision: 'retry' },
+    }, () => undefined)
 
     const headers = capturedInit?.headers as Record<string, string>
-    expect(headers.Authorization).toBeUndefined()
-    expect(headers['X-Model-Base-URL']).toBeUndefined()
-    expect(headers['Content-Type']).toBe('application/json')
-
-    const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>
-    expect(body).toEqual({
-      modelConfigRef: 'client-byok',
-      prompt: '晚上两个人吃饭',
+    expect(headers.Authorization).toBe(`Bearer ${config.apiKey}`)
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
+      runId: 'run_1',
+      actionId: 'action_1',
+      baseURL: config.baseURL,
+      model: config.model,
     })
-    expect(result).toMatchObject({
-      events: [],
-      fallbackUsed: true,
-      planId: plan.id,
-      status: plan.status,
-      usedModel: false,
-    })
+    expect(String(capturedInit?.body)).not.toContain(config.apiKey)
   })
 
 

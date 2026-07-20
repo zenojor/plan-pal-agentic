@@ -68,28 +68,25 @@ export type MockOfferingSearchResult = {
 
 export type CreatePlanResult = {
   events?: AgentEvent[]
-  fallbackUsed?: boolean
   planId: string
   status: string
   plan: Plan
-  usedModel?: boolean
 }
 
 export async function createPlan(
   prompt: string,
-  config?: StoredModelConfig | null,
+  config: StoredModelConfig,
 ): Promise<CreatePlanResult> {
-  const headers = config ? byokHeaders(config) : { 'Content-Type': 'application/json' }
   const response = await safeFetch(`${API_BASE}/api/plans`, {
     method: 'POST',
-    headers,
+    headers: byokHeaders(config),
     body: JSON.stringify({
       prompt,
       modelConfigRef: 'client-byok',
-      baseURL: config?.baseURL,
-      model: config?.model,
-      providerMode: config?.providerMode,
-      resolvedBaseURL: config?.resolvedBaseURL,
+      baseURL: config.baseURL,
+      model: config.model,
+      providerMode: config.providerMode,
+      resolvedBaseURL: config.resolvedBaseURL,
     }),
   }, '创建计划失败')
   if (!response.ok) throw new Error(await parseError(response))
@@ -98,22 +95,21 @@ export async function createPlan(
 
 export async function streamCreatePlan(
   prompt: string,
-  config: StoredModelConfig | null | undefined,
+  config: StoredModelConfig,
   onProgress: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<CreatePlanResult> {
-  const headers = config ? byokHeaders(config) : { 'Content-Type': 'application/json' }
   const response = await safeFetch(`${API_BASE}/api/plans/stream`, {
     method: 'POST',
-    headers,
+    headers: byokHeaders(config),
     signal,
     body: JSON.stringify({
       prompt,
       modelConfigRef: 'client-byok',
-      baseURL: config?.baseURL,
-      model: config?.model,
-      providerMode: config?.providerMode,
-      resolvedBaseURL: config?.resolvedBaseURL,
+      baseURL: config.baseURL,
+      model: config.model,
+      providerMode: config.providerMode,
+      resolvedBaseURL: config.resolvedBaseURL,
     }),
   }, '创建计划失败')
   if (!response.ok || !response.body) throw new Error(await parseError(response))
@@ -354,14 +350,21 @@ export async function streamAgentRun(
 
 export async function streamAgentResume(
   planId: string,
+  config: StoredModelConfig,
   input: { runId: string; actionId: string; payload: unknown },
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ) {
   const response = await safeFetch(`${API_BASE}/api/plans/${planId}/agent/resume`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    headers: byokHeaders(config),
+    body: JSON.stringify({
+      ...input,
+      baseURL: config.baseURL,
+      model: config.model,
+      providerMode: config.providerMode,
+      resolvedBaseURL: config.resolvedBaseURL,
+    }),
     signal,
   }, '继续 Agent 运行失败')
   if (!response.ok || !response.body) throw new Error(await parseError(response))

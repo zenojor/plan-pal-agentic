@@ -3,6 +3,7 @@ import {
   MODEL_PROVIDER_PRESETS,
   applyModelProviderPreset,
   isCompleteModelConfig,
+  isVerifiedModelConfig,
   loadModelConfig,
   maskApiKey,
   modelConfigsEqual,
@@ -49,6 +50,7 @@ describe('model config storage', () => {
       model: ' demo ',
       providerMode: 'auto',
       resolvedBaseURL: ' https://api.example.com/ ',
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
     }, storage)
     expect(loadModelConfig(storage)).toMatchObject({
       apiKey: 'sk-demo',
@@ -57,13 +59,9 @@ describe('model config storage', () => {
       resolvedBaseURL: 'https://api.example.com',
     })
 
-    saveModelConfig({
-      baseURL: '   ',
-      apiKey: 'sk-demo',
-      model: 'demo',
-    }, storage)
-
-    expect(loadModelConfig(storage)).toBeNull()
+    expect(() => saveModelConfig({
+      baseURL: '   ', apiKey: 'sk-demo', model: 'demo',
+    }, storage)).toThrow('请先完成模型连接测试')
     expect(publicModelConfig({ baseURL: '', apiKey: 'sk-demo', model: 'demo' })).toBeNull()
     expect(isCompleteModelConfig({ baseURL: 'https://api.example.com', apiKey: '', model: 'demo' })).toBe(false)
     expect(normalizeModelConfig({ baseURL: ' https://api.example.com/ ', apiKey: ' sk ', model: ' demo ' })).toEqual({
@@ -74,6 +72,22 @@ describe('model config storage', () => {
       providerMode: 'auto',
       resolvedBaseURL: undefined,
     })
+  })
+
+  it('does not load complete but unverified model config', () => {
+    const storage = memoryStorage()
+    storage.setItem('planpal.modelConfig.v1', JSON.stringify({
+      baseURL: 'https://api.example.com/v1',
+      apiKey: 'sk-demo',
+      model: 'demo',
+    }))
+
+    expect(loadModelConfig(storage)).toBeNull()
+    expect(isVerifiedModelConfig({
+      baseURL: 'https://api.example.com/v1',
+      apiKey: 'sk-demo',
+      model: 'demo',
+    })).toBe(false)
   })
 
   it('masks API keys in UI text', () => {
@@ -87,13 +101,14 @@ describe('model config storage', () => {
       model: 'demo',
       providerMode: 'openai-compatible',
       resolvedBaseURL: 'https://api.example.com',
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
     })).toEqual({
       baseURL: 'https://api.example.com/v1',
       maskedApiKey: 'sk-1••••7890',
       model: 'demo',
       providerMode: 'openai-compatible',
       resolvedBaseURL: 'https://api.example.com',
-      lastTestedAt: undefined,
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
     })
   })
 
@@ -109,6 +124,7 @@ describe('model config storage', () => {
     expect(modelConfigsEqual({ ...saved, baseURL: 'https://api.example.com/v1/' }, saved)).toBe(true)
     expect(modelConfigsEqual({ ...saved, model: 'other' }, saved)).toBe(false)
     expect(modelConfigsEqual({ ...saved, resolvedBaseURL: 'https://other.example.com' }, saved)).toBe(false)
+    expect(modelConfigsEqual({ ...saved, lastTestedAt: '2026-06-19T00:00:00.000Z' }, saved)).toBe(false)
     expect(modelConfigsEqual(null, saved)).toBe(false)
   })
 

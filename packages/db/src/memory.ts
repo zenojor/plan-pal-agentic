@@ -87,7 +87,9 @@ export class InMemoryAgentRepository implements AgentRepository {
 
   async appendToolCall(toolCall: ToolCallRecord) {
     const calls = this.toolCalls.get(toolCall.runId) ?? []
-    calls.push(toolCall)
+    const existingIndex = calls.findIndex((call) => call.id === toolCall.id)
+    if (existingIndex >= 0) calls[existingIndex] = toolCall
+    else calls.push(toolCall)
     this.toolCalls.set(toolCall.runId, calls)
     return toolCall
   }

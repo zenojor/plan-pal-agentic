@@ -83,6 +83,13 @@ export type AgentEventType =
   | 'action.required'
   | 'agent.finished'
   | 'agent.error'
+  | 'graph.node.started'
+  | 'graph.node.finished'
+  | 'interrupt.requested'
+  | 'interrupt.resumed'
+  | 'command.proposed'
+  | 'command.applied'
+  | 'run.status'
 
 export type CommandConfirmationSeverity = 'normal' | 'destructive' | 'finalizing'
 
@@ -96,7 +103,11 @@ export type CommandConfirmationPreview = {
   afterOrder?: string[]
 }
 
-export type PendingAction =
+export type PendingAction = {
+  runId?: string
+  planId?: string
+  baseVersion?: number
+} & (
   | {
       id: string
       kind: 'candidate-selection'
@@ -144,6 +155,7 @@ export type PendingAction =
       commands: ConfirmablePlanCommand[]
       preview: CommandConfirmationPreview
     }
+)
 
 export type CandidateOption = {
   id: string
@@ -322,9 +334,10 @@ export type ToolCallRecord = {
 export type AgentRun = {
   id: string
   planId: string
-  status: 'running' | 'waiting_for_user' | 'completed' | 'failed'
+  status: 'running' | 'waiting_for_user' | 'completed' | 'failed' | 'cancelled'
   inputMessage: string
   checkpointId?: string
+  threadId?: string
   createdAt: string
   finishedAt?: string
 }
@@ -333,6 +346,7 @@ export type PlanCommand =
   | {
       type: 'REQUEST_COMMAND_CONFIRMATION'
       source: CommandSource
+      actionId?: string
       title: string
       description: string
       severity: CommandConfirmationSeverity
@@ -415,10 +429,12 @@ export type PlanCommand =
       afterSegmentId?: string | null
       searchQuery?: string
       excludeCandidateIds?: string[]
+      candidates?: CandidateOption[]
     }
   | {
       type: 'REQUEST_CLARIFICATION'
       source: CommandSource
+      actionId?: string
       title: string
       description: string
       requiredFields: string[]
@@ -464,6 +480,7 @@ export type PlanCommand =
       category?: MerchantServiceCategory
       query?: string
       limit?: number
+      offerings?: MerchantOffering[]
     }
   | {
       type: 'SELECT_SERVICE_ITEM'

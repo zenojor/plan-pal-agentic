@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runArchitectureEval } from './architecture.ts'
 import { createDefaultToolRegistry, PlanPalAgentRuntime, type AgentModelGateway, type ClientModelConfig } from '../../agent/src/index.ts'
 import { createInMemoryStores } from '../../db/src/index.ts'
 import {
@@ -31,7 +32,7 @@ type EvalExpectation = {
   finalStatus?: Plan['status']
   pendingKind?: PendingAction['kind']
   planHasServiceSelection?: boolean
-  runStatus?: 'completed' | 'waiting_for_user'
+  runStatus?: 'completed' | 'failed' | 'waiting_for_user'
   toolNames?: string[]
 }
 
@@ -116,6 +117,7 @@ async function runGoldenSuite(): Promise<EvalReport> {
   for (const scenario of goldenScenarios()) {
     results.push(await runScenario(scenario))
   }
+  results.push(...await runArchitectureEval())
   const passed = results.filter((result) => result.passed).length
   return {
     generatedAt: new Date().toISOString(),
@@ -213,22 +215,24 @@ async function runScenario(scenario: EvalScenario, liveModelConfig?: ClientModel
       planId: plan.id,
       message: scenario.message,
       selectedSegmentId,
-      modelConfig: scenario.useModel ? liveModelConfig ?? fakeModelConfig : undefined,
+      modelConfig: liveModelConfig ?? fakeModelConfig,
     }, (event) => {
       events.push(event)
     })
     runStatus = result.status
     pendingAfterRun = (await stores.plans.getPlan(plan.id))?.pendingAction
     if (scenario.resume && result.status === 'waiting_for_user' && pendingAfterRun) {
-      await runtime.resume({
+      const resumed = await runtime.resume({
         planId: plan.id,
         runId: result.runId,
         actionId: pendingAfterRun.id,
         payload: resumePayload(pendingAfterRun, scenario.resume),
+        modelConfig: liveModelConfig ?? fakeModelConfig,
       }, (event) => {
         events.push(event)
       })
-      runStatus = 'completed'
+      runStatus = resumed.status
+      pendingAfterRun = (await stores.plans.getPlan(plan.id))?.pendingAction
     }
   } catch (error) {
     thrownError = error instanceof Error ? error.message : String(error)
@@ -586,26 +590,25 @@ function goldenScenarios(): EvalScenario[] {
       expect: { commandTypes: ['CHOOSE_CANDIDATE'], runStatus: 'completed', toolNames: ['poi.search'] },
     },
     {
-      id: 'golden-model-error-fallback',
-      title: 'Model error is redacted and falls back',
-      tags: ['golden', 'fallback', 'redaction'],
+      id: 'golden-model-error-failed',
+      title: 'Provider error is redacted and fails explicitly',
+      tags: ['golden', 'model-failure', 'redaction'],
       initialPrompt: '晚上两个人附近吃饭',
       message: '把晚饭换近一点',
       modelError: 'provider failed with sk-eval-secret-for-test Bearer abc.def',
-      resume: 'candidate-first',
       useModel: true,
-      expect: { commandTypes: ['CHOOSE_CANDIDATE'], runStatus: 'completed', toolNames: ['poi.search'] },
+      expect: { runStatus: 'failed' },
     },
     {
-      id: 'golden-locked-segment-error',
-      title: 'Locked segment cannot be rewritten',
-      tags: ['golden', 'guardrail', 'locked'],
+      id: 'golden-locked-segment-recovery',
+      title: 'Locked segment failure recovers to clarification',
+      tags: ['golden', 'guardrail', 'locked', 'recovery'],
       initialPrompt: '晚上两个人附近吃饭',
       message: '改成轻松一点',
       setup: 'locked-dining',
       selectedPhase: 'dining',
       resume: 'confirm-command',
-      expect: { errorIncludes: 'Locked segments cannot be rewritten' },
+      expect: { pendingKind: 'clarification', runStatus: 'waiting_for_user' },
     },
     {
       id: 'golden-hotel-add-no-direct-booking',

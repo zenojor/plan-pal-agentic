@@ -22,7 +22,8 @@ import {
   type SegmentPhase,
   redactTraceText,
 } from '@planpal/domain'
-import { createPlanWithVariants, testOpenAICompatibleModel } from '@planpal/agent'
+import { testOpenAICompatibleModel } from '@planpal/agent/model'
+import { createPlanWithVariants } from '@planpal/agent/planner'
 import { agentRuntime, stores } from './store'
 import { modelConfigFromRequest, readJson, toPublicError } from './http'
 
@@ -55,7 +56,6 @@ type CreatePlanBody = {
 type AgentRunBody = {
   message?: string
   selectedSegmentId?: string
-  clientContext?: unknown
   baseURL?: string
   model?: string
   providerMode?: 'auto' | 'openai-compatible'
@@ -66,6 +66,10 @@ type AgentResumeBody = {
   runId?: string
   actionId?: string
   payload?: unknown
+  baseURL?: string
+  model?: string
+  providerMode?: 'auto' | 'openai-compatible'
+  resolvedBaseURL?: string
 }
 
 type ModelConfigBody = {
@@ -223,22 +227,25 @@ app.post('/api/plans', async (context) => {
   if (body.modelConfigRef !== 'client-byok') {
     return context.json({ error: 'modelConfigRef must be client-byok' }, 400)
   }
-  const modelConfig = hasModelConfig(context.req.header('authorization'), body)
-    ? modelConfigFromRequest(context, body)
-    : undefined
-  const result = await createPlanWithVariants(prompt, modelConfig)
-  const plan = await stores.plans.createPlan(result.plan)
-  for (const event of result.events) {
-    await stores.agents.appendEvent(event)
+  if (!hasModelConfig(context.req.header('authorization'), body)) {
+    return context.json({ error: 'A model connection is required' }, 400)
   }
-  return context.json({
-    planId: plan.id,
-    status: plan.status,
-    plan,
-    events: result.events,
-    fallbackUsed: result.fallbackUsed,
-    usedModel: result.usedModel,
-  })
+  try {
+    const modelConfig = modelConfigFromRequest(context, body)
+    const result = await createPlanWithVariants(prompt, modelConfig)
+    const plan = await stores.plans.createPlan(result.plan)
+    for (const event of result.events) {
+      await stores.agents.appendEvent(event)
+    }
+    return context.json({
+      planId: plan.id,
+      status: plan.status,
+      plan,
+      events: result.events,
+    })
+  } catch (error) {
+    return context.json({ error: toPublicError(error) }, 502)
+  }
 })
 
 app.post('/api/plans/stream', async (context) => {
@@ -250,9 +257,10 @@ app.post('/api/plans/stream', async (context) => {
   if (body.modelConfigRef !== 'client-byok') {
     return context.json({ error: 'modelConfigRef must be client-byok' }, 400)
   }
-  const modelConfig = hasModelConfig(context.req.header('authorization'), body)
-    ? modelConfigFromRequest(context, body)
-    : undefined
+  if (!hasModelConfig(context.req.header('authorization'), body)) {
+    return context.json({ error: 'A model connection is required' }, 400)
+  }
+  const modelConfig = modelConfigFromRequest(context, body)
 
   return streamSSE(context, async (stream) => {
     try {
@@ -268,8 +276,6 @@ app.post('/api/plans/stream', async (context) => {
         status: plan.status,
         plan,
         events: result.events,
-        fallbackUsed: result.fallbackUsed,
-        usedModel: result.usedModel,
       })
     } catch (error) {
       await writeCreatePlanStreamError(stream, error)
@@ -364,9 +370,10 @@ app.post('/api/plans/:planId/agent/runs', async (context) => {
     return context.json({ error: 'message is required' }, 400)
   }
 
-  const modelConfig = hasModelConfig(context.req.header('authorization'), body)
-    ? modelConfigFromRequest(context, body)
-    : undefined
+  if (!hasModelConfig(context.req.header('authorization'), body)) {
+    return context.json({ error: 'A model connection is required' }, 400)
+  }
+  const modelConfig = modelConfigFromRequest(context, body)
 
   return streamSSE(context, async (stream) => {
     let runId = createId('run')
@@ -376,7 +383,6 @@ app.post('/api/plans/:planId/agent/runs', async (context) => {
         planId,
         message: body.message!.trim(),
         selectedSegmentId: body.selectedSegmentId,
-        clientContext: body.clientContext,
         modelConfig,
       }, async (event) => {
         runId = event.runId
@@ -400,6 +406,10 @@ app.post('/api/plans/:planId/agent/resume', async (context) => {
   if (!body.runId || !body.actionId) {
     return context.json({ error: 'runId and actionId are required' }, 400)
   }
+  if (!hasModelConfig(context.req.header('authorization'), body)) {
+    return context.json({ error: 'A model connection is required' }, 400)
+  }
+  const modelConfig = modelConfigFromRequest(context, body)
   return streamSSE(context, async (stream) => {
     let sequence = 0
     try {
@@ -408,6 +418,7 @@ app.post('/api/plans/:planId/agent/resume', async (context) => {
         runId: body.runId!,
         actionId: body.actionId!,
         payload: body.payload,
+        modelConfig,
       }, async (event) => {
         sequence = Math.max(sequence, event.sequence)
         await writeAgentEvent(stream, event)
@@ -554,11 +565,9 @@ async function writeCreatePlanCreatedEvent(
   stream: Parameters<Parameters<typeof streamSSE>[1]>[0],
   result: {
     events: AgentEvent[]
-    fallbackUsed: boolean
     planId: string
     plan: unknown
     status: string
-    usedModel: boolean
   },
 ) {
   await stream.writeSSE({
@@ -587,12 +596,15 @@ async function writeAgentErrorEvent(
   stream: Parameters<Parameters<typeof streamSSE>[1]>[0],
   input: { error: unknown; planId: string; runId: string; sequence: number },
 ) {
+  const persistedSequence = (await stores.agents.listEvents(input.planId))
+    .filter((event) => event.runId === input.runId)
+    .reduce((maximum, event) => Math.max(maximum, event.sequence), 0)
   const event: AgentEvent = {
     id: createId('evt'),
     runId: input.runId,
     planId: input.planId,
     type: 'agent.error',
-    sequence: input.sequence,
+    sequence: Math.max(input.sequence, persistedSequence + 1),
     message: toPublicError(input.error),
     payload: {
       error: toPublicError(input.error),

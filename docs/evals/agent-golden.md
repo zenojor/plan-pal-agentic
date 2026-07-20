@@ -1,6 +1,6 @@
 # PlanPal Agent golden Eval
-Generated: 2026-06-24T15:16:07.826Z
-Summary: 42/42 passed
+Generated: 2026-07-20T21:29:35.805Z
+Summary: 52/52 passed
 | Scenario | Result | Checks |
 | --- | --- | --- |
 | golden-replace-nearby | PASS | 5 checks passed |
@@ -34,8 +34,8 @@ Summary: 42/42 passed
 | golden-rewrite-command | PASS | 4 checks passed |
 | golden-qa-stream | PASS | 3 checks passed |
 | golden-model-invalid-intent-fallback | PASS | 5 checks passed |
-| golden-model-error-fallback | PASS | 5 checks passed |
-| golden-locked-segment-error | PASS | 3 checks passed |
+| golden-model-error-failed | PASS | 3 checks passed |
+| golden-locked-segment-recovery | PASS | 4 checks passed |
 | golden-hotel-add-no-direct-booking | PASS | 5 checks passed |
 | golden-movie-add-no-direct-ticket | PASS | 5 checks passed |
 | golden-read-only-plan-question | PASS | 3 checks passed |
@@ -45,3 +45,13 @@ Summary: 42/42 passed
 | golden-movie-ticket-pending-without-resume | PASS | 5 checks passed |
 | golden-hotel-room-pending-without-resume | PASS | 5 checks passed |
 | golden-model-delete-intent | PASS | 4 checks passed |
+| eval-delete-coffee | PASS | 3 checks passed |
+| eval-negated-hotel | PASS | 3 checks passed |
+| eval-confirm-hotel | PASS | 3 checks passed |
+| eval-retry-candidate | PASS | 3 checks passed |
+| eval-select-second | PASS | 3 checks passed |
+| eval-cancel-candidate | PASS | 3 checks passed |
+| eval-empty-plan-qa | PASS | 3 checks passed |
+| eval-checkpoint-restart | PASS | 4 checks passed |
+| eval-empty-tool-result | PASS | 3 checks passed |
+| eval-invalid-structured-output | PASS | 3 checks passed |

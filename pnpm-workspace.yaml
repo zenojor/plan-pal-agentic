@@ -5,6 +5,7 @@ packages:
 trustLockfile: true
 
 allowBuilds:
+  better-sqlite3: true
   esbuild: true
   sharp: true
   workerd: true

@@ -198,4 +198,29 @@ describe('agent natural language router', () => {
       segmentId: 'seg_movie',
     })
   })
+
+  it('routes negated named arrangements to deletion instead of search or addition', () => {
+    const base = createPlanFromPrompt('晚上两个人附近吃饭')
+    const plan = {
+      ...base,
+      segments: [
+        ...base.segments,
+        { ...base.segments[0]!, id: 'seg_coffee', title: '咖啡慢歇', place: '纸月咖啡' },
+        { ...base.segments[0]!, id: 'seg_hotel', title: '酒店入住', place: '亚麻时钟酒店', serviceCategory: 'hotel' as const },
+      ],
+    }
+
+    const coffeeRoute = routeNaturalLanguageTurn(plan, '删除咖啡这个安排')
+    expect(coffeeRoute).toMatchObject({ kind: 'command', command: { type: 'DELETE_SEGMENT', segmentId: 'seg_coffee' } })
+    const hotelRoute = routeNaturalLanguageTurn(plan, '不要酒店了')
+    expect(hotelRoute).toMatchObject({ kind: 'command', command: { type: 'DELETE_SEGMENT', segmentId: 'seg_hotel' } })
+    const confirmRoute = routeNaturalLanguageTurn(plan, '确认酒店安排')
+    expect(confirmRoute).toMatchObject({ kind: 'command', command: { type: 'CONFIRM_PLAN' } })
+  })
+
+  it('answers safely when the plan has been cleared', () => {
+    const plan = { ...createPlanFromPrompt('下午两个人附近轻松玩'), segments: [] }
+    const route = routeNaturalLanguageTurn(plan, '这个计划怎么样')
+    expect(route).toMatchObject({ kind: 'qa', reason: 'empty plan read-only turn' })
+  })
 })

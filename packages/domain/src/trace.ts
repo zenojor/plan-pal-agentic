@@ -48,6 +48,7 @@ export type TraceStep = {
   effect?: ToolEffect
   commandType?: PlanCommand['type']
   version?: number
+  node?: string
 }
 
 export type TraceReplayFrame = {
@@ -152,6 +153,7 @@ export function normalizeTraceForComparison(snapshot: AgentTraceSnapshot) {
       effect: step.effect,
       commandType: step.commandType,
       version: step.version,
+      node: step.node,
       summary: step.summary,
     })),
     toolCalls: snapshot.toolCalls.map((call) => ({
@@ -193,6 +195,7 @@ function stepFromEvent(event: AgentEvent): TraceStep {
     effect: effect ?? readToolCallFromPayload(event.payload)?.effect,
     commandType: command?.type ?? patch?.operation,
     version: readNumber(payload.version),
+    node: readString(payload.node) || undefined,
   }
 }
 
@@ -294,6 +297,8 @@ function replayFrameFromStep(step: TraceStep): TraceReplayFrame {
 }
 
 function eventLabel(event: AgentEvent) {
+  const payload = readObject(event.payload)
+  const node = readString(payload.node)
   switch (event.type) {
     case 'agent.started':
       return '接收请求'
@@ -319,6 +324,20 @@ function eventLabel(event: AgentEvent) {
       return 'Agent 完成'
     case 'agent.error':
       return 'Agent 失败'
+    case 'graph.node.started':
+      return node ? `Graph 节点开始 · ${node}` : 'Graph 节点开始'
+    case 'graph.node.finished':
+      return node ? `Graph 节点完成 · ${node}` : 'Graph 节点完成'
+    case 'interrupt.requested':
+      return 'LangGraph Interrupt'
+    case 'interrupt.resumed':
+      return 'LangGraph Resume'
+    case 'command.proposed':
+      return 'PlanCommand 提案'
+    case 'command.applied':
+      return 'PlanCommand 执行'
+    case 'run.status':
+      return 'Run 状态'
     default:
       return event.type
   }
@@ -326,7 +345,8 @@ function eventLabel(event: AgentEvent) {
 
 function eventStatus(event: AgentEvent): TraceStepStatus {
   if (event.type === 'agent.error' || event.type === 'agent.model.error') return 'error'
-  if (event.type === 'action.required' || event.type === 'agent.model.started' || event.type === 'tool.called') return 'active'
+  if (event.type === 'action.required' || event.type === 'interrupt.requested') return 'blocked'
+  if (event.type === 'agent.model.started' || event.type === 'tool.called' || event.type === 'graph.node.started') return 'active'
   return 'done'
 }
 

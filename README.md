@@ -17,6 +17,7 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 
 - 首页快速创建计划，支持时间、人数、范围、节奏和补充需求。
 - `/settings/model` 配置 OpenAI-compatible 模型，内置 DeepSeek/OpenAI 预设，API key 只保存在浏览器本地。
+- 模型连接必须先测试成功再保存；没有已验证连接时不能创建计划或进入工作台，不提供伪 Agent 离线模式。
 - 创建计划时生成 3 个方案方向，用户选择后写入拼图主轴。
 - 工作台保留多列框架：对话、拼图、商家、详情、路线、记录。
 - 对话列支持全局计划或选中活动上下文，Agent-first 进入替换、加点候选和命令流程。
@@ -25,8 +26,10 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - 本地 mock API 支持 POI/merchant/offering 查询、计划路线估算和 sandbox receipt 演示闭环。
 - 商家可带 `MerchantOffering` 商品/服务项；酒店房型、电影场次、票务、花礼、SPA 等仍是 fictional local mock。
 - Trace 列展示 Agent / model / tool / command 事件、版本历史、run 级 trace replay 和安全检查。
-- `packages/eval` 提供离线 golden suite 与可选 DeepSeek live smoke，默认不读取真实 key、不发外部网络请求。
-- 本地 demo 默认用文件存储，测试环境使用内存存储。
+- Agent API 真实执行 12 节点 LangGraph `StateGraph`，支持条件边、多轮 messages、原生 tool calling 和 graph stream。
+- command、候选、服务、clarification 和 plan variant 共用 typed `interrupt()` / `Command({ resume })` 模型。
+- `packages/eval` 提供 52 项离线 Agent eval 与 3 项 DeepSeek live smoke；默认不读取真实 key、不发外部网络请求。
+- 本地 demo 默认使用文件 Plan store + SQLite LangGraph checkpoint，测试环境使用内存存储和 `MemorySaver`。
 
 ## 技术栈
 
@@ -35,7 +38,7 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - UI：`animal-island-ui`、Tailwind CSS 4、定制 workspace CSS
 - API：Hono、Node runtime、SSE
 - Domain：共享 Plan 类型、PendingAction、PlanCommand、确定性 mutation
-- Agent：OpenAI-compatible BYOK 模型适配、计划方案生成、自然语言路由、运行时事件流
+- Agent：LangGraph、LangChain tools、Zod structured output、SQLite checkpoint、OpenAI-compatible BYOK adapter
 - DB：repository 接口、文件存储、内存存储、Drizzle schema
 
 ## 目录结构
@@ -47,10 +50,10 @@ apps/
 packages/
   domain/     Plan 类型、命令、seed/mock POI、确定性计划变更
   db/         repository、file store、memory store、Drizzle schema
-  agent/      模型适配、planner、router、runtime、工具注册
-  eval/       本地 Agent golden eval、trace 报告和可选 live smoke
+  agent/      StateGraph、nodes、typed tools、checkpoint、runtime facade
+  eval/       Agent golden/architecture eval、trace 报告和真实模型 smoke
 docs/
-  agent-flow.md  Agent 链路说明
+  agent-flow.md  真实 Graph、状态、条件边和恢复链路
   agent-case-study.md  面试向架构说明
 ```
 
@@ -159,6 +162,7 @@ API 默认使用文件存储：
 
 ```text
 .planpal-data/demo-store.json
+.planpal-data/langgraph-checkpoints.sqlite
 ```
 
 可用环境变量：
@@ -174,12 +178,12 @@ $env:PLANPAL_STORE_MODE="memory"
 
 1. 打开 `/`，输入想安排的活动。
 2. 首页通过 `/api/plans/stream` 创建计划，并显示 SSE 进度。
-3. API 调 `createPlanWithVariants`，有模型则尝试生成方案，无模型或失败则用 deterministic fallback。
+3. API 调 `createPlanWithVariants` 生成方案；缺少模型配置或 provider 调用失败时直接失败，不持久化本地替代计划。
 4. 用户在对话列选择 3 个方案之一。
 5. 前端发送 `CHOOSE_PLAN_VARIANT` 到 `/api/plans/:planId/commands`。
 6. domain 应用命令，替换拼图主轴并产生版本。
 7. 用户在工作台中继续拖拽、替换、加点、改路线、选择商品/服务、生成模拟确认单；自然语言“再加个咖啡/拍照点/酒店/电影”会先生成候选或服务票据。
-8. Agent 对话只负责理解自然语言；写计划仍通过命令。
+8. Agent 对话由 compiled LangGraph 执行；模型和工具生成意图、证据与 proposal，写计划仍只通过 `applyPlanCommand()`。
 
 更完整的 Agent 细节见 [docs/agent-flow.md](docs/agent-flow.md)。
 
@@ -209,6 +213,9 @@ $env:PLANPAL_STORE_MODE="memory"
 
 当前确定性命令包括：
 
+- `REQUEST_COMMAND_CONFIRMATION`
+- `CONFIRM_COMMAND_ACTION`
+- `CLEAR_PLAN_SEGMENTS`
 - `CHOOSE_PLAN_VARIANT`
 - `REORDER_SEGMENT`
 - `DELETE_SEGMENT`
@@ -219,6 +226,7 @@ $env:PLANPAL_STORE_MODE="memory"
 - `UNLOCK_SEGMENT`
 - `CHOOSE_CANDIDATE`
 - `REFRESH_CANDIDATES`
+- `REQUEST_CLARIFICATION`
 - `DISMISS_PENDING_ACTION`
 - `SET_ROUTE_CHOICE`
 - `CLEAR_ROUTE_CHOICE`
@@ -256,13 +264,13 @@ $env:PLANPAL_STORE_MODE="memory"
 
 ## Agent Eval
 
-默认 golden suite 使用 fake model、in-memory store 和本地 mock 数据，覆盖候选、服务项、sandbox order、fallback、redaction 和 command gate：
+默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 52 个 golden/architecture 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、故障恢复、Plan invariants 和 trace correctness：
 
 ```powershell
 pnpm eval:agent -- --suite golden
 ```
 
-DeepSeek live smoke 是可选手测路径。只有显式设置环境变量时才会联网调用；报告只写 redacted provider 信息：
+DeepSeek live smoke 包含 3 个真实模型场景。只有显式设置环境变量时才会联网调用；key 不进入 graph state、checkpoint、store 或报告：
 
 ```powershell
 $env:PLANPAL_EVAL_API_KEY="<your temporary key>"

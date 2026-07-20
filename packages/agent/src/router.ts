@@ -53,8 +53,38 @@ export type ModelTurnIntent = {
 
 export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSegmentId?: string): RoutedTurn {
   const normalized = message.trim().toLowerCase()
+  if (!plan.segments.some((segment) => !segment.isTransit)) {
+    return {
+      kind: 'qa',
+      answerSeed: '当前计划是空的。你可以告诉我想去哪里、时间和偏好，我会从第一个节点开始规划。',
+      reason: 'empty plan read-only turn',
+    }
+  }
   const target = findTargetSegment(plan, normalized, selectedSegmentId)
   const insertionAnchor = findInsertionAnchor(plan, normalized, selectedSegmentId)
+  if (isClearPlanRequest(normalized)) {
+    return {
+      kind: 'command',
+      reason: 'clear plan request',
+      command: { type: 'CLEAR_PLAN_SEGMENTS', source: 'agent', reason: message },
+    }
+  }
+  if (containsAny(normalized, ['删除', '删掉', '去掉', '不要', 'remove', 'delete'])) {
+    return {
+      kind: 'command',
+      reason: 'delete request',
+      command: { type: 'DELETE_SEGMENT', source: 'agent', segmentId: target.id },
+    }
+  }
+  // Confirmation must win over category words such as “酒店”; otherwise
+  // “确认酒店安排” is misread as a request to search for another hotel.
+  if (containsAny(normalized, ['确认', 'confirm']) && !containsAny(normalized, ['不确认', '取消确认'])) {
+    return {
+      kind: 'command',
+      reason: 'confirm plan request',
+      command: { type: 'CONFIRM_PLAN', source: 'agent' },
+    }
+  }
   const serviceCategory = inferServiceCategory(normalized)
   const serviceTarget = serviceCategory ? findServiceSegment(plan, serviceCategory, selectedSegmentId) : undefined
   if (isServiceItemRequest(normalized) && serviceTarget) {
@@ -341,6 +371,8 @@ function findTargetSegment(
   if (byPhase) return byPhase
   const selected = selectedSegmentId ? plan.segments.find((segment) => segment.id === selectedSegmentId) : null
   if (selected) return selected
+  const mentioned = findMentionedSegment(plan, normalized)
+  if (mentioned) return mentioned
   if (containsAny(normalized, ['饭', '吃', 'dinner', '餐厅', '晚餐', '火锅', '涮锅', '涮肉', '锅底', 'hotpot', '辣', '麻辣', '川菜', '湘菜', '川湘', '串串', '不吃辣', '少辣', '清淡'])) {
     return plan.segments.find((segment) => segment.phase === 'dining') ?? plan.segments[0]!
   }
@@ -352,6 +384,14 @@ function findTargetSegment(
     return findServiceSegment(plan, serviceCategory, selectedSegmentId) ?? plan.segments.find((segment) => segment.serviceCategory === serviceCategory) ?? plan.segments[0]!
   }
   return plan.segments.find((segment) => !segment.isTransit) ?? plan.segments[0]!
+}
+
+function findMentionedSegment(plan: Plan, normalized: string) {
+  const keywords = ['咖啡', '酒店', '住宿', '电影', '影院', '晚餐', '午餐', '餐厅', '吃饭', '酒吧', '清吧', '甜品', '散步']
+  return plan.segments.find((segment) => {
+    const text = `${segment.title} ${segment.place}`.toLowerCase()
+    return keywords.some((keyword) => normalized.includes(keyword) && text.includes(keyword))
+  })
 }
 
 function findInsertionAnchor(

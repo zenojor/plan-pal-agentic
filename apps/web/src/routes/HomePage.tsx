@@ -77,6 +77,10 @@ export function HomePage() {
   async function submit(customPrompt = prompt) {
     const nextPrompt = customPrompt.trim()
     if (!nextPrompt || isSubmitting) return
+    if (!config) {
+      setError('请先在模型设置中完成连接测试并保存配置。')
+      return
+    }
     const abortController = new AbortController()
     createPlanAbortRef.current?.abort()
     createPlanAbortRef.current = abortController
@@ -147,7 +151,7 @@ export function HomePage() {
                       {quickOpen ? '收起条件' : '按条件填写'}
                     </button>
                   </div>
-                  <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim()}>
+                  <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim() || !config}>
                     <Sparkle aria-hidden="true" size={18} weight="fill" />
                     {isSubmitting ? '创建中' : '生成计划'}
                   </button>
@@ -249,7 +253,12 @@ export function HomePage() {
             )}
           </div>
           {(isSubmitting || creationEvents.length > 0) && (
-            <CreationProgress events={creationEvents} hasModelConfig={Boolean(config)} />
+            <CreationProgress events={creationEvents} />
+          )}
+          {!config && (
+            <p className={homeClasses.note}>
+              Agent 工作台需要可用的模型连接。请先前往 <Link to="/settings/model">模型设置</Link> 完成测试并保存。
+            </p>
           )}
           {error && <p className={homeClasses.launchError}>{error}</p>}
         </div>
@@ -346,19 +355,18 @@ function QuickOptionGroup({
   )
 }
 
-function CreationProgress({ events, hasModelConfig }: { events: AgentEvent[]; hasModelConfig: boolean }) {
+function CreationProgress({ events }: { events: AgentEvent[] }) {
   const latest = events[events.length - 1]
   const started = events.some((event) => event.type === 'agent.started')
   const modelStarted = events.some((event) => event.type === 'agent.model.started')
   const modelSettled = events.some((event) => event.type === 'agent.model.finished' || event.type === 'agent.model.error')
   const finished = events.some((event) => event.type === 'agent.finished')
   const message = latest?.message ?? '正在准备创建计划...'
-  const generationLabel = hasModelConfig ? '生成候选方案' : '准备离线方案'
   const steps = [
     { key: 'understand', label: '理解需求', state: started ? 'done' : 'active' },
     {
       key: 'generate',
-      label: generationLabel,
+      label: '生成候选方案',
       state: finished || modelSettled ? 'done' : started || modelStarted ? 'active' : 'pending',
     },
     { key: 'workspace', label: '准备工作台', state: finished ? 'done' : modelSettled ? 'active' : 'pending' },
@@ -376,11 +384,7 @@ function CreationProgress({ events, hasModelConfig }: { events: AgentEvent[]; ha
           </li>
         ))}
       </ol>
-      <small className={homeClasses.progressHint}>
-        {hasModelConfig
-          ? '模型只生成候选方向；进入拼图后仍由确定性命令修改计划。'
-          : '当前没有保存模型配置，会使用本地 fallback 方案。'}
-      </small>
+      <small className={homeClasses.progressHint}>模型只生成候选方向；进入拼图后仍由确定性命令修改计划。</small>
     </section>
   )
 }

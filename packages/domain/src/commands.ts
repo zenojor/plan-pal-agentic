@@ -9,7 +9,7 @@ export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = creat
     throw new Error('Agent mutations require user confirmation')
   }
   const beforeVersion = plan.currentVersion
-  const updated = applyCommand(plan, command)
+  const updated = linkPendingAction(applyCommand(plan, command), runId)
   const event = createPlanUpdatedEvent(plan, updated, runId, command)
   const patch: PlanPatch = {
     operation: command.type,
@@ -24,6 +24,19 @@ export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = creat
     events: [event],
     version: updated.currentVersion,
     patch,
+  }
+}
+
+function linkPendingAction(plan: Plan, runId: string): Plan {
+  if (!plan.pendingAction) return plan
+  return {
+    ...plan,
+    pendingAction: {
+      ...plan.pendingAction,
+      runId,
+      planId: plan.id,
+      baseVersion: plan.currentVersion,
+    },
   }
 }
 
@@ -124,7 +137,7 @@ function requestCommandConfirmation(plan: Plan, command: Extract<PlanCommand, { 
   }
   const inferred = inferCommandPreview(plan, command.commands)
   const action: PendingAction = {
-    id: createId('action'),
+    id: command.actionId ?? createId('action'),
     kind: 'command-confirmation',
     title: command.title,
     description: command.description,
@@ -258,8 +271,8 @@ function chooseCandidate(plan: Plan, actionId: string, candidateId: string) {
 }
 
 function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'REFRESH_CANDIDATES' }>) {
-  const existing = command.actionId ? plan.pendingAction : undefined
-  if (command.actionId && (!existing || existing.kind !== 'candidate-selection' || existing.id !== command.actionId)) {
+  const existing = command.actionId && plan.pendingAction?.id === command.actionId ? plan.pendingAction : undefined
+  if (command.actionId && plan.pendingAction && (!existing || existing.kind !== 'candidate-selection')) {
     throw new Error('Candidate action is no longer active')
   }
   const mode = command.mode ?? (existing?.kind === 'candidate-selection' ? existing.mode : 'replace')
@@ -273,11 +286,14 @@ function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'RE
         ...(existing?.kind === 'candidate-selection' ? existing.excludeCandidateIds ?? existing.candidates.map((candidate) => candidate.id) : []),
         ...(command.excludeCandidateIds ?? []),
       ]
-  const candidates = mode === 'add-after'
+  const candidates = command.candidates ?? (mode === 'add-after'
     ? createAddSegmentCandidates(plan, afterSegmentId, searchQuery, excluded)
-    : createReplacementCandidates(plan, requireSegmentId(targetSegmentId), searchQuery, excluded)
+    : createReplacementCandidates(plan, requireSegmentId(targetSegmentId), searchQuery, excluded))
+  if (candidates.length === 0) {
+    throw new Error('Candidate search returned no results')
+  }
   const action: PendingAction = {
-    id: existing?.kind === 'candidate-selection' ? existing.id : createId('action'),
+    id: existing?.kind === 'candidate-selection' ? existing.id : command.actionId ?? createId('action'),
     kind: 'candidate-selection',
     mode,
     targetSegmentId,
@@ -295,7 +311,7 @@ function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'RE
 
 function requestClarification(plan: Plan, command: Extract<PlanCommand, { type: 'REQUEST_CLARIFICATION' }>) {
   const action: PendingAction = {
-    id: createId('action'),
+    id: command.actionId ?? createId('action'),
     kind: 'clarification',
     title: command.title,
     description: command.description,
@@ -430,17 +446,20 @@ function refreshServiceItems(plan: Plan, command: Extract<PlanCommand, { type: '
   const segment = requireExecutableSegment(plan.segments, command.segmentId)
   const merchant = resolveSegmentMerchant(segment, command.merchantId)
   const query = command.query?.trim() || serviceSearchQueryForSegment(segment)
-  const results = searchMerchantOfferings({
-    merchantId: merchant.id,
-    category: command.category ?? segment.serviceCategory,
-    query,
-    limit: command.limit ?? 6,
-  })
-  const offerings = results.length
+  const results = command.offerings ? [] : searchMerchantOfferings({
+      merchantId: merchant.id,
+      category: command.category ?? segment.serviceCategory,
+      query,
+      limit: command.limit ?? 6,
+    })
+  const offerings = command.offerings ?? (results.length
     ? results.map((result) => result.offering)
-    : merchant.offerings.slice(0, Math.max(1, Math.min(6, command.limit ?? 6)))
+    : merchant.offerings.slice(0, Math.max(1, Math.min(6, command.limit ?? 6))))
+  if (offerings.length === 0) {
+    throw new Error('Offering search returned no results')
+  }
   const action: PendingAction = {
-    id: command.actionId && plan.pendingAction?.id === command.actionId ? command.actionId : createId('action'),
+    id: command.actionId ?? createId('action'),
     kind: 'service-item-selection',
     title: '选择商品/服务',
     description: `${merchant.name} 的本地 sandbox 服务项，可选择后写入模拟确认单。`,

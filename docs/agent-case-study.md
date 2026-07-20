@@ -1,71 +1,101 @@
 # PlanPal Agent Case Study
 
-## 背景
+## 项目一句话
 
-PlanPal 是一个 BYOK Agent 行程规划工作台。项目刻意不让模型直接写计划，而是把用户可编辑的行程建模为确定性的 `Plan`，让 Agent 负责理解自然语言、调用只读工具、生成候选和解释，真正状态变更必须经过 `PlanCommand`。
+PlanPal 是一个基于 TypeScript、LangGraph 和 React 的可恢复行程 Agent：模型通过 structured output 和原生 tool calling 理解用户，LangGraph 管理多轮状态、条件分支、interrupt/resume 与 checkpoint，所有计划写入仍由确定性的 `PlanCommand` domain boundary 执行。
 
-这个设计解决的核心问题是：行程类 Agent 很容易看起来“聪明”，但实际很难证明它没有偷偷改状态、没有绕过用户确认、没有泄露 API key、没有把 mock 能力伪装成真实预订。PlanPal 的下一阶段重点就是把这些边界做成可评测、可回放、可审计的工程证据。
+## 为什么重构
 
-## 架构决策
+旧实现虽然有一个 `graph.ts` 示例，但 API 并不调用它；主链路在 800 多行 runtime 中用 `if/else` 手工编排。工具由应用提前决定，`poi.search` 的结果甚至会被丢弃后由 domain 重搜；所谓 checkpoint 只是时间戳字符串，resume 会创建一套新事件序号。
 
-- `packages/domain` 是可信写入边界，定义 `Plan`、`PendingAction`、`PlanCommand` 和 deterministic mutation。
-- `packages/agent` 只负责 runtime、intent routing、model adapter 和 tool registry；工具按 `read-only` / `external-write` 标注 effect。
-- `packages/db` 存储 plans、runs、events、tool calls；API key 不入库，事件和错误都做 redaction。
-- `apps/api` 通过 SSE 暴露 agent run/resume，并提供 run trace 的只读聚合接口。
-- `apps/web` 把 Agent Chat、Puzzle、Merchant、Map、Trace 拆成可解释工作台，Trace 列用于展示运行链路而不是修改状态。
-- `packages/eval` 用 fake model + in-memory store 跑 golden suite；DeepSeek 只作为显式环境变量驱动的 live smoke。
+这类实现可以演示 UI，却无法回答面试中最重要的问题：执行路径是否真由 graph 决定、工具结果是否真正 grounding、interrupt 能否跨进程恢复、失败是否可追踪、计划 invariant 是否可证明。
 
-## Agent 控制流
+## 重构后的架构决策
 
-1. 用户输入自然语言。
-2. Runtime 先确定当前 `Plan` 和选中 segment 上下文。
-3. 对明显 QA 的消息直接进入 answer phase；对可能改计划的消息进入 intent phase 或 deterministic fallback。
-4. Agent 可以调用 `poi.search`、`offering.search`、`route.estimate`、`order.preview` 等只读工具。
-5. 需要用户选择时写入 `PendingAction`，并产生 `action.required` 事件。
-6. 用户选择候选或服务项后，resume 把选择转换为 `CHOOSE_CANDIDATE` 或 `SELECT_SERVICE_ITEM`。
-7. Domain 应用 `PlanCommand`，生成 `plan.updated` 事件、version 和 patch。
-8. Trace snapshot 聚合 run、events、tool calls、command writes 和 safety findings，供 UI 回放和 eval 报告使用。
+1. `packages/domain` 继续是唯一写边界。模型、tool 和 graph node 都不能直接持久化修改后的 Plan。
+2. API 的 Agent 入口只调用 compiled `StateGraph.stream()`；runtime 是 facade，不再承载业务分支。
+3. Graph state 使用 `StateSchema` 和 Zod；messages、tool calls、tool results 使用 reducer，保证多轮与 checkpoint 合并语义。
+4. 模型使用 LangChain `bindTools()`，输出 `AIMessage.tool_calls`；每个结果以同一个 `tool_call_id` 返回 `ToolMessage`。
+5. 候选和 offering 作为 typed `PlanCommand` 字段进入 domain，避免工具执行后再次搜索。
+6. 用户决策统一为 `interrupt()`；恢复统一为同一 `thread_id` 下的 `Command({ resume })`。
+7. 测试用 `MemorySaver`，本地应用用 SQLite checkpointer；thread id 使用可解释的 `plan:${planId}`。
+8. Graph update 映射为稳定事件，run sequence 在 resume 时从 store 最大值继续，Trace UI 展示真实 node path。
+9. schema/tool/domain failure 进入可观测 graph recovery；模型网络、认证或 provider 失败则明确结束为 `failed`，不伪造离线回答。
+10. 模型配置必须测试成功再保存；Web 路由和 create/run/resume API 共同阻止无连接进入工作台。
 
-## Eval 指标
+## 一次候选替换的真实链路
 
-Golden suite v1 包含 36 个离线场景，覆盖：
+```text
+HTTP SSE request
+  -> PlanPalAgentRuntime.run
+  -> compiledGraph.stream
+  -> loadContext
+  -> understandIntent (Zod structured output)
+  -> routeIntent (candidate-search)
+  -> planningAgent (model.bindTools)
+  -> AIMessage.tool_calls[poi_search]
+  -> callTools
+  -> ToolMessage(tool_call_id)
+  -> buildCommandProposal (uses exact tool candidates)
+  -> validateProposal (applyPlanCommand preview)
+  -> requestApproval (interrupt)
+  -> waiting_for_user checkpoint
+  -> Command({ resume }) on the same thread
+  -> applyCommand (CHOOSE_CANDIDATE)
+  -> finalize
+```
 
-- 替换候选：安静、室内、预算、火锅、拍照、亲子、商务、夜间。
-- add-after：咖啡、甜品、散步、酒店、电影、雨天室内、礼物。
-- 服务选择：电影票、酒店房型、餐饮套餐。
-- 命令边界：confirm、sandbox order、delete、rewrite、model-generated intent。
-- 容错与安全：模型 JSON 失败、模型错误 fallback、locked segment、secret redaction、external-write 不成功。
+用户说“换一个”会从 `applyCommand` 的 conditional edge 回到 `planningAgent`，并排除上一轮候选；“就第二个”变成 typed candidate selection；“还是算了”变成 rejected resume 并以 `cancelled` 结束。
 
-核心判断维度：
+## 工程证据
 
-- `route_accuracy`
-- `tool_selection`
-- `command_gate`
-- `user_confirm_boundary`
-- `service_selection`
-- `safety_no_external_write`
-- `secret_redaction`
-- `deterministic_replay`
+- 12 个真实 graph nodes，route、tool、validation、resume、recovery 多组 conditional edges。
+- 6 个 LangChain + Zod typed tools：POI、offering、路线、天气、order preview、current plan。
+- 4 个核心 structured outputs：intent、route、command proposal、final response。
+- SQLite checkpoint 集成测试会销毁旧 runtime，再创建新 runtime 恢复同一 interrupt。
+- Trace 记录 node/model/tool/command/interrupt/resume/run，确认包装命令和实际内层 command 都可见。
+- 全仓 148 项测试通过：domain 27、db 2、agent 46、API 15、Web 58。
+- Agent eval 52/52；真实 DeepSeek smoke 3/3。
+- domain、db、agent、eval、API TypeScript 检查和 Vite production build 全部通过。
 
-默认报告输出到 `docs/evals/agent-golden.md` 和 `docs/evals/agent-golden.json`。live smoke 使用 `PLANPAL_EVAL_API_KEY`，默认不运行真实网络请求。
+## Eval 覆盖
 
-## 失败案例
+离线 suite 不依赖网络，使用 fake model、MemorySaver、SQLite 临时数据库和 fictional mock catalog，覆盖：
 
-- 模型返回非 JSON intent：runtime 产生 `agent.model.error`，回退到 deterministic router，仍通过候选/命令边界继续。
-- 模型错误包含密钥：错误文案在 runtime/API/UI/eval 报告中统一 redacted。
-- 用户尝试改 locked segment：domain 拒绝命令，证明写入边界不依赖前端按钮状态。
-- external-write 工具存在但不允许执行：tool registry 会返回 `blocked`，Trace Safety 展示外部写入没有成功。
+- intent routing 与否定路由
+- 原生 tool selection 和 tool result grounding
+- structured output 修复/fallback
+- graph node path
+- interrupt/resume 和事件连续性
+- runtime 重启后的 checkpoint recovery
+- 多轮 messages
+- tool exception、空候选、model exception
+- locked segment、base version、PlanCommand invariant
+- trace redaction 和 command write correctness
 
-## 面试亮点
+回归输入包含“删除咖啡这个安排”“不要酒店了”“确认酒店安排”“换一个”“就第二个”“还是算了”，以及清空计划后询问“这个计划怎么样”。
 
-- 不只是“接了 LLM”，而是实现了 Agent state machine、tool effect gate、deterministic command boundary 和 trace replay。
-- 不依赖真实地图、酒店、影院或支付 API，也能演示完整计划闭环；mock 能力在 UI 和 receipt 中明确标注为 sandbox。
-- eval harness 可在无网络、无真实 key 的情况下复现结果；DeepSeek live smoke 只验证模型链路，不污染 golden suite。
-- Trace UI 能把一次 Agent run 拆成 Timeline、Tools、Replay、Safety，适合演示“为什么可信”。
+真实 DeepSeek smoke 使用临时环境变量调用 provider。首次运行曾发现模型把“换近一点”误判成原地 rewrite；最终实现增加了可追踪的关键意图 guard。这个案例说明 eval 不只是 happy path，也能直接推动 runtime 设计。
 
-## 后续生产化
+## 面试描述
 
-- 增加 auth-scoped persistence，把 plan/run/event/tool call 绑定到真实用户边界。
-- 如果接真实地图/商家/provider，先抽 provider interface，再让 provider 结果进入只读候选层，仍不直接改 `Plan`。
-- 增加浏览器截图 QA 和关键 demo flow E2E。
-- 把 eval 报告接入 CI，要求 golden suite 100% pass、安全违规 0。
+可以如实描述为：
+
+> 设计并重构了一个 TypeScript/LangGraph 行程 Agent runtime，将原有 800+ 行手工分支改为 12 节点的可 checkpoint StateGraph。接入 LangChain 原生 tool calling、Zod structured output、SQLite checkpoint 和 typed human-in-the-loop interrupt/resume；通过稳定 thread id 支持跨 runtime 恢复和多轮上下文。所有计划 mutation 均经过 deterministic PlanCommand domain boundary，工具结果直接 grounding command proposal。建立 node/model/tool/interrupt/command trace、连续 SSE 事件和 Agent eval，并用真实 DeepSeek smoke 验证模型链路；无有效模型连接时明确拒绝进入工作台。
+
+## 二次 review 的取舍
+
+- 已删除无模型配置时的本地 Agent 分支。Web 只接受测试成功的配置，workspace route、create/run/resume API 和 runtime facade 分层拒绝无连接请求。
+- 保留 structured output 两次失败后的 deterministic intent fallback，以及模型未产生预期 tool call 时的 typed tool-call recovery；它们只在已经发起模型协议调用后生效，并写入 trace，不构成离线模式。
+- 没有引入 RAG、多 Agent、向量库或 MCP。当前单 Agent graph 已能覆盖产品路径，继续加抽象只会增加维护面。
+- 删除了只为借用 `CoreMessage` 类型而存在的 Vercel AI SDK 依赖；graph 模型与 tool calling 只保留 LangChain，简单 endpoint 探测/创建流使用项目内最小消息类型。
+- 仍有两个可后续合并的工程面：初始方案 planner 与对话 graph 是两条真实但独立的模型入口；OpenAI-compatible endpoint/stream adapter 与 LangChain `ChatOpenAI` 同时存在。现阶段前者负责连接探测和创建流，后者负责 structured output/tool calling，直接合并的收益尚不足以抵消回归风险。
+- `router.ts` 仍是较大的 deterministic guard 模块；它承担否定、指代、resume 文本和 schema fallback 的回归语义。后续应按 intent/target/resume 拆分纯函数，不应再增加一层 router framework。
+
+## 仍未实现
+
+- 没有真实地图、天气、酒店、票务、预订或支付 provider；数据明确为 local fictional mock。
+- 已定义的路线、天气、current-plan tools 尚未全部进入主产品意图路由。
+- plan variant 已有 typed interrupt schema，但首页初始方案仍由 UI 直接发 `CHOOSE_PLAN_VARIANT`。
+- checkpoint 仅提供本地 SQLite，没有远程数据库、分布式 worker 或多实例并发锁。
+- Trace 是自建本地事件模型，未接 LangSmith/OpenTelemetry exporter。

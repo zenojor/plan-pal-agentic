@@ -1,4 +1,4 @@
-import { assertClientModelConfig, readBearerKey, type ClientModelConfig } from '@planpal/agent'
+import { assertClientModelConfig, readBearerKey, type ClientModelConfig } from '@planpal/agent/model'
 import type { Context } from 'hono'
 
 export async function readJson<T>(context: Context): Promise<T> {

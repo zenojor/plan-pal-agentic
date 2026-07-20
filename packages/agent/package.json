@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./model": "./src/model.ts",
+    "./planner": "./src/planner.ts",
+    "./runtime": "./src/runtime.ts"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -12,11 +15,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-sdk/openai": "2.0.73",
+    "@langchain/core": "^1.1.49",
     "@langchain/langgraph": "^1.0.4",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.3",
+    "@langchain/openai": "^1.4.7",
     "@planpal/db": "workspace:*",
     "@planpal/domain": "workspace:*",
-    "ai": "5.0.95",
+    "better-sqlite3": "^12.11.1",
     "zod": "^4.1.13"
   },
   "devDependencies": {

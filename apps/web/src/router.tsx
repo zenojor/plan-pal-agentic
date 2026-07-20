@@ -5,12 +5,14 @@ import {
   lazyRouteComponent,
   Link,
   Outlet,
+  redirect,
   useRouterState,
 } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { GearSixIcon as GearSix } from '@phosphor-icons/react/GearSix'
 import { HomePage } from './routes/HomePage'
 import { appClasses } from './lib/appClasses'
+import { loadModelConfig } from './lib/modelConfig'
 
 type RouterContext = {
   queryClient: QueryClient
@@ -38,6 +40,9 @@ const settingsRoute = createRoute({
 const planRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/plans/$planId',
+  beforeLoad: () => {
+    if (!loadModelConfig()) throw redirect({ to: '/settings/model' })
+  },
   component: lazyRouteComponent(
     () => import('./routes/PlanWorkspacePage'),
     'PlanWorkspacePage',

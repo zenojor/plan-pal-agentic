@@ -1,5 +1,5 @@
 import { getFictionalPoiById, getFictionalPoiByName, getPlanRouteChoiceId, reorderPlanSegmentsWithTime, type AgentEvent, type CandidateOption, type CommandResult, type MerchantOffering, type MerchantServiceCategory, type PendingAction, type Plan, type PlanCommand, type PlanSegment, type PlanServiceSelection, type PlanVariantOption, type PlanVariantSelection, type ReorderPosition, type RouteMode } from '@planpal/domain'
-import { isCompleteModelConfig, type StoredModelConfig } from '../../lib/modelConfig'
+import { isVerifiedModelConfig, type StoredModelConfig } from '../../lib/modelConfig'
 
 export type WorkspaceColumnId = 'chat' | 'puzzle' | 'merchant' | 'details' | 'map' | 'trace'
 export type MobileWorkspaceColumnId = Exclude<WorkspaceColumnId, 'chat'>
@@ -871,7 +871,7 @@ const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTe
     queueRisk: '中',
     rating: '4.2',
     reservationMode: '建议确认',
-    sourceLabel: 'fallback-local-mock',
+    sourceLabel: 'fictional-catalog',
     summary: '适合低负担开场，能给后续安排留出调整空间。',
     suitableFor: ['轻量活动'],
     tags: ['室内优先', '低体力负担'],
@@ -890,7 +890,7 @@ const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTe
     queueRisk: '中',
     rating: '4.1',
     reservationMode: '建议预约',
-    sourceLabel: 'fallback-local-mock',
+    sourceLabel: 'fictional-catalog',
     summary: '适合作为计划中段补给点，位置和排队确定性优先。',
     suitableFor: ['正餐'],
     tags: ['用餐', '排队风险'],
@@ -909,7 +909,7 @@ const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTe
     queueRisk: '低',
     rating: '4.0',
     reservationMode: '现场确认',
-    sourceLabel: 'fallback-local-mock',
+    sourceLabel: 'fictional-catalog',
     summary: '适合做可取消的收尾节点，不会强制拉长主线。',
     suitableFor: ['夜间收尾'],
     tags: ['收尾', '可取消'],
@@ -928,7 +928,7 @@ const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTe
     queueRisk: '低',
     rating: '4.2',
     reservationMode: '通常无需预约',
-    sourceLabel: 'fallback-local-mock',
+    sourceLabel: 'fictional-catalog',
     summary: '用于吸收时间误差，降低复杂计划的失败概率。',
     suitableFor: ['机动缓冲'],
     tags: ['机动', '缓冲'],
@@ -947,7 +947,7 @@ const merchantReferenceByPhase: Record<PlanSegment['phase'], MerchantReferenceTe
     queueRisk: '中',
     rating: '3.8',
     reservationMode: '无需预约',
-    sourceLabel: 'fallback-local-mock',
+    sourceLabel: 'fictional-catalog',
     summary: '路线仅作为本地估算，不代表实时导航。',
     suitableFor: ['路线参考'],
     tags: ['交通', '参考'],
@@ -1330,7 +1330,7 @@ export function getCandidateSelectionMode(pendingActionRunId: string | null) {
 }
 
 export function canSendAgentChat(config: StoredModelConfig | null, draft: string, isStreaming = false) {
-  return Boolean(isCompleteModelConfig(config) && draft.trim() && !isStreaming)
+  return Boolean(isVerifiedModelConfig(config) && draft.trim() && !isStreaming)
 }
 
 export function getAgentChatDisabledReason(
@@ -1339,13 +1339,13 @@ export function getAgentChatDisabledReason(
   isStreaming = false,
 ) {
   if (isStreaming) return 'Agent 正在处理上一条消息'
-  if (!isCompleteModelConfig(config)) return '请先完整填写并保存模型配置'
+  if (!isVerifiedModelConfig(config)) return '请先测试并保存可用的模型连接'
   if (!draft.trim()) return '请输入要发送给 Agent 的内容'
   return ''
 }
 
 export function getChatExecutionPathLabel(config: StoredModelConfig | null, draft: string) {
-  if (!isCompleteModelConfig(config)) return '离线 fallback'
+  if (!isVerifiedModelConfig(config)) return '模型连接不可用'
   const normalized = draft.trim().toLowerCase()
   if (!normalized) return '等待输入'
   if (containsAny(normalized, ['加一个', '加个', '加一段', '加点别的', '再加', '添加', '加入', '安排一个', '安排个', '空档', '空隙', '咖啡', '甜品', '拍照', '散步', '酒店', '住宿', '住一晚', '电影', '影院', 'imax', '房型', '双床', '大床', '电影票', '买票', '套餐', '换', '替换', 'replace', 'near', '近一点', '近点', '删除', '删掉', '去掉', '不要', 'remove', 'delete', '确认', '下单', '预订', 'confirm', '轻松', '别太赶', '安静', '改成', 'rewrite', '调整'])) {

@@ -2,7 +2,6 @@ import {
   attachPlanVariants,
   createId,
   createPlanFromPrompt,
-  createPlanVariants,
   isGenericPlaceName,
   nowIso,
   pickFictionalPoi,
@@ -13,30 +12,27 @@ import {
   type PlanVariantOption,
   type SegmentPhase,
 } from '@planpal/domain'
-import type { CoreMessage } from 'ai'
 import {
   generateAssistantReply,
   getOpenAICompatibleAttemptedEndpoints,
   sanitizeModelConfig,
   type ClientModelConfig,
+  type CoreMessage,
 } from './model'
 
 export type PlanCreationResult = {
   events: AgentEvent[]
-  fallbackUsed: boolean
   plan: Plan
-  usedModel: boolean
 }
 
 export type PlanCreationProgressSink = (event: AgentEvent) => void | Promise<void>
 
 export async function createPlanWithVariants(
   prompt: string,
-  modelConfig?: ClientModelConfig,
+  modelConfig: ClientModelConfig,
   onProgress?: PlanCreationProgressSink,
 ): Promise<PlanCreationResult> {
   const basePlan = createPlanFromPrompt(prompt)
-  const fallbackVariants = createPlanVariants(prompt)
   const runId = createId('run')
   const events: AgentEvent[] = []
   let sequence = 0
@@ -57,16 +53,6 @@ export async function createPlanWithVariants(
   }
 
   await emit('agent.started', 'Plan creation started', { node: 'createPlan' })
-  if (!modelConfig) {
-    const plan = attachPlanVariants(basePlan, fallbackVariants)
-    await emit('agent.finished', '使用离线方案生成 fallback', {
-      usedModel: false,
-      fallbackUsed: true,
-      variantCount: fallbackVariants.length,
-    })
-    return { events, fallbackUsed: true, plan, usedModel: false }
-  }
-
   const model = sanitizeModelConfig(modelConfig)
   const attemptedEndpoints = getOpenAICompatibleAttemptedEndpoints(modelConfig)
   try {
@@ -122,25 +108,18 @@ export async function createPlanWithVariants(
       fallbackUsed: false,
       variantCount: plan.pendingAction?.kind === 'plan-variant-selection' ? plan.pendingAction.variants.length : 0,
     })
-    return { events, fallbackUsed: false, plan, usedModel: true }
+    return { events, plan }
   } catch (error) {
     const message = redactModelError(error)
-    const plan = attachPlanVariants(basePlan, fallbackVariants)
     await emit('agent.model.error', `模型方案生成失败：${message}`, {
       model,
       phase: 'create-plan',
       usedModel: false,
-      fallbackUsed: true,
+      fallbackUsed: false,
       error: message,
       attemptedEndpoints,
     })
-    await emit('agent.finished', '模型失败，已使用离线方案生成 fallback', {
-      usedModel: false,
-      fallbackUsed: true,
-      error: message,
-      variantCount: fallbackVariants.length,
-    })
-    return { events, fallbackUsed: true, plan, usedModel: false }
+    throw new Error(`模型方案生成失败：${message}`)
   }
 }
 
@@ -250,23 +229,25 @@ function coerceSegment(value: unknown, fallback: PlanSegment | undefined, basePl
   const input = value as Partial<Record<keyof PlanSegment, unknown>>
   const phase = isSegmentPhase(input.phase) ? input.phase : fallback?.phase ?? 'leisure'
   const fallbackPoi = pickFictionalPoi(phase, segmentIndex)
+  const phaseFallback = fallback?.phase === phase ? fallback : undefined
   const serviceCategory = isMerchantServiceCategory(input.serviceCategory)
     ? input.serviceCategory
-    : fallback?.serviceCategory ?? fallbackPoi.serviceCategory
+    : phaseFallback?.serviceCategory ?? fallbackPoi.serviceCategory
   const startTime = readClockTime(input.startTime)
-    || readClockTime(fallback?.startTime)
+    || readClockTime(phaseFallback?.startTime)
     || readClockTime(basePlan.intent.startTime)
     || '12:00'
-  const endCandidate = readClockTime(input.endTime) || readClockTime(fallback?.endTime)
+  const endCandidate = readClockTime(input.endTime) || readClockTime(phaseFallback?.endTime)
   const endTime = endCandidate && toMinutes(endCandidate) > toMinutes(startTime)
     ? endCandidate
     : addMinutes(startTime, 60)
   const modelPlace = readModelString(input.place)
-  const fallbackPlace = isGenericPlaceName(fallback?.place) ? '' : fallback?.place
+  const fallbackPlace = isGenericPlaceName(phaseFallback?.place) ? '' : phaseFallback?.place
   const useFallbackPoi = isGenericPlaceName(modelPlace) && !fallbackPlace
   const place = useFallbackPoi ? fallbackPoi.name : modelPlace || fallbackPlace || fallbackPoi.name
-  const title = readModelString(input.title) || (useFallbackPoi ? fallbackPoi.activityTitle : fallback?.title) || fallbackPoi.activityTitle
-  const lnglat = readLngLat(input.lnglat) ?? (place === fallbackPoi.name ? fallbackPoi.lnglat : fallback?.lnglat) ?? mockLngLatForSegment(phase, segmentIndex)
+  const placeFallback = fallback?.place === place ? fallback : undefined
+  const title = readModelString(input.title) || (useFallbackPoi ? fallbackPoi.activityTitle : phaseFallback?.title) || fallbackPoi.activityTitle
+  const lnglat = readLngLat(input.lnglat) ?? placeFallback?.lnglat ?? (place === fallbackPoi.name ? fallbackPoi.lnglat : undefined) ?? mockLngLatForSegment(phase, segmentIndex)
   return {
     id: createId('seg'),
     phase,
@@ -276,12 +257,12 @@ function coerceSegment(value: unknown, fallback: PlanSegment | undefined, basePl
     endTime,
     durationMinutes: Math.max(30, toMinutes(endTime) - toMinutes(startTime)),
     status: '待确认',
-    reason: readModelString(input.reason) || fallback?.reason || fallbackPoi.description,
-    budget: readModelString(input.budget) || fallback?.budget || fallbackPoi.budget,
-    notes: readModelString(input.notes) || fallback?.notes || fallbackPoi.notes,
-    poiId: readModelString(input.poiId) || fallback?.poiId || (place === fallbackPoi.name ? fallbackPoi.id : ['model', phase, segmentIndex + 1].join('-')),
+    reason: readModelString(input.reason) || phaseFallback?.reason || fallbackPoi.description,
+    budget: readModelString(input.budget) || phaseFallback?.budget || fallbackPoi.budget,
+    notes: readModelString(input.notes) || phaseFallback?.notes || fallbackPoi.notes,
+    poiId: readModelString(input.poiId) || placeFallback?.poiId || (place === fallbackPoi.name ? fallbackPoi.id : ['model', phase, segmentIndex + 1].join('-')),
     serviceCategory,
-    locked: typeof input.locked === 'boolean' ? input.locked : fallback?.locked,
+    locked: typeof input.locked === 'boolean' ? input.locked : phaseFallback?.locked,
     lnglat,
   }
 }

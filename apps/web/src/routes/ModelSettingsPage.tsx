@@ -6,6 +6,7 @@ import {
   applyModelProviderPreset,
   clearModelConfig,
   isCompleteModelConfig,
+  isVerifiedModelConfig,
   maskApiKey,
   modelConfigsEqual,
   normalizeModelConfig,
@@ -31,6 +32,7 @@ export function ModelSettingsPage() {
   const testAbortRef = useRef<AbortController | null>(null)
   const isDirty = !modelConfigsEqual(form, savedConfig)
   const formComplete = isCompleteModelConfig(form)
+  const formVerified = isVerifiedModelConfig(form)
   const savedPublic = publicModelConfig(savedConfig)
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function ModelSettingsPage() {
     setIsEditing(true)
     setForm((prev) => {
       const next = { ...prev, [field]: value }
-      if (field === 'baseURL' || field === 'model') {
+      if (field === 'baseURL' || field === 'apiKey' || field === 'model') {
         delete next.resolvedBaseURL
         delete next.lastTestedAt
       }
@@ -65,9 +67,9 @@ export function ModelSettingsPage() {
 
   function save() {
     const nextConfig = normalizeModelConfig(form)
-    if (!isCompleteModelConfig(nextConfig)) {
+    if (!isVerifiedModelConfig(nextConfig)) {
       setForm(nextConfig)
-      setStatus('请先填写 Base URL、API Key 和 Model 后再保存。')
+      setStatus('请先完成模型连接测试，再保存配置。')
       return
     }
     saveModelConfig(nextConfig)
@@ -132,7 +134,7 @@ export function ModelSettingsPage() {
           <span className={settingsClasses.headerCopy}>
             <span className={appClasses.eyebrow}>BYOK · 模型连接</span>
             <h1 className={settingsClasses.title}>连接你的模型</h1>
-            <p className={settingsClasses.paragraph}>选择一个供应商预设，再补齐连接信息。保存后，聊天 Agent 才会使用这组配置。</p>
+            <p className={settingsClasses.paragraph}>选择供应商并验证连接。只有测试成功且已保存的配置才能进入 Agent 工作台。</p>
           </span>
         </header>
 
@@ -149,7 +151,7 @@ export function ModelSettingsPage() {
               ) : (
                 <>
                   <strong className={settingsClasses.summaryTitle}>还没有保存模型配置</strong>
-                  <span className={settingsClasses.summaryLine}>未配置时仍可使用本地 fallback；保存后才会启用聊天 Agent。</span>
+                  <span className={settingsClasses.summaryLine}>请先测试并保存有效连接；未连接时不能创建计划或进入工作台。</span>
                 </>
               )}
               {isDirty && <em className={settingsClasses.dirty}>当前表单尚未保存</em>}
@@ -187,7 +189,7 @@ export function ModelSettingsPage() {
 
             <div className={settingsClasses.sectionHeading}>
               <strong className={settingsClasses.sectionTitle}>连接信息</strong>
-              <p className={settingsClasses.sectionText}>建议先测试连接，确认端点可用后再保存到浏览器。</p>
+              <p className={settingsClasses.sectionText}>必须先测试连接；修改 Base URL、API Key 或模型名后需要重新测试。</p>
             </div>
             <div className={settingsClasses.fields}>
               <label className={`${settingsClasses.label} ${settingsClasses.wideField}`}>
@@ -204,7 +206,7 @@ export function ModelSettingsPage() {
               </label>
             </div>
             <div className={settingsClasses.buttonRow}>
-              <button className={settingsClasses.button} type="button" onClick={save} disabled={!formComplete}>保存配置</button>
+              <button className={settingsClasses.button} type="button" onClick={save} disabled={!formVerified}>保存配置</button>
               <button type="button" className={settingsClasses.secondaryButton} onClick={test} disabled={testing || !formComplete}>
                 {testing ? '测试中' : '测试连接'}
               </button>

@@ -170,6 +170,8 @@ describe('workspace model helpers', () => {
       baseURL: 'https://api.example.com/v1',
       apiKey: 'sk-demo',
       model: 'demo',
+      resolvedBaseURL: 'https://api.example.com/v1',
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
     }
 
     expect(canSendAgentChat(null, '把晚饭换近一点')).toBe(false)
@@ -183,15 +185,17 @@ describe('workspace model helpers', () => {
       baseURL: 'https://api.example.com/v1',
       apiKey: 'sk-demo',
       model: 'demo',
+      resolvedBaseURL: 'https://api.example.com/v1',
+      lastTestedAt: '2026-06-18T00:00:00.000Z',
     }
 
-    expect(getAgentChatDisabledReason(null, '你好')).toBe('请先完整填写并保存模型配置')
+    expect(getAgentChatDisabledReason(null, '你好')).toBe('请先测试并保存可用的模型连接')
     expect(canSendAgentChat({ ...config, apiKey: '' }, '你好')).toBe(false)
-    expect(getAgentChatDisabledReason({ ...config, apiKey: '' }, '你好')).toBe('请先完整填写并保存模型配置')
+    expect(getAgentChatDisabledReason({ ...config, apiKey: '' }, '你好')).toBe('请先测试并保存可用的模型连接')
     expect(getAgentChatDisabledReason(config, '')).toBe('请输入要发送给 Agent 的内容')
     expect(getAgentChatDisabledReason(config, '你好', true)).toBe('Agent 正在处理上一条消息')
     expect(getAgentChatDisabledReason(config, '你好')).toBe('')
-    expect(getChatExecutionPathLabel(null, '你好')).toBe('离线 fallback')
+    expect(getChatExecutionPathLabel(null, '你好')).toBe('模型连接不可用')
     expect(getChatExecutionPathLabel(config, '你是什么模型')).toBe('模型回答')
     expect(getChatExecutionPathLabel(config, '把晚饭换近一点')).toBe('模型意图理解 + 确定性拼图命令')
     expect(getChatExecutionPathLabel(config, '中间再加个咖啡休息')).toBe('模型意图理解 + 确定性拼图命令')
@@ -227,23 +231,6 @@ describe('workspace model helpers', () => {
       sequence: 2,
       type: 'agent.error',
       message: 'Candidate action is no longer active',
-    })).toBe(true)
-    expect(chatMessageFromAgentEvent({
-      ...baseEvent,
-      id: 'evt_2',
-      sequence: 3,
-      type: 'agent.finished',
-      message: '模型调用失败，已切换离线 fallback：我可以解释当前安排。',
-    })).toEqual({
-      role: 'planpal',
-      content: '模型调用失败，已切换离线 fallback：我可以解释当前安排。',
-    })
-    expect(shouldOpenChatForAgentEvent({
-      ...baseEvent,
-      id: 'evt_2',
-      sequence: 3,
-      type: 'agent.finished',
-      message: '模型调用失败，已切换离线 fallback：我可以解释当前安排。',
     })).toBe(true)
     expect(shouldOpenChatForAgentEvent({
       ...baseEvent,
