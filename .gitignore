@@ -33,6 +33,8 @@ web-dev.err.log
 edge-*/
 playwright-report/
 test-results/
+/output/playwright/
+/design-qa.md
 /*.png
 /*.webm
 /*.mp4
