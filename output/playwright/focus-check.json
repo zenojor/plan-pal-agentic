@@ -1,0 +1,27 @@
+{
+  "keyboardFocusStyle": {
+    "active": true,
+    "borderColor": "rgb(255, 204, 0)",
+    "borderWidth": "2px",
+    "className": "planpal-focus-managed min-h-[48px] max-h-[120px] w-full resize-none rounded-[18px] border-[2.5px] border-animal-border bg-[#fffdf5] px-3.5 py-[0.68rem] text-sm font-medium leading-[1.55] text-animal-text-body shadow-[0_3px_0_var(--animal-shadow-input)] transition placeholder:font-normal placeholder:text-[var(--animal-text-disabled)] hover:border-[var(--animal-border-hover)]",
+    "boxShadow": "rgb(224, 184, 0) 0px 3px 0px 0px",
+    "focusMatches": true,
+    "focusVisibleMatches": true,
+    "outlineColor": "rgb(114, 93, 66)",
+    "outlineStyle": "none",
+    "outlineWidth": "3px"
+  },
+  "pointerFocusStyle": {
+    "active": true,
+    "borderColor": "rgb(255, 204, 0)",
+    "borderWidth": "2px",
+    "className": "planpal-focus-managed min-h-[48px] max-h-[120px] w-full resize-none rounded-[18px] border-[2.5px] border-animal-border bg-[#fffdf5] px-3.5 py-[0.68rem] text-sm font-medium leading-[1.55] text-animal-text-body shadow-[0_3px_0_var(--animal-shadow-input)] transition placeholder:font-normal placeholder:text-[var(--animal-text-disabled)] hover:border-[var(--animal-border-hover)]",
+    "boxShadow": "rgb(224, 184, 0) 0px 3px 0px 0px",
+    "focusMatches": true,
+    "focusVisibleMatches": true,
+    "outlineColor": "rgb(114, 93, 66)",
+    "outlineStyle": "none",
+    "outlineWidth": "3px"
+  },
+  "consoleErrors": []
+}

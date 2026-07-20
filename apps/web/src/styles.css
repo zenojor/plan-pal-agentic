@@ -138,6 +138,15 @@ select {
   outline-offset: 3px;
 }
 
+:where(.planpal-focus-managed):focus-visible {
+  outline: none;
+}
+
+:where(.planpal-focus-managed):focus {
+  border-color: var(--animal-focus-yellow);
+  box-shadow: 0 3px 0 var(--animal-focus-yellow-d);
+}
+
 textarea,
 input {
   caret-color: var(--animal-primary-active);

@@ -170,11 +170,10 @@ export const agentChatClasses = {
     'max-[340px]:grid-cols-1 [&_[class*="animal-btn"]]:min-w-[72px] [&_[class*="animal-btn"]]:self-end max-[340px]:[&_[class*="animal-btn"]]:w-full',
   ),
   composerInput: classNames(
-    'min-h-[48px] max-h-[120px] w-full resize-none rounded-[18px] border-[2.5px] border-animal-border',
+    'planpal-focus-managed min-h-[48px] max-h-[120px] w-full resize-none rounded-[18px] border-[2.5px] border-animal-border',
     'bg-[#fffdf5] px-3.5 py-[0.68rem] text-sm font-medium leading-[1.55] text-animal-text-body [letter-spacing:0.01em]',
     'shadow-[0_3px_0_var(--animal-shadow-input)] transition placeholder:font-normal placeholder:text-[var(--animal-text-disabled)]',
-    'hover:border-[var(--animal-border-hover)] focus:border-[var(--animal-focus-yellow)] focus:outline-none focus-visible:outline-none',
-    'focus:shadow-[0_3px_0_var(--animal-focus-yellow-d)]',
+    'hover:border-[var(--animal-border-hover)]',
   ),
   composerMeta: 'flex min-w-0 items-center justify-between gap-3 px-1 text-xs font-medium leading-4 text-[var(--animal-text-muted)]',
   disabledReason: 'm-0 px-1 text-xs font-semibold leading-4 text-[var(--animal-error)]',
