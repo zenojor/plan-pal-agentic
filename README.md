@@ -2,6 +2,8 @@
 
 PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作台**。它把自然语言 Agent、可编辑拼图行程、多列工作台、模型配置和本地演示存储放在同一个 pnpm monorepo 里。
 
+在线演示：[https://plan-pal-agentic-zeno.zenojor.chatgpt.site/](https://plan-pal-agentic-zeno.zenojor.chatgpt.site/)
+
 项目最重要的设计原则是：
 
 ```text
