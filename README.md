@@ -54,7 +54,6 @@ packages/
   eval/       Agent golden/architecture eval、trace 报告和真实模型 smoke
 docs/
   agent-flow.md  真实 Graph、状态、条件边和恢复链路
-  agent-case-study.md  面试向架构说明
 ```
 
 这个项目不是传统的 `frontend/` + `backend/` 拆法。真正重要的边界是：
@@ -278,7 +277,7 @@ pnpm eval:agent -- --suite live-smoke --provider deepseek
 Remove-Item Env:\PLANPAL_EVAL_API_KEY
 ```
 
-报告输出在 `docs/evals/`，面试叙事见 [docs/agent-case-study.md](docs/agent-case-study.md)。
+报告输出在 `docs/evals/`。
 
 ## 开发守则
 
