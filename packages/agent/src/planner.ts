@@ -64,9 +64,10 @@ export async function createPlanWithVariants(
       attemptedEndpoints,
     })
     const text = await generateAssistantReply(modelConfig, buildPlanVariantMessages(prompt, basePlan))
-    const minimumSegments = minimumSegmentCountForPrompt(prompt)
+    const requiredActivities = requiredActivitiesForPrompt(prompt)
+    const minimumSegments = requiredActivities.length >= 2 ? 2 : 0
     let variants = parsePlanVariantResponse(text, basePlan)
-    if (minimumSegments > 0 && variants.length >= 2 && variants.some((variant) => variant.segments.length < minimumSegments)) {
+    if (variants.length >= 2 && variants.some((variant) => !variantSatisfiesStructure(variant, minimumSegments, requiredActivities))) {
       await emit('agent.model.started', 'Calling model to repair plan structure', {
         model,
         phase: 'repair-plan',
@@ -75,9 +76,18 @@ export async function createPlanWithVariants(
         attemptedEndpoints,
         minimumSegments,
       })
-      const repairedText = await generateAssistantReply(modelConfig, buildPlanRepairMessages(prompt, text, minimumSegments))
+      const repairedText = await generateAssistantReply(modelConfig, buildPlanRepairMessages(
+        prompt,
+        text,
+        minimumSegments,
+        requiredActivities.map((activity) => activity.label),
+      ))
       const repairedVariants = parsePlanVariantResponse(repairedText, basePlan)
-      if (repairedVariants.length >= 2 && repairedVariants.every((variant) => variant.segments.length >= minimumSegments)) {
+      if (repairedVariants.length >= 2 && repairedVariants.every((variant) => variantSatisfiesStructure(
+        variant,
+        minimumSegments,
+        requiredActivities,
+      ))) {
         variants = repairedVariants
       }
       await emit('agent.model.finished', 'Model plan structure repaired', {
@@ -92,7 +102,11 @@ export async function createPlanWithVariants(
     }
     if (variants.length < 2) throw new Error('模型返回的方案不足')
     if (minimumSegments > 0 && variants.some((variant) => variant.segments.length < minimumSegments)) {
-      throw new Error(`模型返回的复杂方案节点不足，至少需要 ${minimumSegments} 个节点`)
+      throw new Error(`模型返回的方案未覆盖多活动需求，至少需要 ${minimumSegments} 个节点`)
+    }
+    const missingActivities = [...new Set(variants.flatMap((variant) => missingRequiredActivities(variant, requiredActivities)))]
+    if (missingActivities.length > 0) {
+      throw new Error(`模型返回的方案缺少明确活动：${missingActivities.join('、')}`)
     }
     const plan = attachPlanVariants(basePlan, variants.slice(0, 3))
     await emit('agent.model.finished', 'Model plan variants generated', {
@@ -131,7 +145,7 @@ function buildPlanVariantMessages(prompt: string, basePlan: Plan): CoreMessage[]
         'You are PlanPal plan variant generator.',
         'Return only JSON. No markdown.',
         'Schema: {"variants":[{"title":"string","summary":"string","tags":["string"],"reasons":["string"],"segments":[{"phase":"activity|dining|drinks|leisure","serviceCategory":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other","title":"string","place":"string","startTime":"HH:mm","endTime":"HH:mm","reason":"string","budget":"string","notes":"optional execution constraints/checklist","locked":false,"lnglat":[121.47,31.23]}]}]}.',
-        'Return 3 variants. Infer the task structure from userPrompt; do not choose from predefined plan branches. Every place must be fictional but specific, like a named shop/studio/restaurant; never use real merchant names and never use generic category names such as 展览, 餐厅, 咖啡店, 小馆, 附近可选地点. Do not collapse distinct user goals into one segment. If the prompt contains more than two goals, dependencies, participants, or constraints, each variant must include 4-7 executable segments with at least one buffer/checkpoint segment. Use notes for risks, dependencies, pre-checks, and fallback rules. Do not include secrets or API keys.',
+        'Return 3 variants. Infer the task structure from userPrompt; do not choose from predefined plan branches. Use 1-7 executable segments according to the explicit activities. Every distinct activity should be covered, but constraints such as route stability, pace, budget, participant count, weather, and preferences belong in notes, reason, or budget rather than separate segments. Do not add filler or a buffer solely to reach a count; add a buffer/checkpoint only when it has execution value. Every place must be fictional but specific, like a named shop/studio/restaurant; never use real merchant names and never use generic category names such as 展览, 餐厅, 咖啡店, 小馆, 附近可选地点. Do not include secrets or API keys.',
       ].join(' '),
     },
     {
@@ -148,7 +162,12 @@ function buildPlanVariantMessages(prompt: string, basePlan: Plan): CoreMessage[]
   ]
 }
 
-function buildPlanRepairMessages(prompt: string, previousResponse: string, minimumSegments: number): CoreMessage[] {
+function buildPlanRepairMessages(
+  prompt: string,
+  previousResponse: string,
+  minimumSegments: number,
+  requiredActivities: string[],
+): CoreMessage[] {
   return [
     {
       role: 'system',
@@ -156,8 +175,8 @@ function buildPlanRepairMessages(prompt: string, previousResponse: string, minim
         'You are PlanPal plan variant repairer.',
         'Return only JSON. No markdown.',
         'Repair the previous response so each variant has enough executable segments. Do not use predefined plan branches. Every place must be fictional but specific; never use real merchant names or generic category names.',
-        `Each variant must include at least ${minimumSegments} and at most 7 segments. Include buffer/checkpoint segments when the user prompt has multiple constraints.`,
-        'Keep the user intent, but split collapsed goals into separate segments with clear times, reasons, budgets, and notes.',
+        `Each variant must include at least ${minimumSegments} and at most 7 segments because the prompt contains multiple explicit activities.`,
+        'Keep the user intent and split collapsed activities into separate segments with clear times, reasons, budgets, and notes. Keep route, pace, budget, participant, weather, and preference constraints in segment fields; do not turn them into filler segments.',
       ].join(' '),
     },
     {
@@ -165,18 +184,57 @@ function buildPlanRepairMessages(prompt: string, previousResponse: string, minim
       content: JSON.stringify({
         userPrompt: prompt,
         validationError: `Each variant must have at least ${minimumSegments} executable segments.`,
+        requiredActivities,
         previousResponse: redactModelText(previousResponse),
       }),
     },
   ]
 }
 
-function minimumSegmentCountForPrompt(prompt: string) {
-  const clauses = prompt.split(/[，,。；;、]/).map((part) => part.trim()).filter(Boolean)
-  const connectors = prompt.match(/和|与|到|再|然后|最后|以及/g) ?? []
-  if (clauses.length >= 4 || connectors.length >= 3 || prompt.trim().length >= 48) return 4
-  return 0
+function requiredActivitiesForPrompt(prompt: string) {
+  const matched = explicitActivityRequirements.filter((activity) => activity.promptPattern.test(prompt))
+  return matched.length >= 2 ? matched : []
 }
+
+function variantSatisfiesStructure(
+  variant: PlanVariantOption,
+  minimumSegments: number,
+  requiredActivities: ExplicitActivityRequirement[],
+) {
+  return variant.segments.length >= minimumSegments
+    && missingRequiredActivities(variant, requiredActivities).length === 0
+}
+
+function missingRequiredActivities(variant: PlanVariantOption, requiredActivities: ExplicitActivityRequirement[]) {
+  return requiredActivities
+    .filter((activity) => !variant.segments.some((segment) => {
+      const text = [segment.title, segment.place, segment.reason, segment.notes].filter(Boolean).join(' ')
+      return activity.segmentPattern.test(text)
+        || activity.phases?.includes(segment.phase)
+        || (segment.serviceCategory ? activity.categories?.includes(segment.serviceCategory) : false)
+    }))
+    .map((activity) => activity.label)
+}
+
+type ExplicitActivityRequirement = {
+  label: string
+  promptPattern: RegExp
+  segmentPattern: RegExp
+  phases?: PlanSegment['phase'][]
+  categories?: NonNullable<PlanSegment['serviceCategory']>[]
+}
+
+const explicitActivityRequirements: ExplicitActivityRequirement[] = [
+  { label: '产品演示', promptPattern: /产品演示|方案演示|演示产品|汇报|展示/, segmentPattern: /演示|展示|汇报/ },
+  { label: '用餐', promptPattern: /早餐|早饭|午餐|午饭|晚餐|晚饭|吃饭|用餐/, segmentPattern: /餐|饭|用餐|宴/, phases: ['dining'], categories: ['dining'] },
+  { label: '复盘', promptPattern: /复盘|总结|回顾/, segmentPattern: /复盘|总结|回顾|下一步/ },
+  { label: '咖啡或茶歇', promptPattern: /咖啡|茶歇|下午茶/, segmentPattern: /咖啡|茶歇|下午茶/, phases: ['drinks'], categories: ['drinks'] },
+  { label: '电影', promptPattern: /电影|观影|影院/, segmentPattern: /电影|观影|影院/, categories: ['movie'] },
+  { label: '酒店住宿', promptPattern: /酒店|住宿|入住/, segmentPattern: /酒店|住宿|入住|客房/, categories: ['hotel'] },
+  { label: '购物', promptPattern: /购物|逛街/, segmentPattern: /购物|逛街|商场/, categories: ['retail'] },
+  { label: '散步或游览', promptPattern: /散步|游览|参观/, segmentPattern: /散步|游览|参观/ },
+  { label: '会议或会谈', promptPattern: /会议|会谈|沟通会/, segmentPattern: /会议|会谈|沟通/ },
+] as const
 
 function parsePlanVariantResponse(raw: string, basePlan: Plan): PlanVariantOption[] {
   const json = extractJsonObject(raw)

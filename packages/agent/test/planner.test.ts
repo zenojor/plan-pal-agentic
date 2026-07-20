@@ -74,8 +74,6 @@ describe('plan creation variants', () => {
                 reasons: ['需要修复'],
                 segments: [
                   { phase: 'activity', title: '演示', place: '会议室', startTime: '14:00', endTime: '16:00', reason: '产品演示', budget: 'CNY 100-200/人' },
-                  { phase: 'dining', title: '晚餐', place: '餐厅', startTime: '17:00', endTime: '18:30', reason: '商务晚餐', budget: 'CNY 200-300/人' },
-                  { phase: 'drinks', title: '复盘', place: '大堂吧', startTime: '19:00', endTime: '20:00', reason: '简短复盘', budget: 'CNY 80-160/人' },
                 ],
               },
               {
@@ -85,8 +83,6 @@ describe('plan creation variants', () => {
                 reasons: ['需要修复'],
                 segments: [
                   { phase: 'activity', title: '演示', place: '会议室', startTime: '14:00', endTime: '16:00', reason: '产品演示', budget: 'CNY 100-200/人' },
-                  { phase: 'dining', title: '晚餐', place: '餐厅', startTime: '17:00', endTime: '18:30', reason: '商务晚餐', budget: 'CNY 200-300/人' },
-                  { phase: 'drinks', title: '复盘', place: '大堂吧', startTime: '19:00', endTime: '20:00', reason: '简短复盘', budget: 'CNY 80-160/人' },
                 ],
               },
             ],
@@ -116,6 +112,7 @@ describe('plan creation variants', () => {
                   { phase: 'activity', title: '演示', place: '会议室', startTime: '14:30', endTime: '15:45', reason: '核心任务', budget: 'CNY 100-200/人' },
                   { phase: 'leisure', title: '缓冲', place: '休息区', startTime: '15:55', endTime: '16:25', reason: '不赶', budget: 'CNY 0-60/人' },
                   { phase: 'dining', title: '晚餐', place: '餐厅', startTime: '17:00', endTime: '18:30', reason: '商务晚餐', budget: 'CNY 200-300/人' },
+                  { phase: 'drinks', title: '简短复盘', place: '茶室', startTime: '18:45', endTime: '19:15', reason: '确认下一步', budget: 'CNY 40-80/人' },
                 ],
               },
             ],
@@ -132,7 +129,38 @@ describe('plan creation variants', () => {
     expect(result.events.some((event) => event.payload && typeof event.payload === 'object' && (event.payload as { phase?: unknown }).phase === 'repair-plan')).toBe(true)
     if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
     expect(result.plan.pendingAction.variants[0]?.title).toBe('修复方案 A')
-    expect(result.plan.pendingAction.variants[0]?.segments.length).toBeGreaterThanOrEqual(4)
+    expect(result.plan.pendingAction.variants[0]?.segments.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('accepts three explicit activities without turning constraints into a fourth node', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      const segments = [
+        { phase: 'activity', title: '产品演示', place: '栖光会议室', startTime: '14:00', endTime: '16:00', reason: '完成产品演示', budget: 'CNY 100-200/人' },
+        { phase: 'dining', title: '商务晚餐', place: '松庭餐叙馆', startTime: '17:00', endTime: '18:30', reason: '稳定交流', budget: 'CNY 200-300/人' },
+        { phase: 'drinks', title: '简短复盘', place: '云廊茶室', startTime: '19:00', endTime: '20:00', reason: '沉淀下一步', budget: 'CNY 80-160/人' },
+      ]
+      const variants = ['稳妥版', '紧凑版', '交流版'].map((title) => ({
+        title,
+        summary: '演示、晚餐和复盘',
+        tags: ['商务'],
+        reasons: ['覆盖明确活动'],
+        segments,
+      }))
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ variants }) } }] }), { status: 200 })
+    })
+
+    const result = await createPlanWithVariants(
+      '周五下午接待 4 位客户，从产品演示到晚餐和简短复盘，路线要稳，不能太赶，预算中高。',
+      config,
+    )
+
+    expect(calls).toBe(1)
+    expect(result.events.some((event) => event.payload && typeof event.payload === 'object' && (event.payload as { phase?: unknown }).phase === 'repair-plan')).toBe(false)
+    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
+    expect(result.plan.pendingAction.variants).toHaveLength(3)
+    expect(result.plan.pendingAction.variants.every((variant) => variant.segments.length === 3)).toBe(true)
   })
 
   it('sanitizes model-generated variant text and invalid segment times', async () => {
