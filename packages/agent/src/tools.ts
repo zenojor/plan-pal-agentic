@@ -14,7 +14,7 @@ import {
   type ToolEffect,
 } from '@planpal/domain'
 import { z } from 'zod'
-import type { ToolCallRequest, ToolResult } from './schemas'
+import { CandidateIntentSchema, type ToolCallRequest, type ToolResult } from './schemas'
 
 export const planPalToolNames = [
   'poi_search',
@@ -49,6 +49,7 @@ const poiSearchSchema = z.object({
   segmentId: z.string().optional(),
   afterSegmentId: z.string().nullable().optional(),
   excludeCandidateIds: z.array(z.string()).optional(),
+  candidateIntent: CandidateIntentSchema.optional(),
 })
 
 const offeringSearchSchema = z.object({
@@ -170,8 +171,19 @@ export class ToolRegistry {
       })
       const candidates = input.mode === 'add-after'
         ? createAddSegmentCandidates(plan, input.afterSegmentId, input.query, input.excludeCandidateIds)
-        : createReplacementCandidates(plan, requireText(input.segmentId, 'segmentId'), input.query, input.excludeCandidateIds)
-      return { source: 'fictional-local-mock-v2', intent: summarizeCandidateSearchIntent(intent), candidates }
+        : createReplacementCandidates(
+            plan,
+            requireText(input.segmentId, 'segmentId'),
+            input.query,
+            input.excludeCandidateIds,
+            input.candidateIntent,
+          )
+      return {
+        source: 'fictional-local-mock-v2',
+        candidateIntent: input.candidateIntent,
+        intent: summarizeCandidateSearchIntent(intent),
+        candidates,
+      }
     })
     this.add('offering_search', 'Search fictional merchant offerings.', offeringSearchSchema, async (input) => ({
       source: 'fictional-local-mock-v2',

@@ -495,6 +495,33 @@ function goldenScenarios(): EvalScenario[] {
       },
     })),
     {
+      id: 'golden-contextual-cross-type-replace',
+      title: 'Dining is replaced by activity/leisure candidates instead of deleted',
+      tags: ['golden', 'candidate', 'contextual', 'cross-type'],
+      initialPrompt: '下午两个人附近轻松玩',
+      message: '还是不吃饭了去玩点其他的',
+      expect: { pendingKind: 'candidate-selection', runStatus: 'waiting_for_user', toolNames: ['poi.search'] },
+    },
+    {
+      id: 'golden-model-contextual-cross-type-replace',
+      title: 'Structured model intent keeps cross-type replacement grounded',
+      tags: ['golden', 'model', 'candidate', 'cross-type'],
+      initialPrompt: '下午两个人附近轻松玩',
+      message: '还是不吃饭了去玩点其他的',
+      modelReply: JSON.stringify({
+        action: 'replace',
+        targetPhase: 'dining',
+        replacementScope: 'cross-type',
+        desiredPhases: ['activity', 'leisure'],
+        excludedPhases: ['dining'],
+        query: '还是不吃饭了去玩点其他的',
+        reason: 'replace meal with play in the same slot',
+        confidence: 0.99,
+      }),
+      useModel: true,
+      expect: { pendingKind: 'candidate-selection', runStatus: 'waiting_for_user', toolNames: ['poi.search'] },
+    },
+    {
       id: 'golden-movie-ticket',
       title: 'Select movie ticket through service ticket',
       tags: ['golden', 'service', 'movie'],
@@ -698,8 +725,8 @@ function goldenScenarios(): EvalScenario[] {
       expect: { commandTypes: ['DELETE_SEGMENT'], runStatus: 'completed' },
     },
   ]
-  if (scenarios.length !== 42) {
-    throw new Error(`Golden suite must contain 42 scenarios, got ${scenarios.length}`)
+  if (scenarios.length !== 44) {
+    throw new Error(`Golden suite must contain 44 scenarios, got ${scenarios.length}`)
   }
   return scenarios
 }

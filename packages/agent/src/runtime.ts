@@ -20,6 +20,8 @@ export type AgentRunInput = {
   planId: string
   message: string
   selectedSegmentId?: string
+  candidateActionId?: string
+  interactionSource?: 'chat' | 'candidate-card'
   modelConfig: ClientModelConfig
 }
 
@@ -54,7 +56,7 @@ export class PlanPalAgentRuntime {
         planId: input.planId,
         runId: waiting.id,
         actionId: plan.pendingAction.id,
-        payload: { answer: input.message },
+        payload: { answer: input.message, interactionSource: input.interactionSource ?? 'chat' },
         modelConfig,
       }, sink)
     }
@@ -76,6 +78,11 @@ export class PlanPalAgentRuntime {
     await emitter.emit('agent.started', 'Agent run started', { threadId, status: 'running' })
     await emitter.emit('run.status', 'Run is running', { status: 'running', threadId })
 
+    const candidateAction = plan.pendingAction?.kind === 'candidate-selection'
+      && (!input.candidateActionId || plan.pendingAction.id === input.candidateActionId)
+      ? plan.pendingAction
+      : undefined
+
     const graph = buildPlanPalLangGraph({
       stores: this.stores,
       tools: this.tools,
@@ -90,7 +97,9 @@ export class PlanPalAgentRuntime {
       runId,
       baseVersion: plan.currentVersion,
       metadata: {
-        selectedSegmentId: input.selectedSegmentId,
+        selectedSegmentId: input.selectedSegmentId ?? candidateAction?.targetSegmentId,
+        candidateActionId: candidateAction?.id,
+        interactionSource: input.interactionSource ?? 'chat',
         userMessage: input.message,
         routeSource: 'deterministic' as const,
         fallbackReasons: [],
@@ -100,7 +109,12 @@ export class PlanPalAgentRuntime {
         activeToolCallIds: [],
         appliedCommands: [],
         appliedPatches: [],
-        excludedCandidateIds: [],
+        excludedCandidateIds: candidateAction
+          ? [...new Set([
+              ...(candidateAction.session?.seenPoiIds ?? candidateAction.excludeCandidateIds ?? []),
+              ...candidateAction.candidates.map((candidate) => candidate.id),
+            ])]
+          : [],
         continuation: null,
         resumed: false,
       },
@@ -211,13 +225,13 @@ function normalizeResume(actionId: string, payload: unknown, action?: PendingAct
   if (typeof value.variantId === 'string') return PlanPalResumeSchema.parse({ ...value, actionId, decision: 'selected' })
   if (typeof value.answer === 'string') {
     const answer = value.answer.trim().toLowerCase()
-    if (containsAny(answer, ['还是算了', '算了', '取消', '不要了', 'cancel'])) {
+    if (matchesMechanicalAnswer(answer, ['还是算了', '算了', '取消', '不要了', 'cancel'])) {
       return PlanPalResumeSchema.parse({ actionId, decision: 'rejected' })
     }
-    if (containsAny(answer, ['换一个', '再换', '别的', 'another'])) {
+    if (matchesMechanicalAnswer(answer, ['换一个', '再换', '换一批', '别的', 'another'])) {
       return PlanPalResumeSchema.parse({ actionId, decision: 'retry' })
     }
-    if (containsAny(answer, ['确认', '确定', '可以', 'approved'])) {
+    if (matchesMechanicalAnswer(answer, ['确认', '确定', '可以', 'approved'])) {
       return PlanPalResumeSchema.parse({ actionId, decision: 'approved' })
     }
     const ordinal = readOrdinal(answer)
@@ -232,19 +246,25 @@ function normalizeResume(actionId: string, payload: unknown, action?: PendingAct
       if (typeof offeringId === 'string') return PlanPalResumeSchema.parse({ actionId, decision: 'selected', offeringId })
       if (typeof variantId === 'string') return PlanPalResumeSchema.parse({ actionId, decision: 'selected', variantId })
     }
-    return PlanPalResumeSchema.parse({ ...value, actionId, decision: 'answered' })
+    return PlanPalResumeSchema.parse({
+      ...value,
+      actionId,
+      decision: action?.kind === 'candidate-selection' ? 'revise' : 'answered',
+    })
   }
   return PlanPalResumeSchema.parse({ actionId, decision: value.confirmed === false ? 'rejected' : 'approved' })
 }
 
-function containsAny(value: string, needles: string[]) {
-  return needles.some((needle) => value.includes(needle))
+function matchesMechanicalAnswer(value: string, answers: string[]) {
+  const normalized = value.replace(/[，。！？、,.!?\s]/g, '')
+  return answers.some((answer) => normalized === answer.replace(/[，。！？、,.!?\s]/g, ''))
 }
 
 function readOrdinal(value: string) {
-  if (containsAny(value, ['第二', '第2', '2nd'])) return 1
-  if (containsAny(value, ['第三', '第3', '3rd'])) return 2
-  if (containsAny(value, ['第一', '第1', '1st'])) return 0
+  const normalized = value.toLowerCase().replace(/[，。！？、,.!?\s]/g, '')
+  if (/^(?:就|选|选择)?(?:第二个|第2个|2nd)$/.test(normalized)) return 1
+  if (/^(?:就|选|选择)?(?:第三个|第3个|3rd)$/.test(normalized)) return 2
+  if (/^(?:就|选|选择)?(?:第一个|第1个|1st)$/.test(normalized)) return 0
   return undefined
 }
 

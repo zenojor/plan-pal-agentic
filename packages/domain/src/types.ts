@@ -4,6 +4,8 @@ export type PlanStatus = 'draft' | 'ready' | 'pending_confirmation' | 'confirmed
 
 export type SegmentPhase = 'activity' | 'dining' | 'drinks' | 'leisure' | 'transit'
 
+export type CandidatePoiPhase = Exclude<SegmentPhase, 'transit'>
+
 export type CommandSource = 'puzzle' | 'agent' | 'action-card' | 'system'
 
 export type RouteMode = 'walk' | 'transit' | 'taxi'
@@ -103,6 +105,42 @@ export type CommandConfirmationPreview = {
   afterOrder?: string[]
 }
 
+export type CandidateIntent = {
+  operation: 'refresh' | 'refine' | 'replace'
+  replacementScope: 'same-type' | 'cross-type'
+  targetSegmentId: string
+  desiredPhases: CandidatePoiPhase[]
+  excludedPhases: CandidatePoiPhase[]
+  query: string
+  hardConstraints: {
+    startTime: string
+    endTime: string
+    locked: false
+    catalogOnly: true
+  }
+  softPreferences: {
+    budget?: string
+    distance?: string
+    pace?: string
+    tags?: string[]
+  }
+}
+
+export type CandidateSearchSession = {
+  actionId: string
+  targetSegmentId: string
+  sourceSegmentSnapshot: {
+    poiId: string
+    phase: CandidatePoiPhase
+    serviceCategory?: MerchantServiceCategory
+    startTime: string
+    endTime: string
+  }
+  intent: CandidateIntent
+  seenPoiIds: string[]
+  revision: number
+}
+
 export type PendingAction = {
   runId?: string
   planId?: string
@@ -119,6 +157,7 @@ export type PendingAction = {
       searchQuery?: string
       candidates: CandidateOption[]
       excludeCandidateIds?: string[]
+      session?: CandidateSearchSession
     }
   | {
       id: string
@@ -430,6 +469,8 @@ export type PlanCommand =
       searchQuery?: string
       excludeCandidateIds?: string[]
       candidates?: CandidateOption[]
+      candidateIntent?: CandidateIntent
+      resetSession?: boolean
     }
   | {
       type: 'REQUEST_CLARIFICATION'

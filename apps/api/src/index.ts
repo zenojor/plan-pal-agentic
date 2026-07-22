@@ -56,6 +56,8 @@ type CreatePlanBody = {
 type AgentRunBody = {
   message?: string
   selectedSegmentId?: string
+  candidateActionId?: string
+  interactionSource?: 'chat' | 'candidate-card'
   baseURL?: string
   model?: string
   providerMode?: 'auto' | 'openai-compatible'
@@ -403,6 +405,8 @@ app.post('/api/plans/:planId/agent/runs', async (context) => {
         planId,
         message: body.message!.trim(),
         selectedSegmentId: body.selectedSegmentId,
+        candidateActionId: body.candidateActionId,
+        interactionSource: body.interactionSource,
         modelConfig,
       }, async (event) => {
         runId = event.runId

@@ -40,6 +40,28 @@ describe('agent natural language router', () => {
     expect(mildRoute).toMatchObject({ kind: 'candidate-search', mode: 'replace' })
   })
 
+  it('routes “不吃饭了去玩” as a cross-type replacement instead of deletion', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const route = routeNaturalLanguageTurn(plan, '还是不吃饭了去玩点其他的')
+    expect(route).toMatchObject({
+      kind: 'candidate-search',
+      mode: 'replace',
+      replacementScope: 'cross-type',
+      desiredPhases: ['activity', 'leisure'],
+      excludedPhases: ['dining'],
+    })
+    if (route.kind === 'candidate-search' && route.mode === 'replace') {
+      expect(plan.segments.find((segment) => segment.id === route.segmentId)?.phase).toBe('dining')
+    }
+  })
+
+  it('keeps a bare negated segment request as deletion', () => {
+    const plan = createPlanFromPrompt('晚上两个人住酒店')
+    const route = routeNaturalLanguageTurn(plan, '不要酒店了')
+    expect(route.kind).toBe('command')
+    if (route.kind === 'command') expect(route.command.type).toBe('DELETE_SEGMENT')
+  })
+
   it('routes Sichuan/Hunan family dining preferences through candidate search', () => {
     const plan = createPlanFromPrompt('晚上两个人附近吃饭')
     const route = routeNaturalLanguageTurn(plan, '想吃川湘但带孩子')
@@ -116,14 +138,11 @@ describe('agent natural language router', () => {
       reason: 'user wants nearby dinner',
     }))
 
-    expect(intent).toEqual({
+    expect(intent).toMatchObject({
       action: 'replace',
       targetPhase: 'dining',
       query: '换近一点',
       reason: 'user wants nearby dinner',
-      answer: undefined,
-      category: undefined,
-      targetSegmentId: undefined,
     })
 
     const route = routeModelTurnIntent(plan, '把晚饭换近一点', intent!)
@@ -145,14 +164,11 @@ describe('agent natural language router', () => {
       reason: 'user wants an extra stop',
     }))
 
-    expect(intent).toEqual({
+    expect(intent).toMatchObject({
       action: 'add',
-      category: undefined,
-      targetPhase: undefined,
       targetSegmentId: first.id,
       query: '加一个咖啡休息点',
       reason: 'user wants an extra stop',
-      answer: undefined,
     })
 
     const route = routeModelTurnIntent(plan, '加一个咖啡休息点', intent!)

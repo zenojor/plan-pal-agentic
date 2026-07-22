@@ -1,4 +1,4 @@
-import type { MerchantServiceCategory, Plan, PlanCommand, PlanSegment, SegmentPhase } from '@planpal/domain'
+import type { CandidatePoiPhase, MerchantServiceCategory, Plan, PlanCommand, PlanSegment, SegmentPhase } from '@planpal/domain'
 
 export type RoutedTurn =
   | {
@@ -12,6 +12,15 @@ export type RoutedTurn =
       segmentId: string
       query: string
       reason: string
+      replacementScope?: 'same-type' | 'cross-type'
+      desiredPhases?: CandidatePoiPhase[]
+      excludedPhases?: CandidatePoiPhase[]
+      softPreferences?: {
+        budget?: string
+        distance?: string
+        pace?: string
+        tags?: string[]
+      }
     }
   | {
       kind: 'candidate-search'
@@ -49,6 +58,15 @@ export type ModelTurnIntent = {
   reason?: string
   targetPhase?: SegmentPhase
   targetSegmentId?: string
+  replacementScope?: 'same-type' | 'cross-type'
+  desiredPhases?: CandidatePoiPhase[]
+  excludedPhases?: CandidatePoiPhase[]
+  softPreferences?: {
+    budget?: string
+    distance?: string
+    pace?: string
+    tags?: string[]
+  }
 }
 
 export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSegmentId?: string): RoutedTurn {
@@ -67,6 +85,18 @@ export function routeNaturalLanguageTurn(plan: Plan, message: string, selectedSe
       kind: 'command',
       reason: 'clear plan request',
       command: { type: 'CLEAR_PLAN_SEGMENTS', source: 'agent', reason: message },
+    }
+  }
+  if (isCrossTypePlayRequest(normalized, target)) {
+    return {
+      kind: 'candidate-search',
+      mode: 'replace',
+      segmentId: target.id,
+      query: message,
+      reason: 'cross-type contextual replacement request',
+      replacementScope: 'cross-type',
+      desiredPhases: ['activity', 'leisure'],
+      excludedPhases: ['dining'],
     }
   }
   if (containsAny(normalized, ['删除', '删掉', '去掉', '不要', 'remove', 'delete'])) {
@@ -233,6 +263,12 @@ export function parseModelTurnIntent(raw: string): ModelTurnIntent | null {
     if (!parsed.action || !['qa', 'replace', 'add', 'rewrite', 'delete', 'confirm', 'service', 'clarify'].includes(parsed.action)) return null
     const targetPhase = isSegmentPhase(parsed.targetPhase) ? parsed.targetPhase : undefined
     const category = isMerchantServiceCategory(parsed.category) ? parsed.category : undefined
+    const desiredPhases = Array.isArray(parsed.desiredPhases)
+      ? parsed.desiredPhases.filter(isCandidatePoiPhase)
+      : undefined
+    const excludedPhases = Array.isArray(parsed.excludedPhases)
+      ? parsed.excludedPhases.filter(isCandidatePoiPhase)
+      : undefined
     return {
       action: parsed.action,
       answer: typeof parsed.answer === 'string' ? parsed.answer : undefined,
@@ -241,6 +277,12 @@ export function parseModelTurnIntent(raw: string): ModelTurnIntent | null {
       reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
       targetPhase,
       targetSegmentId: typeof parsed.targetSegmentId === 'string' ? parsed.targetSegmentId : undefined,
+      replacementScope: parsed.replacementScope === 'cross-type' || parsed.replacementScope === 'same-type'
+        ? parsed.replacementScope
+        : undefined,
+      desiredPhases,
+      excludedPhases,
+      softPreferences: parseSoftPreferences(parsed.softPreferences),
     }
   } catch {
     return null
@@ -276,12 +318,17 @@ export function routeModelTurnIntent(
     }
   }
   if (intent.action === 'replace') {
+    const deterministicCrossType = isCrossTypePlayRequest(message.trim().toLowerCase(), target)
     return {
       kind: 'candidate-search',
       mode: 'replace',
       segmentId: target.id,
       query: intent.query?.trim() || message,
       reason: intent.reason || 'model interpreted replacement request',
+      replacementScope: deterministicCrossType ? 'cross-type' : intent.replacementScope,
+      desiredPhases: deterministicCrossType ? ['activity', 'leisure'] : intent.desiredPhases,
+      excludedPhases: deterministicCrossType ? ['dining'] : intent.excludedPhases,
+      softPreferences: intent.softPreferences,
     }
   }
   if (intent.action === 'add') {
@@ -369,8 +416,6 @@ function findTargetSegment(
   if (byId) return byId
   const byPhase = intent?.targetPhase ? plan.segments.find((segment) => segment.phase === intent.targetPhase) : null
   if (byPhase) return byPhase
-  const selected = selectedSegmentId ? plan.segments.find((segment) => segment.id === selectedSegmentId) : null
-  if (selected) return selected
   const mentioned = findMentionedSegment(plan, normalized)
   if (mentioned) return mentioned
   if (containsAny(normalized, ['饭', '吃', 'dinner', '餐厅', '晚餐', '火锅', '涮锅', '涮肉', '锅底', 'hotpot', '辣', '麻辣', '川菜', '湘菜', '川湘', '串串', '不吃辣', '少辣', '清淡'])) {
@@ -383,6 +428,8 @@ function findTargetSegment(
   if (serviceCategory) {
     return findServiceSegment(plan, serviceCategory, selectedSegmentId) ?? plan.segments.find((segment) => segment.serviceCategory === serviceCategory) ?? plan.segments[0]!
   }
+  const selected = selectedSegmentId ? plan.segments.find((segment) => segment.id === selectedSegmentId) : null
+  if (selected) return selected
   return plan.segments.find((segment) => !segment.isTransit) ?? plan.segments[0]!
 }
 
@@ -639,6 +686,38 @@ function extractJsonObject(raw: string) {
   const end = value.lastIndexOf('}')
   if (start < 0 || end <= start) return ''
   return value.slice(start, end + 1)
+}
+
+function isCrossTypePlayRequest(value: string, target: PlanSegment) {
+  if (target.phase !== 'dining') return false
+  const rejectsDining = containsAny(value, [
+    '不吃饭',
+    '不吃了',
+    '不吃东西',
+    '不去餐厅',
+    '取消吃饭',
+    '不吃午饭',
+    '不吃晚饭',
+  ])
+  const wantsPlay = containsAny(value, ['去玩', '玩点', '活动', '逛逛', '体验', '休闲', '娱乐', 'something fun'])
+  return rejectsDining && wantsPlay
+}
+
+function parseSoftPreferences(value: unknown): ModelTurnIntent['softPreferences'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const input = value as Record<string, unknown>
+  const tags = Array.isArray(input.tags) ? input.tags.filter((tag): tag is string => typeof tag === 'string') : undefined
+  const parsed = {
+    budget: typeof input.budget === 'string' ? input.budget : undefined,
+    distance: typeof input.distance === 'string' ? input.distance : undefined,
+    pace: typeof input.pace === 'string' ? input.pace : undefined,
+    tags,
+  }
+  return Object.values(parsed).some(Boolean) ? parsed : undefined
+}
+
+function isCandidatePoiPhase(value: unknown): value is CandidatePoiPhase {
+  return value === 'activity' || value === 'dining' || value === 'drinks' || value === 'leisure'
 }
 
 function isSegmentPhase(value: unknown): value is SegmentPhase {

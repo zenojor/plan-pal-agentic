@@ -350,7 +350,12 @@ export async function testModelConfig(config: StoredModelConfig, signal?: AbortS
 export async function streamAgentRun(
   planId: string,
   config: StoredModelConfig,
-  input: { message: string; selectedSegmentId?: string },
+  input: {
+    message: string
+    selectedSegmentId?: string
+    candidateActionId?: string
+    interactionSource?: 'chat' | 'candidate-card'
+  },
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ) {

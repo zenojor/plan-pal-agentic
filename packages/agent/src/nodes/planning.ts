@@ -1,5 +1,5 @@
 import { AIMessage, SystemMessage } from '@langchain/core/messages'
-import { createId, type CandidateOption, type MerchantOffering, type PendingAction, type PlanCommand } from '@planpal/domain'
+import { createCandidateIntent, createId, type CandidateIntent, type CandidateOption, type MerchantOffering, type PendingAction, type PlanCommand } from '@planpal/domain'
 import type { PlanPalGraphDependencies } from '../graph-types'
 import { invokeToolCallingModel } from '../graph-model'
 import { buildPendingActionPreviewResult } from '../proposal'
@@ -19,6 +19,18 @@ export function createPlanningNodes(deps: PlanPalGraphDependencies) {
     planningAgent: async (state: PlanPalGraphStateValue): Promise<PlanPalGraphStateUpdate> => {
       const expected = expectedToolName(state)
       if (!expected) return { metadata: { ...withNodePath(state, 'planningAgent'), continuation: null } }
+      if (expected === 'poi_search') {
+        const request = canonicalToolCall(state, expected)
+        return {
+          messages: [new AIMessage({ content: '', tool_calls: [request] })],
+          toolCalls: [request],
+          metadata: {
+            ...withNodePath(state, 'planningAgent'),
+            activeToolCallIds: [request.id],
+            continuation: null,
+          },
+        }
+      }
       let message: AIMessage | null = null
       let requests: ToolCallRequest[] = []
       let fallbackReason: string | undefined
@@ -139,11 +151,16 @@ export function createPlanningNodes(deps: PlanPalGraphDependencies) {
 
 function buildProposal(state: PlanPalGraphStateValue): PlanCommandProposal {
   const route = state.route!
-  const actionId = createId('action')
+  const actionId = candidateActionIdForRoute(state) ?? createId('action')
   if (route.kind === 'candidate-search') {
     const result = requireSuccessfulResult(state, 'poi_search')
     const candidates = readCandidates(result.output)
-    if (candidates.length === 0) return clarificationProposal(actionId, '没有找到可用候选，请补充地点或偏好。')
+    if (candidates.length === 0) {
+      return clarificationProposal(actionId, route.mode === 'replace'
+        ? '没有找到能完整覆盖原时间段、类型和行程约束的 Catalog 候选。可以放宽距离、预算或允许调整时间。'
+        : '没有找到能放入当前空档的 Catalog 候选。可以放宽地点或时长要求。')
+    }
+    const candidateIntent = route.mode === 'replace' ? candidateIntentFromRoute(state) : undefined
     const command: PlanCommand = {
       type: 'REFRESH_CANDIDATES',
       source: 'agent',
@@ -153,6 +170,8 @@ function buildProposal(state: PlanPalGraphStateValue): PlanCommandProposal {
       afterSegmentId: route.afterSegmentId,
       searchQuery: route.query,
       candidates,
+      candidateIntent,
+      excludeCandidateIds: state.metadata.excludedCandidateIds,
     }
     return {
       actionId,
@@ -269,6 +288,7 @@ function canonicalToolCall(
     segmentId: route.segmentId,
     afterSegmentId: route.afterSegmentId,
     excludeCandidateIds: state.metadata.excludedCandidateIds,
+    candidateIntent: route.mode === 'replace' ? candidateIntentFromRoute(state) : undefined,
   })
   if (route.kind === 'service-search') Object.assign(args, {
     segmentId: route.segmentId,
@@ -278,6 +298,62 @@ function canonicalToolCall(
     limit: 6,
   })
   return ToolCallRequestSchema.parse({ id, name, args, type: 'tool_call' })
+}
+
+function candidateActionIdForRoute(state: PlanPalGraphStateValue) {
+  if (state.route?.kind !== 'candidate-search' || state.route.mode !== 'replace') return undefined
+  const action = state.plan?.pendingAction?.kind === 'candidate-selection'
+    && state.plan.pendingAction.id === state.metadata.candidateActionId
+    ? state.plan.pendingAction
+    : undefined
+  if (!action || action.targetSegmentId !== state.route.segmentId) return undefined
+  return action.id
+}
+
+function candidateIntentFromRoute(state: PlanPalGraphStateValue): CandidateIntent {
+  if (!state.plan || state.route?.kind !== 'candidate-search' || state.route.mode !== 'replace' || !state.route.segmentId) {
+    throw new Error('Replacement candidate intent context is missing')
+  }
+  const route = state.route
+  const plan = state.plan
+  const segmentId = route.segmentId
+  if (!plan || !segmentId) throw new Error('Replacement candidate intent context is missing')
+  const activeSession = plan.pendingAction?.kind === 'candidate-selection'
+    && plan.pendingAction.targetSegmentId === segmentId
+    && !isCandidateResetRequest(route.query)
+    ? plan.pendingAction.session
+    : undefined
+  const initial = activeSession?.intent ?? createCandidateIntent(plan, segmentId, route.query)
+  const replacementScope = route.replacementScope ?? initial.replacementScope
+  const changesType = replacementScope !== initial.replacementScope
+    || Boolean(route.desiredPhases?.length && route.desiredPhases.some((phase) => !initial.desiredPhases.includes(phase)))
+  const mergedQuery = activeSession && !changesType
+    ? [...new Set([activeSession.intent.query.trim(), route.query.trim()].filter(Boolean))].join('；')
+    : route.query
+  const base = createCandidateIntent(plan, segmentId, mergedQuery, {
+    ...initial,
+    query: mergedQuery,
+  })
+  return createCandidateIntent(plan, segmentId, mergedQuery, {
+    ...base,
+    operation: state.metadata.candidateActionId ? 'refine' : 'replace',
+    replacementScope,
+    desiredPhases: route.desiredPhases?.length ? route.desiredPhases : base.desiredPhases,
+    excludedPhases: route.excludedPhases ?? base.excludedPhases,
+    query: mergedQuery,
+    softPreferences: {
+      ...base.softPreferences,
+      ...route.softPreferences,
+      tags: [...new Set([
+        ...(base.softPreferences.tags ?? []),
+        ...(route.softPreferences?.tags ?? []),
+      ])],
+    },
+  })
+}
+
+function isCandidateResetRequest(query: string) {
+  return ['重新开始', '清空要求', '重置要求', '从头来'].some((keyword) => query.includes(keyword))
 }
 
 function readToolCalls(message: AIMessage | null) {

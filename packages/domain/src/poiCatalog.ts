@@ -25,6 +25,9 @@ export type PoiCapacityRange = {
 
 export type PoiSearchConstraints = {
   timeWindow?: PoiTimeWindow
+  requireFullTimeWindow?: boolean
+  durationMinutes?: number
+  durationToleranceMinutes?: number
   headcount?: number
   maxDistanceKm?: number
   requiredTags?: string[]
@@ -1794,7 +1797,13 @@ function filterPoiCandidates(
     .filter((poi) => !excluded.has(poi.id))
     .filter((poi) => !normalizedArea || normalizeSearchText(poi.area).includes(normalizedArea))
     .filter((poi) => !input.maxPriceLevel || poi.priceLevel <= input.maxPriceLevel)
-    .filter((poi) => !input.timeWindow || poi.openWindows.some((window) => timeWindowsOverlap(window, input.timeWindow!)))
+    .filter((poi) => !input.timeWindow || poi.openWindows.some((window) => input.requireFullTimeWindow
+      ? timeWindowContains(window, input.timeWindow!)
+      : timeWindowsOverlap(window, input.timeWindow!)))
+    .filter((poi) => !input.durationMinutes || (
+      poi.durationRangeMinutes[0] <= input.durationMinutes + (input.durationToleranceMinutes ?? 0)
+      && poi.durationRangeMinutes[1] >= input.durationMinutes - (input.durationToleranceMinutes ?? 0)
+    ))
     .filter((poi) => !input.headcount || poi.capacityRange.max >= input.headcount)
     .filter((poi) => !input.maxDistanceKm || !input.nearLnglat || distanceKm(input.nearLnglat, poi.lnglat) <= input.maxDistanceKm)
     .filter((poi) => requiredTags.every((tag) => poiMatchesTag(poi, tag)))
@@ -1809,7 +1818,10 @@ function withConstraintReasons(
   input: FictionalPoiSearchInput,
 ): FictionalPoiSearchResult {
   const reasons = new Set(result.reasons)
-  if (input.timeWindow) reasons.add(`营业时段匹配 ${input.timeWindow.startTime}-${input.timeWindow.endTime}`)
+  if (input.timeWindow) reasons.add(`${input.requireFullTimeWindow ? '营业时段完整覆盖' : '营业时段匹配'} ${input.timeWindow.startTime}-${input.timeWindow.endTime}`)
+  if (input.durationMinutes) reasons.add(input.durationToleranceMinutes
+    ? `建议时长适配 ${input.durationMinutes} 分钟窗口（含缓冲）`
+    : `建议时长覆盖 ${input.durationMinutes} 分钟`)
   if (input.headcount) reasons.add(`容量支持 ${input.headcount} 人`)
   if (input.maxDistanceKm && input.nearLnglat) reasons.add(`距离不超过 ${input.maxDistanceKm}km`)
   if (input.indoorOnly) reasons.add('满足室内硬约束')
@@ -2542,6 +2554,21 @@ function clockMinutes(value: string) {
   if (!isValidClockTime(value)) return Number.NaN
   const [hours, minutes] = value.split(':').map(Number)
   return hours! * 60 + minutes!
+}
+
+function timeWindowContains(left: PoiTimeWindow, right: PoiTimeWindow) {
+  const interval = (window: PoiTimeWindow): [number, number] => {
+    const start = clockMinutes(window.startTime)
+    let end = clockMinutes(window.endTime)
+    if (end <= start) end += 24 * 60
+    return [start, end]
+  }
+  const [leftStart, leftEnd] = interval(left)
+  const [rightStart, rightEnd] = interval(right)
+  return [-24 * 60, 0, 24 * 60].some((offset) => (
+    leftStart + offset <= rightStart
+    && leftEnd + offset >= rightEnd
+  ))
 }
 
 function timeWindowsOverlap(left: PoiTimeWindow, right: PoiTimeWindow) {

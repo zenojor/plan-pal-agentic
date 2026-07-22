@@ -647,8 +647,18 @@ export function deriveCandidateCardDisplay(
       ...(poi?.sceneTags ?? []).slice(0, 2),
       ...(poi?.offerings ?? []).slice(0, 1).map((offering) => offering.title),
     ]),
-    reasons: candidate.reasons.slice(0, 3),
+    reasons: candidateDisplayReasons(candidate.reasons),
   }
+}
+
+function candidateDisplayReasons(reasons: string[]) {
+  const prioritized = [
+    reasons.find((reason) => /改为|匹配|考虑/.test(reason)),
+    reasons.find((reason) => /路线|绕行|距离/.test(reason)),
+    reasons.find((reason) => /预算|排队|预约|风险/.test(reason)),
+    ...reasons,
+  ]
+  return uniqueCompact(prioritized).slice(0, 3)
 }
 
 export function derivePlanVariantCardDisplay(variant: PlanVariantOption): PlanVariantCardDisplay {
@@ -1189,9 +1199,11 @@ export function buildCandidateRefreshCommand(input: {
 
 export function getCandidateRefreshExcludeIds(
   action: Extract<PendingAction, { kind: 'candidate-selection' }>,
-  searchQuery?: string,
 ) {
-  return searchQuery?.trim() ? [] : action.candidates.map((candidate) => candidate.id)
+  return [...new Set([
+    ...(action.session?.seenPoiIds ?? action.excludeCandidateIds ?? []),
+    ...action.candidates.map((candidate) => candidate.id),
+  ])]
 }
 
 export function buildPlanVariantCommand(actionId: string, variant: PlanVariantOption): PlanCommand {
@@ -1327,6 +1339,25 @@ export function getSegmentActionState(segment: PlanSegment) {
 
 export function getCandidateSelectionMode(pendingActionRunId: string | null) {
   return pendingActionRunId ? 'resume' : 'command'
+}
+
+export function parseCandidateMechanicalAction(
+  message: string,
+  action: Extract<PendingAction, { kind: 'candidate-selection' }>,
+) {
+  const normalized = message.toLowerCase().replace(/[，。！？、,.!?\s]/g, '')
+  if (['换一个', '再换', '换一批', '别的', 'another'].includes(normalized)) {
+    return { kind: 'refresh' as const }
+  }
+  if (['还是算了', '算了', '取消', '不要了', 'cancel'].includes(normalized)) {
+    return { kind: 'dismiss' as const }
+  }
+  const ordinalMatch = /^(?:就|选|选择)?第?([123一二三])个?$/.exec(normalized)
+  const ordinal = ordinalMatch?.[1] === '2' || ordinalMatch?.[1] === '二' ? 1
+    : ordinalMatch?.[1] === '3' || ordinalMatch?.[1] === '三' ? 2
+      : ordinalMatch ? 0 : undefined
+  const candidate = ordinal === undefined ? undefined : action.candidates[ordinal]
+  return candidate ? { kind: 'select' as const, candidate } : undefined
 }
 
 export function canSendAgentChat(config: StoredModelConfig | null, draft: string, isStreaming = false) {

@@ -1,6 +1,6 @@
 # PlanPal Agent golden Eval
-Generated: 2026-07-22T09:14:19.582Z
-Summary: 64/64 passed
+Generated: 2026-07-22T11:22:23.447Z
+Summary: 69/69 passed
 | Scenario | Result | Checks |
 | --- | --- | --- |
 | golden-replace-nearby | PASS | 5 checks passed |
@@ -24,6 +24,8 @@ Summary: 64/64 passed
 | golden-add-movie-after-dinner | PASS | 5 checks passed |
 | golden-add-rainy | PASS | 5 checks passed |
 | golden-add-gift | PASS | 5 checks passed |
+| golden-contextual-cross-type-replace | PASS | 5 checks passed |
+| golden-model-contextual-cross-type-replace | PASS | 5 checks passed |
 | golden-movie-ticket | PASS | 6 checks passed |
 | golden-hotel-room | PASS | 6 checks passed |
 | golden-model-dining-service | PASS | 5 checks passed |
@@ -67,3 +69,6 @@ Summary: 64/64 passed
 | retrieval-excluded-poi | PASS | 4 checks passed |
 | retrieval-distance-radius | PASS | 4 checks passed |
 | retrieval-diversity | PASS | 5 checks passed |
+| retrieval-full-window-duration | PASS | 4 checks passed |
+| retrieval-contextual-cross-type | PASS | 5 checks passed |
+| retrieval-contextual-session-memory | PASS | 3 checks passed |

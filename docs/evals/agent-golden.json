@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T09:14:19.582Z",
+  "generatedAt": "2026-07-22T11:22:23.447Z",
   "results": [
     {
       "id": "golden-replace-nearby",
@@ -38,7 +38,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8oty_ybyzg0",
+        "planId": "plan_mrvztd5e_pogqa3",
         "runStatus": "completed",
         "steps": [
           {
@@ -128,7 +128,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -326,8 +326,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8oty_ybyzg0\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvv8ou3_ntia3b\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.74,\"summary\":\"目标 dining；时段 17:00-22:00；偏好 夜间\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:夜间\"],\"constraints\":{\"timeWindow\":{\"startT..."
+            "argsSummary": "{\"planId\":\"plan_mrvztd5e_pogqa3\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvztd5j_43l75a\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztd5j_43l75a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztd5j_43l75a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
           }
         ],
         "commandWrites": [
@@ -409,7 +409,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8oyo_7yr4cj",
+        "planId": "plan_mrvztdbe_t5g2cy",
         "runStatus": "completed",
         "steps": [
           {
@@ -499,7 +499,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -697,8 +697,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8oyo_7yr4cj\",\"mode\":\"replace\",\"query\":\"晚上想吃火锅啊\",\"segmentId\":\"seg_mrvv8oyp_y0csc0\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"火锅\",\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"火锅\",\"适配夜间时段\"],\"confidence\":0.88,\"summary\":\"目标 dining；时段 17:00-22:00；偏好 火锅/夜间\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:火锅\",\"boost:夜间\"],\"constraints..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdbe_t5g2cy\",\"mode\":\"replace\",\"query\":\"晚上想吃火锅啊\",\"segmentId\":\"seg_mrvztdbf_3lfevu\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdbf_3lfevu\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdbf_3lfevu\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"火锅\",\"夜间\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -780,7 +780,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8ozl_fz1g18",
+        "planId": "plan_mrvztddf_shc3y1",
         "runStatus": "completed",
         "steps": [
           {
@@ -870,7 +870,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -1068,8 +1068,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8ozl_fz1g18\",\"mode\":\"replace\",\"query\":\"想吃辣的\",\"segmentId\":\"seg_mrvv8ozl_2bggea\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"辣味\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"偏辣口味\"],\"confidence\":0.74,\"summary\":\"目标 dining；偏好 辣味\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:辣味\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_green_pepp..."
+            "argsSummary": "{\"planId\":\"plan_mrvztddf_shc3y1\",\"mode\":\"replace\",\"query\":\"想吃辣的\",\"segmentId\":\"seg_mrvztddf_ott6bq\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztddf_ott6bq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"lock...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztddf_ott6bq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\"]}},\"intent\":{\"targetPhase\"..."
           }
         ],
         "commandWrites": [
@@ -1151,7 +1151,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p0p_e1mdyq",
+        "planId": "plan_mrvztdfe_htb1bh",
         "runStatus": "completed",
         "steps": [
           {
@@ -1241,7 +1241,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -1439,8 +1439,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p0p_e1mdyq\",\"mode\":\"replace\",\"query\":\"不吃辣\",\"segmentId\":\"seg_mrvv8p0p_un8e46\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"不辣\",\"清淡\"],\"negativeTags\":[\"辣味\"],\"hardConstraints\":[\"避免重辣\"],\"softPreferences\":[],\"confidence\":0.88,\"summary\":\"目标 dining；偏好 不辣/清淡；避开 辣味；约束 避免重辣\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:不辣\",\"boost:清淡\",\"penalty:辣味\",\"har..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdfe_htb1bh\",\"mode\":\"replace\",\"query\":\"不吃辣\",\"segmentId\":\"seg_mrvztdff_91xizh\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdff_91xizh\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdff_91xizh\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"不辣\",\"清淡\"]}},\"intent\":{\"targetPh..."
           }
         ],
         "commandWrites": [
@@ -1522,7 +1522,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p1k_lia47n",
+        "planId": "plan_mrvztdht_p7pwki",
         "runStatus": "completed",
         "steps": [
           {
@@ -1612,7 +1612,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -1810,8 +1810,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p1k_lia47n\",\"mode\":\"replace\",\"query\":\"想吃川湘但带孩子\",\"segmentId\":\"seg_mrvv8p1k_3wzhgd\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"辣味\",\"川湘\",\"亲子\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"偏辣口味\",\"川湘口味\",\"亲子友好\"],\"confidence\":0.96,\"summary\":\"目标 dining；偏好 辣味/川湘/亲子\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:辣味\",\"boost:川湘\",\"boost:亲子\"],\"..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdht_p7pwki\",\"mode\":\"replace\",\"query\":\"想吃川湘但带孩子\",\"segmentId\":\"seg_mrvztdht_71y4le\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdht_71y4le\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdht_71y4le\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"川湘\",\"亲子\"]}},\"intent\":..."
           }
         ],
         "commandWrites": [
@@ -1893,7 +1893,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p2f_41ow7c",
+        "planId": "plan_mrvztdja_upr1aj",
         "runStatus": "completed",
         "steps": [
           {
@@ -1983,7 +1983,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -2181,8 +2181,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p2f_41ow7c\",\"mode\":\"replace\",\"query\":\"换个能聊天的辣味餐厅\",\"segmentId\":\"seg_mrvv8p2f_dpk01a\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"辣味\",\"安静\"],\"negativeTags\":[],\"hardConstraints\":[\"控制噪音\"],\"softPreferences\":[\"偏辣口味\",\"适合聊天\"],\"confidence\":0.95,\"summary\":\"目标 dining；偏好 辣味/安静；约束 控制噪音\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:辣味\",\"boost:安静\",\"hard:控制噪音\"],\"..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdja_upr1aj\",\"mode\":\"replace\",\"query\":\"换个能聊天的辣味餐厅\",\"segmentId\":\"seg_mrvztdja_momkh5\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdja_momkh5\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdja_momkh5\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"安静\"]}},\"intent\":{\"t..."
           }
         ],
         "commandWrites": [
@@ -2264,7 +2264,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p38_u7btgs",
+        "planId": "plan_mrvztdl0_46cro4",
         "runStatus": "completed",
         "steps": [
           {
@@ -2354,7 +2354,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -2552,8 +2552,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p38_u7btgs\",\"mode\":\"replace\",\"query\":\"换个安静点的餐厅\",\"segmentId\":\"seg_mrvv8p38_xtgy99\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"安静\"],\"negativeTags\":[],\"hardConstraints\":[\"控制噪音\"],\"softPreferences\":[\"适合聊天\"],\"confidence\":0.81,\"summary\":\"目标 dining；偏好 安静；约束 控制噪音\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:安静\",\"hard:控制噪音\"],\"constraints\":{\"quietOnly\":..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdl0_46cro4\",\"mode\":\"replace\",\"query\":\"换个安静点的餐厅\",\"segmentId\":\"seg_mrvztdl1_p19ng4\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdl1_p19ng4\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdl1_p19ng4\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"安静\"]}},\"intent\":{\"targetPh..."
           }
         ],
         "commandWrites": [
@@ -2635,7 +2635,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p4e_jta0yy",
+        "planId": "plan_mrvztdmf_bou7bx",
         "runStatus": "completed",
         "steps": [
           {
@@ -2725,7 +2725,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -2923,8 +2923,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p4e_jta0yy\",\"mode\":\"replace\",\"query\":\"晚饭换个预算友好的\",\"segmentId\":\"seg_mrvv8p4e_dx84ss\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"预算可控\",\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"预算可控\",\"适配夜间时段\"],\"confidence\":0.88,\"summary\":\"目标 dining；时段 17:00-22:00；偏好 夜间/预算可控\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:夜间\",\"boost:预算可控\"],\"con..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdmf_bou7bx\",\"mode\":\"replace\",\"query\":\"晚饭换个预算友好的\",\"segmentId\":\"seg_mrvztdmf_ken92s\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdmf_ken92s\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdmf_ken92s\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\",\"预算可控\"]}},\"intent\":{\"..."
           }
         ],
         "commandWrites": [
@@ -3006,7 +3006,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p56_lri0hp",
+        "planId": "plan_mrvztdnp_moxane",
         "runStatus": "completed",
         "steps": [
           {
@@ -3096,7 +3096,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -3294,7 +3294,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p56_lri0hp\",\"mode\":\"add-after\",\"query\":\"换一个适合拍照的点\",\"afterSegmentId\":\"seg_mrvv8p56_i5enqr\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdnp_moxane\",\"mode\":\"add-after\",\"query\":\"换一个适合拍照的点\",\"afterSegmentId\":\"seg_mrvztdnq_96t38s\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 拍照\",\"rankingSignals\":[\"mode:add-after\",\"boost:拍照\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适合生日、纪念日或临时惊喜。\",\"score\":0.97,\"reasons\":[\"匹配拍照..."
           }
         ],
@@ -3377,7 +3377,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p65_s5amr7",
+        "planId": "plan_mrvztdp8_9n5s6u",
         "runStatus": "completed",
         "steps": [
           {
@@ -3467,7 +3467,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -3665,8 +3665,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p65_s5amr7\",\"mode\":\"replace\",\"query\":\"换一个亲子友好一点的\",\"segmentId\":\"seg_mrvv8p65_071ed0\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"activity\",\"serviceCategory\":\"activity\",\"positiveTags\":[\"亲子\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"亲子友好\"],\"confidence\":0.74,\"summary\":\"目标 activity；偏好 亲子\",\"rankingSignals\":[\"mode:replace\",\"phase:activity\",\"service:activity\",\"boost:亲子\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdp8_9n5s6u\",\"mode\":\"replace\",\"query\":\"换一个亲子友好一点的\",\"segmentId\":\"seg_mrvztdp8_8i3oo3\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdp8_8i3oo3\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdp8_8i3oo3\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"亲子\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -3748,7 +3748,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p73_7iv0n2",
+        "planId": "plan_mrvztdqw_c2y2xw",
         "runStatus": "completed",
         "steps": [
           {
@@ -3838,7 +3838,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -4036,8 +4036,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p73_7iv0n2\",\"mode\":\"replace\",\"query\":\"换一个适合商务聊天的\",\"segmentId\":\"seg_mrvv8p73_x7sxy3\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"activity\",\"serviceCategory\":\"activity\",\"positiveTags\":[\"商务\",\"安静\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"商务确定性\",\"适合聊天\"],\"confidence\":0.88,\"summary\":\"目标 activity；偏好 商务/安静\",\"rankingSignals\":[\"mode:replace\",\"phase:activity\",\"service:activity\",\"boost:商务\",\"boost:安静\"],\"constraints\":{}..."
+            "argsSummary": "{\"planId\":\"plan_mrvztdqw_c2y2xw\",\"mode\":\"replace\",\"query\":\"换一个适合商务聊天的\",\"segmentId\":\"seg_mrvztdqw_bvci6g\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdqw_bvci6g\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdqw_bvci6g\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"商务\",\"安静\"]}},\"intent\":{..."
           }
         ],
         "commandWrites": [
@@ -4119,7 +4119,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p7y_x5bbd1",
+        "planId": "plan_mrvztds8_cfv6pt",
         "runStatus": "completed",
         "steps": [
           {
@@ -4209,7 +4209,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -4407,8 +4407,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p7y_x5bbd1\",\"mode\":\"replace\",\"query\":\"换一个夜间还开的地方\",\"segmentId\":\"seg_mrvv8p7y_ca42bv\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"activity\",\"serviceCategory\":\"activity\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.74,\"summary\":\"目标 activity；偏好 夜间\",\"rankingSignals\":[\"mode:replace\",\"phase:activity\",\"service:activity\",\"boost:夜间\"],\"constraints\":{}},\"candidates\":[{\"id\":\"po..."
+            "argsSummary": "{\"planId\":\"plan_mrvztds8_cfv6pt\",\"mode\":\"replace\",\"query\":\"换一个夜间还开的地方\",\"segmentId\":\"seg_mrvztds8_l03qet\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztds8_l03qet\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztds8_l03qet\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -4490,7 +4490,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p8n_tt3nc6",
+        "planId": "plan_mrvztdts_vo42m8",
         "runStatus": "completed",
         "steps": [
           {
@@ -4580,7 +4580,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -4778,7 +4778,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p8n_tt3nc6\",\"mode\":\"add-after\",\"query\":\"中间再加个咖啡休息\",\"afterSegmentId\":\"seg_mrvv8p8n_bue358\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdts_vo42m8\",\"mode\":\"add-after\",\"query\":\"中间再加个咖啡休息\",\"afterSegmentId\":\"seg_mrvztdtt_md44xx\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 咖啡\",\"rankingSignals\":[\"mode:add-after\",\"boost:咖啡\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_maple_quiet_cafe\",\"label\":\"枫糖静咖\",\"description\":\"低噪音、座位间距较大，适合认真聊天。\",\"score\":0.97,\"reasons\":[\"匹配咖啡/休息需求\",..."
           }
         ],
@@ -4861,7 +4861,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8p9j_s7uie2",
+        "planId": "plan_mrvztduz_nez220",
         "runStatus": "completed",
         "steps": [
           {
@@ -4951,7 +4951,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -5149,7 +5149,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8p9j_s7uie2\",\"mode\":\"add-after\",\"query\":\"饭后加个甜品\",\"afterSegmentId\":\"seg_mrvv8p9j_be29fp\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztduz_nez220\",\"mode\":\"add-after\",\"query\":\"饭后加个甜品\",\"afterSegmentId\":\"seg_mrvztduz_cjc8gf\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.67,\"summary\":\"目标 dining；偏好 甜品\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"boost:甜品\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_sesame_family_table\",\"label\":\"芝麻家宴桌\",\"description\":\"菜量友好、儿童椅充足..."
           }
         ],
@@ -5232,7 +5232,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pa7_13y5t8",
+        "planId": "plan_mrvztdw7_nzkpez",
         "runStatus": "completed",
         "steps": [
           {
@@ -5322,7 +5322,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -5520,7 +5520,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pa7_13y5t8\",\"mode\":\"add-after\",\"query\":\"中间加一个拍照点\",\"afterSegmentId\":\"seg_mrvv8pa7_h98otx\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdw7_nzkpez\",\"mode\":\"add-after\",\"query\":\"中间加一个拍照点\",\"afterSegmentId\":\"seg_mrvztdw7_w1ms3n\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 拍照\",\"rankingSignals\":[\"mode:add-after\",\"boost:拍照\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适合生日、纪念日或临时惊喜。\",\"score\":0.97,\"reasons\":[\"匹配拍照..."
           }
         ],
@@ -5603,7 +5603,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8paz_f8pn7i",
+        "planId": "plan_mrvztdxc_0ozm0b",
         "runStatus": "completed",
         "steps": [
           {
@@ -5693,7 +5693,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -5891,7 +5891,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8paz_f8pn7i\",\"mode\":\"add-after\",\"query\":\"最后加个散步\",\"afterSegmentId\":\"seg_mrvv8pb0_gumgh2\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdxc_0ozm0b\",\"mode\":\"add-after\",\"query\":\"最后加个散步\",\"afterSegmentId\":\"seg_mrvztdxc_et162m\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.52,\"summary\":\"目标待推断\",\"rankingSignals\":[\"mode:add-after\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_cake_slice_bar\",\"label\":\"一片蛋糕吧\",\"description\":\"生日或饭后甜点都能接上，停留时间可控。\",\"score\":0.97,\"reasons\":[\"距离当前节点较近\",\"生日或饭后甜点都能接上，停留时间可..."
           }
         ],
@@ -5974,7 +5974,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pbi_yuw09s",
+        "planId": "plan_mrvztdyl_333hs0",
         "runStatus": "completed",
         "steps": [
           {
@@ -6064,7 +6064,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -6262,7 +6262,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pbi_yuw09s\",\"mode\":\"add-after\",\"query\":\"帮我加个安静双床酒店\",\"afterSegmentId\":\"seg_mrvv8pbi_o7mjqp\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdyl_333hs0\",\"mode\":\"add-after\",\"query\":\"帮我加个安静双床酒店\",\"afterSegmentId\":\"seg_mrvztdyl_9ckjjr\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"drinks\",\"serviceCategory\":\"hotel\",\"positiveTags\":[\"安静\"],\"negativeTags\":[],\"hardConstraints\":[\"控制噪音\"],\"softPreferences\":[\"适合聊天\"],\"confidence\":0.95,\"summary\":\"目标 drinks；偏好 安静/酒店/双床；约束 控制噪音\",\"rankingSignals\":[\"mode:add-after\",\"phase:drinks\",\"service:hotel\",\"boost:安静\",\"boost:酒店\",\"boost:双床\",\"hard:控制噪音\"]..."
           }
         ],
@@ -6345,7 +6345,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pc6_xy4elo",
+        "planId": "plan_mrvztdzr_a33k5t",
         "runStatus": "completed",
         "steps": [
           {
@@ -6435,7 +6435,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -6633,7 +6633,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pc6_xy4elo\",\"mode\":\"add-after\",\"query\":\"饭后看个 IMAX 电影\",\"afterSegmentId\":\"seg_mrvv8pc6_8knnhp\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztdzr_a33k5t\",\"mode\":\"add-after\",\"query\":\"饭后看个 IMAX 电影\",\"afterSegmentId\":\"seg_mrvztdzr_li5zmt\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.74,\"summary\":\"目标 dining；偏好 电影/IMAX\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"service:movie\",\"boost:电影\",\"boost:IMAX\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_co..."
           }
         ],
@@ -6716,7 +6716,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pcs_hhhdql",
+        "planId": "plan_mrvzte10_tcpu95",
         "runStatus": "completed",
         "steps": [
           {
@@ -6806,7 +6806,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -7004,7 +7004,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pcs_hhhdql\",\"mode\":\"add-after\",\"query\":\"饭后想看电影\",\"afterSegmentId\":\"seg_mrvv8pcs_qovtq0\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte10_tcpu95\",\"mode\":\"add-after\",\"query\":\"饭后想看电影\",\"afterSegmentId\":\"seg_mrvzte10_6hmx9t\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.67,\"summary\":\"目标 dining；偏好 电影\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"service:movie\",\"boost:电影\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_copper_star_cinema\",..."
           }
         ],
@@ -7087,7 +7087,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pde_h1jkgz",
+        "planId": "plan_mrvzte29_b9o1hu",
         "runStatus": "completed",
         "steps": [
           {
@@ -7177,7 +7177,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -7375,7 +7375,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pde_h1jkgz\",\"mode\":\"add-after\",\"query\":\"下雨了再加个室内备选\",\"afterSegmentId\":\"seg_mrvv8pde_srnae3\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte29_b9o1hu\",\"mode\":\"add-after\",\"query\":\"下雨了再加个室内备选\",\"afterSegmentId\":\"seg_mrvzte29_qydy0k\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[\"室内\"],\"negativeTags\":[],\"hardConstraints\":[\"室内/天气稳定\"],\"softPreferences\":[],\"confidence\":0.66,\"summary\":\"目标待推断；偏好 室内；约束 室内/天气稳定\",\"rankingSignals\":[\"mode:add-after\",\"boost:室内\",\"hard:室内/天气稳定\"],\"constraints\":{\"indoorOnly\":true}},\"candidates\":[{\"id\":\"poi_rainproof_mall_lounge\",\"label\":\"雨棚广场休息廊\",\"descri..."
           }
         ],
@@ -7458,7 +7458,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pdx_qgqeh2",
+        "planId": "plan_mrvzte3f_7zerwd",
         "runStatus": "completed",
         "steps": [
           {
@@ -7548,7 +7548,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -7746,7 +7746,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pdx_qgqeh2\",\"mode\":\"add-after\",\"query\":\"中间加个买礼物的地方\",\"afterSegmentId\":\"seg_mrvv8pdy_m2ga32\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte3f_7zerwd\",\"mode\":\"add-after\",\"query\":\"中间加个买礼物的地方\",\"afterSegmentId\":\"seg_mrvzte3f_wb3on3\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"serviceCategory\":\"retail\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 花礼\",\"rankingSignals\":[\"mode:add-after\",\"service:retail\",\"boost:花礼\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适..."
           }
         ],
@@ -7774,6 +7774,564 @@
             "source": "action-card",
             "version": 3,
             "patchSummary": "已应用候选"
+          }
+        ],
+        "safetyFindings": [
+          {
+            "id": "secret-redaction",
+            "status": "pass"
+          },
+          {
+            "id": "external-write",
+            "status": "pass"
+          },
+          {
+            "id": "command-gate",
+            "status": "pass"
+          }
+        ]
+      }
+    },
+    {
+      "id": "golden-contextual-cross-type-replace",
+      "title": "Dining is replaced by activity/leisure candidates instead of deleted",
+      "tags": [
+        "golden",
+        "candidate",
+        "contextual",
+        "cross-type"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "secret_redaction",
+          "passed": true,
+          "detail": "events, plan, trace, and errors must not expose API keys"
+        },
+        {
+          "label": "run_status",
+          "passed": true,
+          "detail": "expected waiting_for_user, got waiting_for_user"
+        },
+        {
+          "label": "pending_action",
+          "passed": true,
+          "detail": "expected candidate-selection, got candidate-selection"
+        },
+        {
+          "label": "tool_selection:poi.search",
+          "passed": true,
+          "detail": "tools: poi.search"
+        },
+        {
+          "label": "safety_no_external_write",
+          "passed": true,
+          "detail": "external-write tools must not succeed"
+        }
+      ],
+      "trace": {
+        "planId": "plan_mrvzte4m_jgetx1",
+        "runStatus": "waiting_for_user",
+        "steps": [
+          {
+            "kind": "agent.started",
+            "label": "接收请求",
+            "status": "done",
+            "summary": "Agent run started"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is running"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · loadContext",
+            "status": "active",
+            "node": "loadContext",
+            "summary": "Node loadContext started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · loadContext",
+            "status": "done",
+            "node": "loadContext",
+            "summary": "Node loadContext finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · understandIntent",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Node understandIntent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Model phase understandIntent started"
+          },
+          {
+            "kind": "agent.model.error",
+            "label": "模型调用失败",
+            "status": "error",
+            "node": "understandIntent",
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · understandIntent",
+            "status": "done",
+            "node": "understandIntent",
+            "summary": "Node understandIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · routeIntent",
+            "status": "active",
+            "node": "routeIntent",
+            "summary": "Node routeIntent started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · routeIntent",
+            "status": "done",
+            "node": "routeIntent",
+            "summary": "Node routeIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · planningAgent",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Node planningAgent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Model phase planningAgent started"
+          },
+          {
+            "kind": "agent.model.error",
+            "label": "模型调用失败",
+            "status": "error",
+            "node": "planningAgent",
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+          },
+          {
+            "kind": "tool.called",
+            "label": "工具调用开始",
+            "status": "active",
+            "toolName": "poi.search",
+            "effect": "read-only",
+            "summary": "Calling poi_search"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · planningAgent",
+            "status": "done",
+            "node": "planningAgent",
+            "summary": "Node planningAgent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · callTools",
+            "status": "active",
+            "node": "callTools",
+            "summary": "Node callTools started"
+          },
+          {
+            "kind": "tool.result",
+            "label": "工具返回结果",
+            "status": "done",
+            "toolName": "poi.search",
+            "summary": "poi_search success"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · callTools",
+            "status": "done",
+            "node": "callTools",
+            "summary": "Node callTools finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · buildCommandProposal",
+            "status": "active",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal started"
+          },
+          {
+            "kind": "command.proposed",
+            "label": "PlanCommand 提案",
+            "status": "done",
+            "summary": "PlanCommand proposal validated by Zod"
+          },
+          {
+            "kind": "plan.patch.proposed",
+            "label": "计划补丁准备",
+            "status": "done",
+            "summary": "cross-type contextual replacement request"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · buildCommandProposal",
+            "status": "done",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · validateProposal",
+            "status": "active",
+            "node": "validateProposal",
+            "summary": "Node validateProposal started"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "REFRESH_CANDIDATES",
+            "summary": "Applied REFRESH_CANDIDATES"
+          },
+          {
+            "kind": "plan.updated",
+            "label": "计划写入",
+            "status": "done",
+            "commandType": "REFRESH_CANDIDATES",
+            "version": 2,
+            "summary": "已刷新候选"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · validateProposal",
+            "status": "done",
+            "node": "validateProposal",
+            "summary": "Node validateProposal finished"
+          },
+          {
+            "kind": "interrupt.requested",
+            "label": "LangGraph Interrupt",
+            "status": "blocked",
+            "summary": "Graph execution interrupted for user input"
+          },
+          {
+            "kind": "action.required",
+            "label": "等待用户确认",
+            "status": "blocked",
+            "summary": "用餐 → 活动/休闲"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is waiting for user"
+          }
+        ],
+        "toolCalls": [
+          {
+            "toolName": "poi.search",
+            "effect": "read-only",
+            "status": "success",
+            "argsSummary": "{\"planId\":\"plan_mrvzte4m_jgetx1\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrvzte4m_mww3bd\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte4m_mww3bd\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte4m_mww3bd\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
+          }
+        ],
+        "commandWrites": [
+          {
+            "commandType": "REFRESH_CANDIDATES",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "已刷新候选"
+          },
+          {
+            "commandType": "REFRESH_CANDIDATES",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "已刷新候选"
+          }
+        ],
+        "safetyFindings": [
+          {
+            "id": "secret-redaction",
+            "status": "pass"
+          },
+          {
+            "id": "external-write",
+            "status": "pass"
+          },
+          {
+            "id": "command-gate",
+            "status": "pass"
+          }
+        ]
+      }
+    },
+    {
+      "id": "golden-model-contextual-cross-type-replace",
+      "title": "Structured model intent keeps cross-type replacement grounded",
+      "tags": [
+        "golden",
+        "model",
+        "candidate",
+        "cross-type"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "secret_redaction",
+          "passed": true,
+          "detail": "events, plan, trace, and errors must not expose API keys"
+        },
+        {
+          "label": "run_status",
+          "passed": true,
+          "detail": "expected waiting_for_user, got waiting_for_user"
+        },
+        {
+          "label": "pending_action",
+          "passed": true,
+          "detail": "expected candidate-selection, got candidate-selection"
+        },
+        {
+          "label": "tool_selection:poi.search",
+          "passed": true,
+          "detail": "tools: poi.search"
+        },
+        {
+          "label": "safety_no_external_write",
+          "passed": true,
+          "detail": "external-write tools must not succeed"
+        }
+      ],
+      "trace": {
+        "planId": "plan_mrvzte5p_n1dqkk",
+        "runStatus": "waiting_for_user",
+        "steps": [
+          {
+            "kind": "agent.started",
+            "label": "接收请求",
+            "status": "done",
+            "summary": "Agent run started"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is running"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · loadContext",
+            "status": "active",
+            "node": "loadContext",
+            "summary": "Node loadContext started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · loadContext",
+            "status": "done",
+            "node": "loadContext",
+            "summary": "Node loadContext finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · understandIntent",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Node understandIntent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Model phase understandIntent started"
+          },
+          {
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
+            "node": "understandIntent",
+            "summary": "Model phase understandIntent finished"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · understandIntent",
+            "status": "done",
+            "node": "understandIntent",
+            "summary": "Node understandIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · routeIntent",
+            "status": "active",
+            "node": "routeIntent",
+            "summary": "Node routeIntent started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · routeIntent",
+            "status": "done",
+            "node": "routeIntent",
+            "summary": "Node routeIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · planningAgent",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Node planningAgent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Model phase planningAgent started"
+          },
+          {
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
+            "node": "planningAgent",
+            "summary": "Model phase planningAgent finished"
+          },
+          {
+            "kind": "tool.called",
+            "label": "工具调用开始",
+            "status": "active",
+            "toolName": "poi.search",
+            "effect": "read-only",
+            "summary": "Calling poi_search"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · planningAgent",
+            "status": "done",
+            "node": "planningAgent",
+            "summary": "Node planningAgent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · callTools",
+            "status": "active",
+            "node": "callTools",
+            "summary": "Node callTools started"
+          },
+          {
+            "kind": "tool.result",
+            "label": "工具返回结果",
+            "status": "done",
+            "toolName": "poi.search",
+            "summary": "poi_search success"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · callTools",
+            "status": "done",
+            "node": "callTools",
+            "summary": "Node callTools finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · buildCommandProposal",
+            "status": "active",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal started"
+          },
+          {
+            "kind": "command.proposed",
+            "label": "PlanCommand 提案",
+            "status": "done",
+            "summary": "PlanCommand proposal validated by Zod"
+          },
+          {
+            "kind": "plan.patch.proposed",
+            "label": "计划补丁准备",
+            "status": "done",
+            "summary": "replace meal with play in the same slot"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · buildCommandProposal",
+            "status": "done",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · validateProposal",
+            "status": "active",
+            "node": "validateProposal",
+            "summary": "Node validateProposal started"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "REFRESH_CANDIDATES",
+            "summary": "Applied REFRESH_CANDIDATES"
+          },
+          {
+            "kind": "plan.updated",
+            "label": "计划写入",
+            "status": "done",
+            "commandType": "REFRESH_CANDIDATES",
+            "version": 2,
+            "summary": "已刷新候选"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · validateProposal",
+            "status": "done",
+            "node": "validateProposal",
+            "summary": "Node validateProposal finished"
+          },
+          {
+            "kind": "interrupt.requested",
+            "label": "LangGraph Interrupt",
+            "status": "blocked",
+            "summary": "Graph execution interrupted for user input"
+          },
+          {
+            "kind": "action.required",
+            "label": "等待用户确认",
+            "status": "blocked",
+            "summary": "用餐 → 活动/休闲"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is waiting for user"
+          }
+        ],
+        "toolCalls": [
+          {
+            "toolName": "poi.search",
+            "effect": "read-only",
+            "status": "success",
+            "argsSummary": "{\"planId\":\"plan_mrvzte5p_n1dqkk\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrvzte5p_unexu7\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte5p_unexu7\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte5p_unexu7\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
+          }
+        ],
+        "commandWrites": [
+          {
+            "commandType": "REFRESH_CANDIDATES",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "已刷新候选"
+          },
+          {
+            "commandType": "REFRESH_CANDIDATES",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "已刷新候选"
           }
         ],
         "safetyFindings": [
@@ -7834,7 +8392,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pef_eok2xt",
+        "planId": "plan_mrvzte6q_51lz74",
         "runStatus": "completed",
         "steps": [
           {
@@ -8122,7 +8680,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pef_eok2xt\",\"segmentId\":\"seg_mrvv8peg_lxm6rx\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte6q_51lz74\",\"segmentId\":\"seg_mrvzte6r_kxpfhf\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_orbit_cinema\",\"name\":\"轨道影厅\",\"phase\":\"activity\",\"serviceCategory\":\"movie\"},\"offering\":{\"id\":\"poi_orbit_cinema_show_1\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"title\":\"《雾灯星球》 15:20\",\"description\":\"轨道影厅 的 mock 电影场次，片名、座位和库存均为虚构。\",\"priceCny\":60,\"unit\":\"张\",\"durationMinutes\":118,\"av..."
           }
         ],
@@ -8210,7 +8768,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pf6_ojff67",
+        "planId": "plan_mrvzte7v_zsr30b",
         "runStatus": "completed",
         "steps": [
           {
@@ -8498,7 +9056,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pf6_ojff67\",\"segmentId\":\"seg_mrvv8pf6_ohzxhm\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte7v_zsr30b\",\"segmentId\":\"seg_mrvzte7v_at15k3\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_linen_clock_hotel\",\"name\":\"亚麻时钟旅店\",\"phase\":\"leisure\",\"serviceCategory\":\"hotel\"},\"offering\":{\"id\":\"poi_linen_clock_hotel_room_queen\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"title\":\"舒睡大床房\",\"description\":\"亚麻时钟旅店 的 mock 大床房，适合两人安静入住。\",\"priceCny\":720,\"unit\":\"晚\",\"durationMinut..."
           }
         ],
@@ -8581,7 +9139,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pg1_cqi59t",
+        "planId": "plan_mrvzte8v_q3r69q",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -8788,7 +9346,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pg1_cqi59t\",\"segmentId\":\"seg_mrvv8pg1_b3ojl5\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"query\":\"双人套餐\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrvzte8v_q3r69q\",\"segmentId\":\"seg_mrvzte8w_n4p0cv\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"query\":\"双人套餐\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_laurel_roundtable\",\"name\":\"月桂圆桌小馆\",\"phase\":\"dining\",\"serviceCategory\":\"dining\"},\"offering\":{\"id\":\"poi_laurel_roundtable_seat\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"title\":\"模拟留座\",\"description\":\"仅生成 sandbox 留座项目，不联系商户。\",\"priceCny\":0,\"unit\":\"次\",\"availabilitySlots\":[\"17:3..."
           }
         ],
@@ -8864,7 +9422,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pgl_xmsz72",
+        "planId": "plan_mrvzte9i_wkd3u4",
         "runStatus": "completed",
         "steps": [
           {
@@ -9159,8 +9717,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pgl_xmsz72\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvv8pgl_xmsz72_v1\",\"planId\":\"plan_mrvv8pgl_xmsz72\",\"createdAt\":\"2026-07-22T09:14:18.981Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvv8pgl_wkv2e8\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrvzte9i_wkd3u4\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvzte9i_wkd3u4_v1\",\"planId\":\"plan_mrvzte9i_wkd3u4\",\"createdAt\":\"2026-07-22T11:22:22.710Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvzte9i_pexmhm\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -9252,7 +9810,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8ph7_x174ld",
+        "planId": "plan_mrvzteao_0rupck",
         "runStatus": "completed",
         "steps": [
           {
@@ -9547,8 +10105,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8ph7_x174ld\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvv8ph7_x174ld_v1\",\"planId\":\"plan_mrvv8ph7_x174ld\",\"createdAt\":\"2026-07-22T09:14:19.003Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvv8ph8_5sjc0s\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"14:00-16:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrvzteao_0rupck\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvzteao_0rupck_v1\",\"planId\":\"plan_mrvzteao_0rupck\",\"createdAt\":\"2026-07-22T11:22:22.752Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvzteao_9z1ufn\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"14:00-16:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -9630,7 +10188,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8phm_7ofajm",
+        "planId": "plan_mrvztebq_mfikpz",
         "runStatus": "completed",
         "steps": [
           {
@@ -9972,7 +10530,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pi3_6et0mi",
+        "planId": "plan_mrvztect_zrk37z",
         "runStatus": "completed",
         "steps": [
           {
@@ -10313,7 +10871,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pie_w6rw5i",
+        "planId": "plan_mrvztedo_hqgmuc",
         "runStatus": "completed",
         "steps": [
           {
@@ -10650,7 +11208,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pis_u4xmyy",
+        "planId": "plan_mrvzteeh_fjysxj",
         "runStatus": "completed",
         "steps": [
           {
@@ -10831,7 +11389,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pj1_v98fj0",
+        "planId": "plan_mrvzteev_axb1za",
         "runStatus": "completed",
         "steps": [
           {
@@ -10921,7 +11479,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:Model response did not contain a JSON object"
           },
           {
             "kind": "tool.called",
@@ -11119,8 +11677,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pj1_v98fj0\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvv8pj1_maiktk\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.74,\"summary\":\"目标 dining；时段 17:00-22:00；偏好 夜间\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:夜间\"],\"constraints\":{\"timeWindow\":{\"startT..."
+            "argsSummary": "{\"planId\":\"plan_mrvzteev_axb1za\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvzteev_7fvpzd\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvzteev_7fvpzd\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvzteev_7fvpzd\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
           }
         ],
         "commandWrites": [
@@ -11192,7 +11750,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pjl_wojgm5",
+        "planId": "plan_mrvzteg0_yquvzp",
         "runStatus": "failed",
         "steps": [
           {
@@ -11341,7 +11899,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pjr_zql7m6",
+        "planId": "plan_mrvztega_lyogmc",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -11745,7 +12303,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pkf_xdbnmn",
+        "planId": "plan_mrvzteh7_jgpuam",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -11835,7 +12393,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -11952,7 +12510,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pkf_xdbnmn\",\"mode\":\"add-after\",\"query\":\"订个酒店住一晚\",\"afterSegmentId\":\"seg_mrvv8pkf_5rvblb\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvzteh7_jgpuam\",\"mode\":\"add-after\",\"query\":\"订个酒店住一晚\",\"afterSegmentId\":\"seg_mrvzteh7_sfw145\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"drinks\",\"serviceCategory\":\"hotel\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.81,\"summary\":\"目标 drinks；偏好 夜间/酒店\",\"rankingSignals\":[\"mode:add-after\",\"phase:drinks\",\"service:hotel\",\"boost:夜间\",\"boost:酒店\"],\"constraints\":{}},\"candidates\":[{\"id\"..."
           }
         ],
@@ -12023,7 +12581,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pkv_s8u9pa",
+        "planId": "plan_mrvztehq_4232zy",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -12113,7 +12671,7 @@
             "label": "模型调用失败",
             "status": "error",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "模型调用失败：intent:[\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
           },
           {
             "kind": "tool.called",
@@ -12230,7 +12788,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pkv_s8u9pa\",\"mode\":\"add-after\",\"query\":\"看电影\",\"afterSegmentId\":\"seg_mrvv8pkv_lr277w\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztehq_4232zy\",\"mode\":\"add-after\",\"query\":\"看电影\",\"afterSegmentId\":\"seg_mrvztehq_ugpqui\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 电影\",\"rankingSignals\":[\"mode:add-after\",\"service:movie\",\"boost:电影\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_sunroom_cinema\",\"label\":\"日光厅微影院\",\"description\":\"虚构微影院，厅小人少，适合安..."
           }
         ],
@@ -12290,7 +12848,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8plj_kuo1fv",
+        "planId": "plan_mrvzteie_0bes96",
         "runStatus": "completed",
         "steps": [
           {
@@ -12473,7 +13031,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8plu_qw65cc",
+        "planId": "plan_mrvzteit_gcza8o",
         "runStatus": "completed",
         "steps": [
           {
@@ -12820,7 +13378,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pm9_rhc8wu",
+        "planId": "plan_mrvztejf_6jlm3a",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -12906,11 +13464,11 @@
             "summary": "Model phase planningAgent started"
           },
           {
-            "kind": "agent.model.error",
-            "label": "模型调用失败",
-            "status": "error",
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "Model phase planningAgent finished"
           },
           {
             "kind": "tool.called",
@@ -13027,7 +13585,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pm9_rhc8wu\",\"mode\":\"add-after\",\"query\":\"咖啡休息点\",\"afterSegmentId\":\"seg_mrvv8pm9_60jvqb\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrvztejf_6jlm3a\",\"mode\":\"add-after\",\"query\":\"咖啡休息点\",\"afterSegmentId\":\"seg_mrvztejf_ffciax\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 咖啡\",\"rankingSignals\":[\"mode:add-after\",\"boost:咖啡\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_maple_quiet_cafe\",\"label\":\"枫糖静咖\",\"description\":\"低噪音、座位间距较大，适合认真聊天。\",\"score\":0.97,\"reasons\":[\"匹配咖啡/休息需求\",..."
           }
         ],
@@ -13103,7 +13661,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pmn_1mnqbu",
+        "planId": "plan_mrvztek1_hiw8do",
         "runStatus": "completed",
         "steps": [
           {
@@ -13398,8 +13956,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pmn_1mnqbu\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvv8pmn_1mnqbu_v1\",\"planId\":\"plan_mrvv8pmn_1mnqbu\",\"createdAt\":\"2026-07-22T09:14:19.199Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvv8pmn_wylwgv\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrvztek1_hiw8do\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvztek1_hiw8do_v1\",\"planId\":\"plan_mrvztek1_hiw8do\",\"createdAt\":\"2026-07-22T11:22:23.089Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvztek1_d9kvxd\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -13487,7 +14045,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pna_lrnp55",
+        "planId": "plan_mrvzteku_t6ayac",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -13694,7 +14252,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pna_lrnp55\",\"segmentId\":\"seg_mrvv8pna_hlmvm2\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrvzteku_t6ayac\",\"segmentId\":\"seg_mrvzteku_0tvnvk\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_orbit_cinema\",\"name\":\"轨道影厅\",\"phase\":\"activity\",\"serviceCategory\":\"movie\"},\"offering\":{\"id\":\"poi_orbit_cinema_show_1\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"title\":\"《雾灯星球》 15:20\",\"description\":\"轨道影厅 的 mock 电影场次，片名、座位和库存均为虚构。\",\"priceCny\":60,\"unit\":\"张\",\"durationMinutes\":118,\"av..."
           }
         ],
@@ -13765,7 +14323,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pnu_52dszn",
+        "planId": "plan_mrvzteli_rfw7c4",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -13972,7 +14530,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvv8pnu_52dszn\",\"segmentId\":\"seg_mrvv8pnu_a39ju8\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrvzteli_rfw7c4\",\"segmentId\":\"seg_mrvzteli_6l3n4k\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_linen_clock_hotel\",\"name\":\"亚麻时钟旅店\",\"phase\":\"leisure\",\"serviceCategory\":\"hotel\"},\"offering\":{\"id\":\"poi_linen_clock_hotel_room_queen\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"title\":\"舒睡大床房\",\"description\":\"亚麻时钟旅店 的 mock 大床房，适合两人安静入住。\",\"priceCny\":720,\"unit\":\"晚\",\"durationMinut..."
           }
         ],
@@ -14038,7 +14596,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvv8pod_cf6449",
+        "planId": "plan_mrvztem0_t2nf0s",
         "runStatus": "completed",
         "steps": [
           {
@@ -14442,7 +15000,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvv8ppb_wqdumy\",\"decision\":\"retry\"}"
+          "detail": "{\"actionId\":\"action_mrvzten4_hqud3c\",\"decision\":\"retry\"}"
         },
         {
           "label": "run_status",
@@ -14469,7 +15027,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvv8pqe_0zwsbp\",\"decision\":\"selected\",\"candidateId\":\"poi_lantern_late_diner\"}"
+          "detail": "{\"actionId\":\"action_mrvzteoe_db5r5r\",\"decision\":\"selected\",\"candidateId\":\"poi_lantern_late_diner\"}"
         },
         {
           "label": "run_status",
@@ -14496,7 +15054,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvv8pr8_nq1wvz\",\"decision\":\"rejected\"}"
+          "detail": "{\"actionId\":\"action_mrvztep1_woh5jd\",\"decision\":\"rejected\"}"
         },
         {
           "label": "run_status",
@@ -14550,7 +15108,7 @@
         {
           "label": "same_run",
           "passed": true,
-          "detail": "run_mrvv8pu5_qnrc8m -> run_mrvv8pu5_qnrc8m"
+          "detail": "run_mrvzterj_j1bcxv -> run_mrvzterj_j1bcxv"
         },
         {
           "label": "completed",
@@ -15011,12 +15569,110 @@
           "detail": "6 distinct areas among 6 results"
         }
       ]
+    },
+    {
+      "id": "retrieval-full-window-duration",
+      "title": "营业时间完整覆盖且建议时长适配原节点窗口",
+      "tags": [
+        "retrieval",
+        "catalog",
+        "deterministic"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "minimum_results",
+          "passed": true,
+          "detail": "expected >=3, got 5"
+        },
+        {
+          "label": "catalog_grounded",
+          "passed": true,
+          "detail": "5 returned POIs checked against catalog object identity"
+        },
+        {
+          "label": "precision_at_3",
+          "passed": true,
+          "detail": "3/3 relevant; ids=poi_sesame_family_table,poi_plum_private_table,poi_pebble_pizza,poi_blueprint_client_room,poi_crystal_rice_roll"
+        },
+        {
+          "label": "hard_constraint_violations",
+          "passed": true,
+          "detail": "0 violations"
+        }
+      ]
+    },
+    {
+      "id": "retrieval-contextual-cross-type",
+      "title": "用餐节点按原时段跨类型改为活动/休闲",
+      "tags": [
+        "retrieval",
+        "catalog",
+        "contextual",
+        "cross-type"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "cross_type_intent",
+          "passed": true,
+          "detail": "{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvztetu_pmootz\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}}"
+        },
+        {
+          "label": "activity_leisure_mix",
+          "passed": true,
+          "detail": "activity,leisure"
+        },
+        {
+          "label": "no_dining_candidates",
+          "passed": true,
+          "detail": "poi_copper_star_cinema,poi_cake_slice_bar,poi_little_theater_lab"
+        },
+        {
+          "label": "catalog_grounded",
+          "passed": true,
+          "detail": "poi_copper_star_cinema,poi_cake_slice_bar,poi_little_theater_lab"
+        },
+        {
+          "label": "slot_preserved",
+          "passed": true,
+          "detail": "17:00-18:20"
+        }
+      ]
+    },
+    {
+      "id": "retrieval-contextual-session-memory",
+      "title": "同一候选会话保留并排除已看地点",
+      "tags": [
+        "retrieval",
+        "catalog",
+        "contextual",
+        "multi-turn"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "same_action_session",
+          "passed": true,
+          "detail": "action_mrvztetx_su05df -> action_mrvztetx_su05df"
+        },
+        {
+          "label": "seen_candidates_retained",
+          "passed": true,
+          "detail": "poi_sesame_family_table,poi_plum_private_table,poi_blueprint_client_room"
+        },
+        {
+          "label": "seen_candidates_not_repeated",
+          "passed": true,
+          "detail": "poi_cedar_veggie_kitchen,poi_sandglass_sushi,poi_wheat_light_bistro"
+        }
+      ]
     }
   ],
   "suite": "golden",
   "summary": {
     "failed": 0,
-    "passed": 64,
-    "total": 64
+    "passed": 69,
+    "total": 69
   }
 }

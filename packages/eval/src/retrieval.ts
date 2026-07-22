@@ -1,4 +1,8 @@
 import {
+  applyPlanCommand,
+  createCandidateIntent,
+  createPlanFromPrompt,
+  createReplacementCandidates,
   fictionalPoiCatalog,
   getFictionalPoiById,
   searchFictionalPois,
@@ -29,7 +33,10 @@ type RetrievalEvalCase = {
 const spicySignals = ['辣味', '麻辣', '香辣', '川湘', '川菜', '湘菜', '串串', '签签', '钵钵', '火锅']
 
 export function runRetrievalEval(): RetrievalEvalResult[] {
-  return retrievalEvalCases.map(runCase)
+  return [
+    ...retrievalEvalCases.map(runCase),
+    ...runContextualReplacementCases(),
+  ]
 }
 
 const retrievalEvalCases: RetrievalEvalCase[] = [
@@ -136,7 +143,79 @@ const retrievalEvalCases: RetrievalEvalCase[] = [
     hardConstraint: (poi) => poi.phase === 'activity' && overlapsAny(poi, '13:00', '18:00'),
     minimumDistinctAreas: 4,
   },
+  {
+    id: 'retrieval-full-window-duration',
+    title: '营业时间完整覆盖且建议时长适配原节点窗口',
+    input: {
+      phase: 'dining',
+      query: '中午两个人吃饭',
+      timeWindow: { startTime: '12:00', endTime: '13:20' },
+      requireFullTimeWindow: true,
+      durationMinutes: 80,
+      headcount: 2,
+      limit: 5,
+    },
+    minResults: 3,
+    relevant: (poi) => poi.phase === 'dining',
+    hardConstraint: (poi) => containsWindow(poi, '12:00', '13:20')
+      && poi.durationRangeMinutes[0] <= 80
+      && poi.durationRangeMinutes[1] >= 80,
+  },
 ]
+
+function runContextualReplacementCases(): RetrievalEvalResult[] {
+  const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+  const dining = plan.segments.find((segment) => segment.phase === 'dining')!
+  const query = '还是不吃饭了去玩点其他的'
+  const intent = createCandidateIntent(plan, dining.id, query)
+  const candidates = createReplacementCandidates(plan, dining.id, query, [], intent)
+  const phases = new Set(candidates.map((candidate) => candidate.segment.phase))
+  const crossChecks = [
+    check('cross_type_intent', intent.replacementScope === 'cross-type', JSON.stringify(intent)),
+    check('activity_leisure_mix', phases.has('activity') && phases.has('leisure'), [...phases].join(',')),
+    check('no_dining_candidates', candidates.every((candidate) => candidate.segment.phase !== 'dining'), candidates.map((candidate) => candidate.id).join(',')),
+    check('catalog_grounded', candidates.every((candidate) => getFictionalPoiById(candidate.id)?.id === candidate.segment.poiId), candidates.map((candidate) => candidate.id).join(',')),
+    check('slot_preserved', candidates.every((candidate) => candidate.segment.startTime === dining.startTime && candidate.segment.endTime === dining.endTime), `${dining.startTime}-${dining.endTime}`),
+  ]
+
+  const first = applyPlanCommand(plan, {
+    type: 'REPLACE_SEGMENT',
+    source: 'puzzle',
+    segmentId: dining.id,
+    searchQuery: '近一点',
+  }).plan
+  const firstAction = first.pendingAction?.kind === 'candidate-selection' ? first.pendingAction : undefined
+  const shownIds = firstAction?.candidates.map((candidate) => candidate.id) ?? []
+  const refined = firstAction ? applyPlanCommand(first, {
+    type: 'REFRESH_CANDIDATES',
+    source: 'action-card',
+    actionId: firstAction.id,
+    searchQuery: '安静一点',
+  }).plan : first
+  const refinedAction = refined.pendingAction?.kind === 'candidate-selection' ? refined.pendingAction : undefined
+  const sessionChecks = [
+    check('same_action_session', refinedAction?.id === firstAction?.id, `${firstAction?.id} -> ${refinedAction?.id}`),
+    check('seen_candidates_retained', shownIds.every((id) => refinedAction?.session?.seenPoiIds.includes(id)), shownIds.join(',')),
+    check('seen_candidates_not_repeated', refinedAction?.candidates.every((candidate) => !shownIds.includes(candidate.id)) === true, refinedAction?.candidates.map((candidate) => candidate.id).join(',') ?? 'none'),
+  ]
+
+  return [
+    {
+      id: 'retrieval-contextual-cross-type',
+      title: '用餐节点按原时段跨类型改为活动/休闲',
+      tags: ['retrieval', 'catalog', 'contextual', 'cross-type'],
+      passed: crossChecks.every((item) => item.passed),
+      checks: crossChecks,
+    },
+    {
+      id: 'retrieval-contextual-session-memory',
+      title: '同一候选会话保留并排除已看地点',
+      tags: ['retrieval', 'catalog', 'contextual', 'multi-turn'],
+      passed: sessionChecks.every((item) => item.passed),
+      checks: sessionChecks,
+    },
+  ]
+}
 
 function runCase(evalCase: RetrievalEvalCase): RetrievalEvalResult {
   const results = searchFictionalPois(evalCase.input)
@@ -196,6 +275,17 @@ function hasAnyText(poi: FictionalPoi, signals: string[]) {
 
 function overlapsAny(poi: FictionalPoi, startTime: string, endTime: string) {
   return poi.openWindows.some((window) => overlaps(window.startTime, window.endTime, startTime, endTime))
+}
+
+function containsWindow(poi: FictionalPoi, startTime: string, endTime: string) {
+  const targetStart = minutes(startTime)
+  const targetEnd = minutes(endTime)
+  return poi.openWindows.some((window) => {
+    const openStart = minutes(window.startTime)
+    let openEnd = minutes(window.endTime)
+    if (openEnd <= openStart) openEnd += 1440
+    return [-1440, 0, 1440].some((offset) => openStart + offset <= targetStart && openEnd + offset >= targetEnd)
+  })
 }
 
 function overlaps(leftStart: string, leftEnd: string, rightStart: string, rightEnd: string) {

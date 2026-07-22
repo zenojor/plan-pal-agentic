@@ -746,7 +746,7 @@ function CandidateDecisionTicket({
   onCandidateRefresh: (action: Extract<PendingAction, { kind: 'candidate-selection' }>, searchQuery?: string) => void
   onCandidateSelect: (actionId: string, candidate: CandidateOption) => void
 }) {
-  const activeRequirement = action.searchQuery?.trim()
+  const activeRequirement = action.session?.intent.query.trim() || action.searchQuery?.trim()
 
   function submitRequirement() {
     const requirement = candidateRequirement.trim()

@@ -231,7 +231,15 @@ function toAgentRoute(route: RoutedTurn | AgentRoute): AgentRoute {
 function intentFromRoute(route: RoutedTurn): AgentIntent {
   if (route.kind === 'qa') return AgentIntentSchema.parse({ action: 'qa', answer: route.answerSeed, reason: route.reason })
   if (route.kind === 'candidate-search') {
-    return AgentIntentSchema.parse({ action: route.mode === 'replace' ? 'replace' : 'add', query: route.query, reason: route.reason })
+    return AgentIntentSchema.parse({
+      action: route.mode === 'replace' ? 'replace' : 'add',
+      query: route.query,
+      reason: route.reason,
+      replacementScope: route.mode === 'replace' ? route.replacementScope : undefined,
+      desiredPhases: route.mode === 'replace' ? route.desiredPhases : undefined,
+      excludedPhases: route.mode === 'replace' ? route.excludedPhases : undefined,
+      softPreferences: route.mode === 'replace' ? route.softPreferences : undefined,
+    })
   }
   if (route.kind === 'service-item-search') {
     return AgentIntentSchema.parse({ action: 'service', query: route.query, category: route.category, reason: route.reason })
@@ -252,7 +260,8 @@ function guardCriticalIntent(model: AgentIntent, fallback: AgentIntent, route: R
   // correctly be a service intent).
   const guardedDiningReplacement = route.kind === 'candidate-search'
     && route.mode === 'replace'
-    && route.reason === 'dining preference replacement request'
+    && (route.reason === 'dining preference replacement request'
+      || route.reason === 'cross-type contextual replacement request')
   const requiredAction = guardedDiningReplacement && model.action !== 'replace'
     ? 'replace'
     : route.kind === 'candidate-search' && route.mode === 'replace' && model.action === 'rewrite'

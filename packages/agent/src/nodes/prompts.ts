@@ -12,8 +12,11 @@ export function intentMessages(state: PlanPalGraphStateValue, repairReason?: str
     new SystemMessage([
       'You are PlanPal intent interpreter. Return exactly one JSON object and no markdown.',
       'The JSON object must contain action, reason, and confidence. action must be one of qa, replace, add, rewrite, delete, confirm, service, clarify, select, cancel; reason must be a non-empty string; confidence must be a number from 0 to 1.',
-      'Optional JSON fields are answer, query, targetSegmentId, targetPhase, and category. targetPhase must be one of activity, dining, drinks, leisure, transit; category must be one of dining, drinks, activity, hotel, movie, retail, wellness, ticket, other.',
-      'Respect negation: “不要酒店了” means delete, not add or search.',
+      'Optional JSON fields are answer, query, targetSegmentId, targetPhase, category, replacementScope, desiredPhases, excludedPhases, and softPreferences. targetPhase must be one of activity, dining, drinks, leisure, transit; desiredPhases and excludedPhases may only contain activity, dining, drinks, leisure; category must be one of dining, drinks, activity, hotel, movie, retail, wellness, ticket, other.',
+      'softPreferences may contain budget, distance, pace, and string-array tags.',
+      'Respect negation: a bare “不要酒店了” means delete. A construction like “不做 X 了，改成/去做 Y” means replace, not delete.',
+      'For “不吃饭了，去玩点其他的”, use action replace, replacementScope cross-type, desiredPhases [activity, leisure], excludedPhases [dining], and target the dining segment.',
+      'For same-type refinements like “中午想吃辣”, use action replace and replacementScope same-type.',
       'Use replace for 换/替换/switch to another place; replace must search POI candidates.',
       'Use rewrite only to edit time, duration, title, or notes while keeping the same place.',
       'Use service only for room, ticket, package, or merchant-offering selection.',
@@ -23,6 +26,8 @@ export function intentMessages(state: PlanPalGraphStateValue, repairReason?: str
     new HumanMessage(JSON.stringify({
       userMessage: state.metadata.userMessage,
       selectedSegmentId: state.metadata.selectedSegmentId,
+      candidateActionId: state.metadata.candidateActionId,
+      interactionSource: state.metadata.interactionSource,
       history,
       plan: {
         id: plan.id,
@@ -34,8 +39,24 @@ export function intentMessages(state: PlanPalGraphStateValue, repairReason?: str
           place: segment.place,
           phase: segment.phase,
           serviceCategory: segment.serviceCategory,
+          startTime: segment.startTime,
+          endTime: segment.endTime,
+          budget: segment.budget,
           locked: Boolean(segment.locked),
         })),
+        pendingCandidateAction: plan.pendingAction?.kind === 'candidate-selection'
+          ? {
+              id: plan.pendingAction.id,
+              mode: plan.pendingAction.mode,
+              targetSegmentId: plan.pendingAction.targetSegmentId,
+              session: plan.pendingAction.session,
+              visibleCandidates: plan.pendingAction.candidates.map((candidate) => ({
+                poiId: candidate.segment.poiId,
+                label: candidate.label,
+                phase: candidate.segment.phase,
+              })),
+            }
+          : undefined,
       },
     })),
   ]

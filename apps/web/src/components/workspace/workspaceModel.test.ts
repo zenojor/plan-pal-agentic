@@ -56,6 +56,7 @@ import {
   normalizeWorkspaceColumns,
   normalizeWorkspaceLayout,
   openMerchantWorkspaceColumn,
+  parseCandidateMechanicalAction,
   pendingActionFromAgentEvent,
   reconcileWorkspaceSelection,
   removeWorkspaceColumn,
@@ -133,8 +134,17 @@ describe('workspace model helpers', () => {
     }).plan.pendingAction
     if (action?.kind !== 'candidate-selection') throw new Error('expected candidate action')
 
-    expect(getCandidateRefreshExcludeIds(action)).toEqual(action.candidates.map((item) => item.id))
-    expect(getCandidateRefreshExcludeIds(action, '安静一点')).toEqual([])
+    const accumulated = [...new Set([
+      ...(action.session?.seenPoiIds ?? []),
+      ...action.candidates.map((item) => item.id),
+    ])]
+    expect(getCandidateRefreshExcludeIds(action)).toEqual(accumulated)
+    expect(parseCandidateMechanicalAction('换一批', action)).toEqual({ kind: 'refresh' })
+    expect(parseCandidateMechanicalAction('就第二个', action)).toEqual({
+      kind: 'select',
+      candidate: action.candidates[1],
+    })
+    expect(parseCandidateMechanicalAction('还是不吃饭了去玩点其他的', action)).toBeUndefined()
     expect(buildDismissPendingActionCommand(action.id)).toEqual({
       type: 'DISMISS_PENDING_ACTION',
       source: 'action-card',
