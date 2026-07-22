@@ -39,6 +39,7 @@ import {
   getCandidateRefreshExcludeIds,
   getCandidateSelectionMode,
   initialChatMessagesFromPlanEvents,
+  parseCandidateMechanicalAction,
   pendingActionFromAgentEvent,
   reorderSegmentsForCommand,
   shouldClearActiveRunForAgentEvent,
@@ -170,10 +171,25 @@ export function usePlanWorkspaceController({
     const isStreaming = store.get(streamingAtom)
     if (!canSendAgentChat(config, draft, isStreaming)) return
     const message = draft.trim()
+    const candidateAction = visiblePendingAction?.kind === 'candidate-selection' ? visiblePendingAction : undefined
+    const mechanicalAction = candidateAction ? parseCandidateMechanicalAction(message, candidateAction) : undefined
+    if (candidateAction && mechanicalAction) {
+      setDraft('')
+      setMessages((prev) => [...prev, { role: 'user', content: message }])
+      if (mechanicalAction.kind === 'refresh') refreshCandidates(candidateAction)
+      if (mechanicalAction.kind === 'dismiss') dismissPendingAction(candidateAction.id)
+      if (mechanicalAction.kind === 'select') void chooseCandidate(candidateAction.id, mechanicalAction.candidate)
+      return
+    }
     const abortController = beginStreamRequest()
     setDraft('')
     setMessages((prev) => [...prev, { role: 'user', content: message }])
-    const payload = activeSelectedSegmentId ? { message, selectedSegmentId: activeSelectedSegmentId } : { message }
+    const payload = {
+      message,
+      selectedSegmentId: activeSelectedSegmentId ?? candidateAction?.targetSegmentId,
+      candidateActionId: candidateAction?.id,
+      interactionSource: 'chat' as const,
+    }
     await runWithCleanup(
       () => streamAgentRun(planId, config, payload, handleStreamEvent, abortController.signal),
       (error) => {
@@ -199,14 +215,46 @@ export function usePlanWorkspaceController({
   }
 
   function refreshCandidates(action: Extract<PendingAction, { kind: 'candidate-selection' }>, searchQuery?: string) {
+    const requirement = searchQuery?.trim()
+    if (requirement) {
+      void submitCandidateRequirement(action, requirement)
+      return
+    }
+    const pendingActionRunId = store.get(pendingActionRunIdAtom)
+    if (pendingActionRunId && getCandidateSelectionMode(pendingActionRunId) === 'resume') {
+      void resumePendingAction(pendingActionRunId, action.id, { decision: 'retry' })
+      return
+    }
     commandMutation.mutate(buildCandidateRefreshCommand({
       actionId: action.id,
       mode: action.mode,
       targetSegmentId: action.targetSegmentId,
       afterSegmentId: action.afterSegmentId,
-      searchQuery,
-      excludeCandidateIds: getCandidateRefreshExcludeIds(action, searchQuery),
+      excludeCandidateIds: getCandidateRefreshExcludeIds(action),
     }))
+  }
+
+  async function submitCandidateRequirement(
+    action: Extract<PendingAction, { kind: 'candidate-selection' }>,
+    message: string,
+  ) {
+    const abortController = beginStreamRequest()
+    onOpenChat()
+    setMessages((prev) => [...prev, { role: 'user', content: message }])
+    await runWithCleanup(
+      () => streamAgentRun(planId, config, {
+        message,
+        selectedSegmentId: action.targetSegmentId,
+        candidateActionId: action.id,
+        interactionSource: 'candidate-card',
+      }, handleStreamEvent, abortController.signal),
+      (error) => {
+        if (isAbortError(error)) return
+        cancelTypewriterForFailure()
+        setMessages((prev) => [...prev, chatMessageFromAgentFailure('run', error)])
+      },
+      () => finishStreamRequest(abortController),
+    )
   }
 
   function choosePlanVariant(actionId: string, variant: PlanVariantOption) {
@@ -235,6 +283,11 @@ export function usePlanWorkspaceController({
   }
 
   function dismissPendingAction(actionId: string) {
+    const pendingActionRunId = store.get(pendingActionRunIdAtom)
+    if (pendingActionRunId) {
+      void resumePendingAction(pendingActionRunId, actionId, { decision: 'rejected' })
+      return
+    }
     commandMutation.mutate(buildDismissPendingActionCommand(actionId))
   }
 

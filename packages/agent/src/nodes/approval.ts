@@ -45,6 +45,29 @@ export function createApprovalNodes(deps: PlanPalGraphDependencies) {
         )
       }
       if (resume.decision === 'retry') {
+        const candidateAction = state.pendingApproval?.action.kind === 'candidate-selection'
+          ? state.pendingApproval.action
+          : undefined
+        if (candidateAction) {
+          return {
+            plan: current,
+            baseVersion: current.currentVersion,
+            proposedCommands: [],
+            pendingApproval: null,
+            resume: null,
+            metadata: {
+              ...withNodePath(state, 'applyCommand'),
+              activeToolCallIds: [],
+              candidateActionId: candidateAction.id,
+              selectedSegmentId: candidateAction.targetSegmentId ?? state.metadata.selectedSegmentId,
+              excludedCandidateIds: [...new Set([
+                ...(candidateAction.session?.seenPoiIds ?? candidateAction.excludeCandidateIds ?? []),
+                ...candidateAction.candidates.map((candidate) => candidate.id),
+              ])],
+              continuation: 'planning',
+            },
+          }
+        }
         const dismissed = applyPlanCommand(current, {
           type: 'DISMISS_PENDING_ACTION',
           source: 'action-card',
@@ -66,6 +89,35 @@ export function createApprovalNodes(deps: PlanPalGraphDependencies) {
               continuation: 'planning',
             },
           }
+      }
+      if (resume.decision === 'revise' && resume.answer?.trim()) {
+        const candidateAction = state.pendingApproval?.action.kind === 'candidate-selection'
+          ? state.pendingApproval.action
+          : undefined
+        if (!candidateAction) return failure(state, 'applyCommand', 'Only candidate selection can be revised', false)
+        return {
+          messages: [new HumanMessage(resume.answer.trim())],
+          plan: current,
+          baseVersion: current.currentVersion,
+          proposedCommands: [],
+          pendingApproval: null,
+          resume: null,
+          route: null,
+          intent: null,
+          metadata: {
+            ...withNodePath(state, 'applyCommand'),
+            userMessage: resume.answer.trim(),
+            activeToolCallIds: [],
+            candidateActionId: candidateAction.id,
+            selectedSegmentId: candidateAction.targetSegmentId ?? state.metadata.selectedSegmentId,
+            interactionSource: resume.interactionSource ?? state.metadata.interactionSource,
+            excludedCandidateIds: [...new Set([
+              ...(candidateAction.session?.seenPoiIds ?? candidateAction.excludeCandidateIds ?? []),
+              ...candidateAction.candidates.map((candidate) => candidate.id),
+            ])],
+            continuation: 'intent',
+          },
+        }
       }
       if (proposal.kind === 'clarification' && resume.decision === 'answered' && resume.answer?.trim()) {
         const dismissed = applyPlanCommand(current, {

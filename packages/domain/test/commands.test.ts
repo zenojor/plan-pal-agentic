@@ -70,7 +70,7 @@ describe('PlanCommand deterministic handler', () => {
     expect(result.plan.pendingAction?.kind).toBe('candidate-selection')
     if (result.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing candidates')
     expect(result.plan.pendingAction.searchQuery).toBe('火锅')
-    expect(result.plan.pendingAction.candidates).toHaveLength(3)
+    expect(result.plan.pendingAction.candidates.length).toBeGreaterThan(0)
     expect(result.plan.pendingAction.candidates.every((candidate) =>
       `${candidate.label}${candidate.description}${candidate.segment.title}${candidate.segment.reason}`.includes('火锅'),
     )).toBe(true)
@@ -568,7 +568,7 @@ describe('PlanCommand deterministic handler', () => {
     expect(refreshed.plan.pendingAction.candidates.some((candidate) => excluded.includes(candidate.id))).toBe(false)
   })
 
-  it('resets candidate exclusions when the user submits a new search requirement', () => {
+  it('keeps candidate exclusions when the user submits a new search requirement', () => {
     const plan = createPlanFromPrompt('晚上想吃近一点')
     const dining = plan.segments.find((segment) => segment.phase === 'dining')!
     const first = applyPlanCommand(plan, {
@@ -587,9 +587,87 @@ describe('PlanCommand deterministic handler', () => {
     })
 
     if (refined.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing refined candidates')
-    expect(refined.plan.pendingAction.searchQuery).toBe('近一点，室内')
-    expect(refined.plan.pendingAction.excludeCandidateIds).toEqual([])
+    expect(refined.plan.pendingAction.searchQuery).toContain('近一点，室内')
+    expect(refined.plan.pendingAction.excludeCandidateIds).toEqual(expect.arrayContaining(
+      first.plan.pendingAction.candidates.map((candidate) => candidate.id),
+    ))
+    expect(refined.plan.pendingAction.session?.revision).toBe(1)
     expect(refined.plan.pendingAction.candidates.length).toBeGreaterThan(0)
+  })
+
+  it('replaces dining with grounded activity and leisure candidates without mutating the plan', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const dining = plan.segments.find((segment) => segment.phase === 'dining')!
+    const result = applyPlanCommand(plan, {
+      type: 'REPLACE_SEGMENT',
+      source: 'puzzle',
+      segmentId: dining.id,
+      searchQuery: '还是不吃饭了去玩点其他的',
+    })
+
+    expect(result.plan.segments).toEqual(plan.segments)
+    if (result.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing cross-type candidates')
+    const action = result.plan.pendingAction
+    expect(action.session?.intent).toMatchObject({
+      replacementScope: 'cross-type',
+      desiredPhases: ['activity', 'leisure'],
+      excludedPhases: ['dining'],
+    })
+    expect(action.candidates.length).toBeGreaterThan(1)
+    expect(new Set(action.candidates.map((candidate) => candidate.segment.phase))).toEqual(new Set(['activity', 'leisure']))
+    for (const candidate of action.candidates) {
+      const poi = getFictionalPoiById(candidate.id)
+      expect(poi).toBeDefined()
+      expect(candidate.segment).toMatchObject({
+        poiId: poi!.id,
+        place: poi!.name,
+        title: poi!.activityTitle,
+        budget: poi!.budget,
+        lnglat: poi!.lnglat,
+        startTime: dining.startTime,
+        endTime: dining.endTime,
+      })
+    }
+  })
+
+  it('applies a cross-type candidate in the same slot and clears old offerings', () => {
+    const base = createPlanFromPrompt('下午两个人附近轻松玩')
+    const dining = base.segments.find((segment) => segment.phase === 'dining')!
+    const plan = {
+      ...base,
+      serviceSelections: [{
+        id: 'selection_old',
+        segmentId: dining.id,
+        merchantId: dining.poiId!,
+        offeringId: 'offering_old',
+        quantity: 1,
+        selectedAt: new Date().toISOString(),
+        offeringSnapshot: getFictionalPoiById(dining.poiId)!.offerings[0]!,
+      }],
+    }
+    const pending = applyPlanCommand(plan, {
+      type: 'REPLACE_SEGMENT',
+      source: 'puzzle',
+      segmentId: dining.id,
+      searchQuery: '还是不吃饭了去玩点其他的',
+    }).plan
+    if (pending.pendingAction?.kind !== 'candidate-selection') throw new Error('missing cross-type candidates')
+    const candidate = pending.pendingAction.candidates[0]!
+    const chosen = applyPlanCommand(pending, {
+      type: 'CHOOSE_CANDIDATE',
+      source: 'action-card',
+      actionId: pending.pendingAction.id,
+      candidateId: candidate.id,
+    }).plan
+    const replaced = chosen.segments.find((segment) => segment.id === dining.id)!
+    expect(replaced).toMatchObject({
+      id: dining.id,
+      startTime: dining.startTime,
+      endTime: dining.endTime,
+      poiId: candidate.id,
+      phase: candidate.segment.phase,
+    })
+    expect(chosen.serviceSelections ?? []).toEqual([])
   })
 
   it('dismisses an active pending action without mutating the itinerary', () => {

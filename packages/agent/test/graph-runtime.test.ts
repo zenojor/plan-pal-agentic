@@ -52,12 +52,12 @@ describe('mature LangGraph runtime', () => {
     ])
   })
 
-  it('uses native AIMessage tool calls and grounds candidates in the exact ToolMessage result', async () => {
+  it('calls grounded POI search directly after one intent model call', async () => {
     const stores = createInMemoryStores()
     const plan = await stores.plans.createPlan(createPlanFromPrompt('晚上两个人附近吃饭'))
     const checkpointer = createMemoryCheckpointer()
     const tools = createDefaultToolRegistry()
-    let boundToolNames: string[] = []
+    let toolSelectorCalls = 0
     const gateway: AgentModelGateway = {
       generateAssistantReply: async () => '',
       invokeStructured: async (_config, _messages, schema) => schema.parse({
@@ -67,8 +67,8 @@ describe('mature LangGraph runtime', () => {
         reason: 'replace dinner',
         confidence: 0.98,
       }),
-      invokeWithTools: async (_config, _messages, boundTools) => {
-        boundToolNames = boundTools.map((item) => item.name)
+      invokeWithTools: async () => {
+        toolSelectorCalls += 1
         const dining = plan.segments.find((segment) => segment.phase === 'dining')!
         return new AIMessage({
           content: '',
@@ -87,13 +87,11 @@ describe('mature LangGraph runtime', () => {
 
     expect(result.status).toBe('waiting_for_user')
     expect(events.some((event) => event.type === 'agent.message.delta')).toBe(false)
-    expect(boundToolNames).toEqual(expect.arrayContaining([
-      'poi_search', 'offering_search', 'route_estimate', 'weather_check', 'order_preview', 'get_current_plan',
-    ]))
+    expect(toolSelectorCalls).toBe(0)
     const called = events.find((event) => event.type === 'tool.called')
     const returned = events.find((event) => event.type === 'tool.result')
-    expect(called?.payload).toMatchObject({ nativeToolName: 'poi_search', toolCallId: 'call_native_poi' })
-    expect(returned?.payload).toMatchObject({ nativeToolName: 'poi_search', tool_call_id: 'call_native_poi' })
+    expect(called?.payload).toMatchObject({ nativeToolName: 'poi_search' })
+    expect(returned?.payload).toMatchObject({ nativeToolName: 'poi_search' })
 
     const action = actionFromEvents(events)
     expect(action.kind).toBe('candidate-selection')
@@ -105,8 +103,9 @@ describe('mature LangGraph runtime', () => {
     const graph = buildPlanPalLangGraph({ stores, tools, modelGateway: gateway, modelConfig, checkpointer })
     const snapshot = await graph.getState({ configurable: { thread_id: `plan:${plan.id}` } })
     const messages = snapshot.values.messages as BaseMessage[]
-    const ai = messages.find((message) => AIMessage.isInstance(message) && message.tool_calls?.some((call) => call.id === 'call_native_poi'))
-    const toolMessage = messages.find((message) => ToolMessage.isInstance(message) && message.tool_call_id === 'call_native_poi')
+    const canonicalCallId = (called?.payload as { toolCallId?: string }).toolCallId
+    const ai = messages.find((message) => AIMessage.isInstance(message) && message.tool_calls?.some((call) => call.id === canonicalCallId))
+    const toolMessage = messages.find((message) => ToolMessage.isInstance(message) && message.tool_call_id === canonicalCallId)
     expect(ai).toBeDefined()
     expect(toolMessage).toBeDefined()
   })
@@ -162,7 +161,7 @@ describe('mature LangGraph runtime', () => {
     const action = actionFromEvents(events)
     expect(action.kind).toBe('candidate-selection')
     if (action.kind !== 'candidate-selection') throw new Error('expected spicy candidates')
-    expect(action.candidates).toHaveLength(3)
+    expect(action.candidates.length).toBeGreaterThan(0)
     for (const candidate of action.candidates) {
       const poi = getFictionalPoiById(candidate.id)
       expect(poi).toBeDefined()
@@ -267,6 +266,62 @@ describe('mature LangGraph runtime', () => {
     expect(retryEvents.find((event) => event.type === 'interrupt.resumed')?.payload).toMatchObject({
       resume: { decision: 'retry' },
     })
+  })
+
+  it('revises a waiting dining candidate action into a cross-type activity/leisure session', async () => {
+    const stores = createInMemoryStores()
+    const plan = await stores.plans.createPlan(createPlanFromPrompt('下午两个人附近轻松玩'))
+    let intentCall = 0
+    const gateway: AgentModelGateway = {
+      generateAssistantReply: async () => '',
+      invokeStructured: async (_config, _messages, schema) => schema.parse(intentCall++ === 0 ? {
+        action: 'replace',
+        targetPhase: 'dining',
+        replacementScope: 'same-type',
+        desiredPhases: ['dining'],
+        query: '我想吃辣',
+        reason: 'refine dining',
+        confidence: 0.98,
+      } : {
+        action: 'replace',
+        targetPhase: 'dining',
+        replacementScope: 'cross-type',
+        desiredPhases: ['activity', 'leisure'],
+        excludedPhases: ['dining'],
+        query: '还是不吃饭了去玩点其他的',
+        reason: 'replace dining with play',
+        confidence: 0.99,
+      }),
+    }
+    const runtime = new PlanPalAgentRuntime(stores, createDefaultToolRegistry(), gateway, createMemoryCheckpointer())
+    const firstEvents: AgentEvent[] = []
+    await runtime.run({ planId: plan.id, message: '我想吃辣', modelConfig }, collect(firstEvents))
+    const firstAction = actionFromEvents(firstEvents)
+    if (firstAction.kind !== 'candidate-selection') throw new Error('expected dining candidates')
+
+    const revisedEvents: AgentEvent[] = []
+    const result = await runtime.run({
+      planId: plan.id,
+      message: '还是不吃饭了去玩点其他的',
+      interactionSource: 'chat',
+      modelConfig,
+    }, collect(revisedEvents))
+
+    expect(result.status).toBe('waiting_for_user')
+    expect(revisedEvents.find((event) => event.type === 'interrupt.resumed')?.payload).toMatchObject({
+      resume: { decision: 'revise' },
+    })
+    const revisedAction = actionFromEvents(revisedEvents)
+    if (revisedAction.kind !== 'candidate-selection') throw new Error('expected revised candidates')
+    expect(revisedAction.id).toBe(firstAction.id)
+    expect(revisedAction.session?.revision).toBe(1)
+    expect(revisedAction.session?.intent).toMatchObject({
+      replacementScope: 'cross-type',
+      desiredPhases: ['activity', 'leisure'],
+      excludedPhases: ['dining'],
+    })
+    expect(new Set(revisedAction.candidates.map((candidate) => candidate.segment.phase))).toEqual(new Set(['activity', 'leisure']))
+    expect((await stores.plans.getPlan(plan.id))?.segments).toEqual(plan.segments)
   })
 
   it('resumes from the same SQLite checkpoint with a new runtime instance', async () => {

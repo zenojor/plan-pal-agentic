@@ -1,6 +1,6 @@
-import type { CandidateOption, MerchantServiceCategory, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
+import type { CandidateIntent, CandidateOption, CandidatePoiPhase, MerchantServiceCategory, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
 import { createId, nowIso } from './ids'
-import { deriveCandidateSearchIntent, fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type CandidateSearchIntent, type FictionalPoi, type PoiSearchConstraints } from './poiCatalog'
+import { deriveCandidateSearchIntent, fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type CandidateSearchIntent, type FictionalPoi, type FictionalPoiSearchResult, type PoiSearchConstraints } from './poiCatalog'
 
 
 export function createPlanFromPrompt(prompt: string): Plan {
@@ -141,19 +141,75 @@ export function createReplacementCandidates(
   segmentId: string,
   query = '',
   excludeCandidateIds: string[] = [],
+  candidateIntent?: CandidateIntent,
 ): CandidateOption[] {
   const target = plan.segments.find((segmentItem) => segmentItem.id === segmentId)
-  const phase = target?.phase === 'dining' ? 'dining' : target?.phase === 'drinks' ? 'drinks' : target?.phase === 'leisure' ? 'leisure' : 'activity'
-  return createCandidatesForPhase(phase, query, excludeCandidateIds, target ? {
-    startTime: target.startTime,
-    endTime: target.endTime,
+  if (!target || target.isTransit || target.phase === 'transit') return []
+  const candidateTarget = target as PlanSegment & { phase: CandidatePoiPhase }
+  const intent = createCandidateIntent(plan, segmentId, query, candidateIntent)
+  const excluded = [...new Set([
+    ...excludeCandidateIds,
+    ...(candidateTarget.poiId ? [candidateTarget.poiId] : []),
+  ])]
+  return createCandidatesForReplacementIntent(plan, candidateTarget, intent, excluded, {
+    startTime: candidateTarget.startTime,
+    endTime: candidateTarget.endTime,
     status: '待确认',
-  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory, 'replace', {
-    timeWindow: target ? { startTime: target.startTime, endTime: target.endTime } : undefined,
-    headcount: plan.intent.headcount,
-    nearLnglat: target?.lnglat,
-    maxDistanceKm: queryRequestsNearby(query) ? 3 : undefined,
   })
+}
+
+export function createCandidateIntent(
+  plan: Plan,
+  segmentId: string,
+  query = '',
+  requested?: CandidateIntent,
+): CandidateIntent {
+  const target = plan.segments.find((segment) => segment.id === segmentId)
+  if (!target || target.isTransit || target.phase === 'transit') {
+    throw new Error('Candidate target must be an executable segment')
+  }
+  const requestedPhases = requested?.desiredPhases.filter(isCandidatePoiPhase) ?? []
+  const requestedExcluded = requested?.excludedPhases.filter(isCandidatePoiPhase) ?? []
+  const crossTypePlay = isCrossTypePlayRequest(query, target.phase)
+  const replacementScope = requested?.replacementScope ?? (crossTypePlay ? 'cross-type' : 'same-type')
+  const desiredPhases = uniqueCandidatePhases(
+    requestedPhases.length
+      ? requestedPhases
+      : replacementScope === 'cross-type' && crossTypePlay
+        ? ['activity', 'leisure']
+        : [target.phase],
+  )
+  const excludedPhases = uniqueCandidatePhases([
+    ...requestedExcluded,
+    ...(replacementScope === 'cross-type' ? [target.phase] : []),
+  ]).filter((phase) => !desiredPhases.includes(phase))
+  const parsed = deriveCandidateSearchIntent(query, {
+    mode: 'replace',
+    phase: replacementScope === 'same-type' ? target.phase : undefined,
+    serviceCategory: replacementScope === 'same-type' ? target.serviceCategory : undefined,
+  })
+  return {
+    operation: requested?.operation ?? 'replace',
+    replacementScope,
+    targetSegmentId: segmentId,
+    desiredPhases: desiredPhases.filter((phase) => !excludedPhases.includes(phase)),
+    excludedPhases,
+    query: requested?.query.trim() || query.trim(),
+    hardConstraints: {
+      startTime: target.startTime,
+      endTime: target.endTime,
+      locked: false,
+      catalogOnly: true,
+    },
+    softPreferences: {
+      ...requested?.softPreferences,
+      distance: requested?.softPreferences.distance ?? (queryRequestsNearby(query) ? 'nearby' : undefined),
+      tags: [...new Set([
+        ...(requested?.softPreferences.tags ?? []),
+        ...parsed.requestedTags,
+      ])],
+    },
+  }
 }
 
 export function createAddSegmentCandidates(
@@ -187,6 +243,117 @@ export function createAddSegmentCandidates(
     nearLnglat: after?.lnglat,
     maxDistanceKm: queryRequestsNearby(query) ? 3 : undefined,
   })
+}
+
+type ContextualPoiResult = FictionalPoiSearchResult & {
+  contextualScore: number
+  intent: CandidateSearchIntent
+  routeDeltaKm?: number
+}
+
+function createCandidatesForReplacementIntent(
+  plan: Plan,
+  target: PlanSegment & { phase: CandidatePoiPhase },
+  candidateIntent: CandidateIntent,
+  excludeCandidateIds: string[],
+  defaults: Partial<PlanSegment>,
+): CandidateOption[] {
+  const targetIndex = plan.segments.findIndex((segment) => segment.id === target.id)
+  const previous = plan.segments.slice(0, targetIndex).reverse().find((segment) => !segment.isTransit && segment.lnglat)
+  const next = plan.segments.slice(targetIndex + 1).find((segment) => !segment.isTransit && segment.lnglat)
+  const baselineDistance = routeContextDistance(previous?.lnglat, target.lnglat, next?.lnglat)
+  const durationMinutes = minutesBetween(candidateIntent.hardConstraints.startTime, candidateIntent.hardConstraints.endTime)
+  const serviceCategory = candidateIntent.replacementScope === 'same-type'
+    ? inferServiceCategoryFromQuery(candidateIntent.query) ?? target.serviceCategory
+    : undefined
+
+  const ranked = candidateIntent.desiredPhases.flatMap((phase): ContextualPoiResult[] => {
+    const intent = deriveCandidateSearchIntent(candidateIntent.query, { mode: 'replace', phase, serviceCategory })
+    return searchFictionalPois({
+      phase,
+      query: candidateIntent.query,
+      excludePoiIds: excludeCandidateIds,
+      intent,
+      limit: 12,
+      serviceCategory,
+      timeWindow: {
+        startTime: candidateIntent.hardConstraints.startTime,
+        endTime: candidateIntent.hardConstraints.endTime,
+      },
+      requireFullTimeWindow: true,
+      durationMinutes,
+      durationToleranceMinutes: 30,
+      headcount: plan.intent.headcount,
+      requiredTags: explicitCandidateRequiredTags(candidateIntent.query),
+      nearLnglat: target.lnglat,
+      maxDistanceKm: candidateIntent.softPreferences.distance === 'nearby' ? 3 : undefined,
+    })
+      .filter(({ poi }) => candidateIntent.replacementScope !== 'cross-type' || allowsCrossTypePoi(poi, candidateIntent.query))
+      .map((result) => {
+        const candidateDistance = routeContextDistance(previous?.lnglat, result.poi.lnglat, next?.lnglat)
+        const routeDeltaKm = baselineDistance !== undefined && candidateDistance !== undefined
+          ? candidateDistance - baselineDistance
+          : undefined
+        const routeAdjustment = routeDeltaKm === undefined ? 0 : Math.max(-10, Math.min(20, routeDeltaKm * 5))
+        return {
+          ...result,
+          contextualScore: result.score - routeAdjustment,
+          intent,
+          routeDeltaKm,
+        }
+      })
+  }).sort((left, right) => right.contextualScore - left.contextualScore || left.poi.id.localeCompare(right.poi.id))
+
+  const selected = selectPhaseDiverse(ranked, candidateIntent.desiredPhases, 3)
+  return selected.map((result, index) => ({
+    id: result.poi.id,
+    label: result.poi.name,
+    description: result.poi.description,
+    score: normalizeCandidateScore(result.contextualScore, index),
+    reasons: uniqueReasons([
+      candidateIntent.replacementScope === 'cross-type'
+        ? `${phaseName(target.phase)}改为${candidateIntent.desiredPhases.map(phaseName).join('/')}`
+        : '',
+      `完整覆盖 ${candidateIntent.hardConstraints.startTime}-${candidateIntent.hardConstraints.endTime}`,
+      routeImpactLine(result.routeDeltaKm),
+      budgetImpactLine(target.budget, result.poi.budget),
+      ...candidateReasonLines(result.intent, result.poi, result.reasons),
+      ...result.reasons,
+    ]),
+    segment: {
+      ...defaults,
+      phase: result.poi.phase,
+      title: result.poi.activityTitle,
+      place: result.poi.name,
+      reason: result.poi.description,
+      budget: result.poi.budget,
+      notes: result.poi.notes,
+      poiId: result.poi.id,
+      serviceCategory: result.poi.serviceCategory,
+      lnglat: result.poi.lnglat,
+    },
+  }))
+}
+
+function selectPhaseDiverse(results: ContextualPoiResult[], phases: CandidatePoiPhase[], limit: number) {
+  const selected: ContextualPoiResult[] = []
+  const selectedIds = new Set<string>()
+  if (phases.length > 1) {
+    for (const phase of phases) {
+      const match = results.find((result) => result.poi.phase === phase && !selectedIds.has(result.poi.id))
+      if (!match) continue
+      selected.push(match)
+      selectedIds.add(match.poi.id)
+      if (selected.length >= limit) return selected
+    }
+  }
+  for (const result of results) {
+    if (selectedIds.has(result.poi.id)) continue
+    selected.push(result)
+    selectedIds.add(result.poi.id)
+    if (selected.length >= limit) break
+  }
+  return selected
 }
 
 function createCandidatesForPhase(
@@ -238,6 +405,95 @@ function createCandidatesForPhase(
 function queryRequestsNearby(query: string) {
   const normalized = query.toLowerCase()
   return query.includes('附近') || query.includes('就近') || query.includes('少绕路') || normalized.includes('near')
+}
+
+function isCrossTypePlayRequest(query: string, sourcePhase: SegmentPhase) {
+  if (sourcePhase !== 'dining') return false
+  const normalized = query.toLowerCase()
+  const rejectsDining = containsAnyText(normalized, ['不吃饭', '不吃了', '不吃东西', '不去餐厅', '取消吃饭', '不吃午饭', '不吃晚饭'])
+  const wantsPlay = containsAnyText(normalized, ['去玩', '玩点', '活动', '逛逛', '体验', '休闲', '娱乐', 'something fun'])
+  return rejectsDining && wantsPlay
+}
+
+function allowsCrossTypePoi(poi: FictionalPoi, query: string) {
+  const explicitHotel = containsAnyText(query.toLowerCase(), ['酒店', '住宿', '住一晚', 'hotel'])
+  const explicitRetail = containsAnyText(query.toLowerCase(), ['购物', '礼物', '买点', '花店', '写真'])
+  if (poi.serviceCategory === 'hotel') return explicitHotel
+  if (poi.serviceCategory === 'retail') return explicitRetail
+  return poi.serviceCategory !== 'dining' && poi.serviceCategory !== 'drinks'
+}
+
+function uniqueCandidatePhases(phases: SegmentPhase[]): CandidatePoiPhase[] {
+  return [...new Set(phases.filter(isCandidatePoiPhase))]
+}
+
+function isCandidatePoiPhase(phase: SegmentPhase): phase is CandidatePoiPhase {
+  return phase !== 'transit'
+}
+
+function phaseName(phase: CandidatePoiPhase) {
+  if (phase === 'activity') return '活动'
+  if (phase === 'dining') return '用餐'
+  if (phase === 'drinks') return '小酌'
+  return '休闲'
+}
+
+function routeContextDistance(
+  previous: [number, number] | undefined,
+  current: [number, number] | undefined,
+  next: [number, number] | undefined,
+) {
+  if (!current || (!previous && !next)) return undefined
+  return (previous ? coordinateDistanceKm(previous, current) : 0)
+    + (next ? coordinateDistanceKm(current, next) : 0)
+}
+
+function coordinateDistanceKm(from: [number, number], to: [number, number]) {
+  const radians = Math.PI / 180
+  const deltaLatitude = (to[1] - from[1]) * radians
+  const deltaLongitude = (to[0] - from[0]) * radians
+  const leftLatitude = from[1] * radians
+  const rightLatitude = to[1] * radians
+  const haversine = Math.sin(deltaLatitude / 2) ** 2
+    + Math.cos(leftLatitude) * Math.cos(rightLatitude) * Math.sin(deltaLongitude / 2) ** 2
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+}
+
+function routeImpactLine(deltaKm: number | undefined) {
+  if (deltaKm === undefined) return ''
+  if (Math.abs(deltaKm) < 0.15) return '前后路线与原安排基本相当'
+  if (deltaKm < 0) return `前后路线预计少 ${Math.abs(deltaKm).toFixed(1)}km`
+  return `前后路线预计多 ${deltaKm.toFixed(1)}km`
+}
+
+function budgetImpactLine(sourceBudget: string, candidateBudget: string) {
+  const source = budgetMidpoint(sourceBudget)
+  const candidate = budgetMidpoint(candidateBudget)
+  if (source === undefined || candidate === undefined) return `预算参考 ${candidateBudget}`
+  const difference = candidate - source
+  if (Math.abs(difference) < 10) return '预算与原节点接近'
+  return difference < 0
+    ? `人均预算约减少 CNY ${Math.round(Math.abs(difference))}`
+    : `人均预算约增加 CNY ${Math.round(difference)}`
+}
+
+function budgetMidpoint(value: string) {
+  const numbers = [...value.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0])).filter(Number.isFinite)
+  if (numbers.length === 0) return undefined
+  return numbers.length === 1 ? numbers[0] : (numbers[0]! + numbers[1]!) / 2
+}
+
+function containsAnyText(value: string, needles: string[]) {
+  return needles.some((needle) => value.includes(needle))
+}
+
+function explicitCandidateRequiredTags(query: string) {
+  if (containsAnyText(query, ['火锅', '涮锅', '涮肉', 'hotpot'])) return ['火锅']
+  if (containsAnyText(query, ['串串', '签签', '钵钵'])) return ['串串']
+  if (containsAnyText(query, ['川菜', '湘菜', '川湘'])) return ['川湘']
+  if (!containsAnyText(query, ['不吃辣', '不要辣', '不辣', '清淡', '少辣'])
+    && containsAnyText(query, ['想吃辣', '吃辣', '辣的', '辣味', '麻辣', '香辣'])) return ['辣味']
+  return []
 }
 
 function buildVariantSegments(intent: PlanIntent, pois: FictionalPoi[], durations: number[]) {

@@ -36,6 +36,29 @@ const offeringSchema = z.custom<MerchantOffering>((value) => {
 })
 
 const commandSourceSchema = z.literal('agent')
+const candidatePoiPhaseSchema = z.enum(['activity', 'dining', 'drinks', 'leisure'])
+const candidateSoftPreferencesSchema = z.object({
+  budget: z.string().optional(),
+  distance: z.string().optional(),
+  pace: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+export const CandidateIntentSchema = z.object({
+  operation: z.enum(['refresh', 'refine', 'replace']),
+  replacementScope: z.enum(['same-type', 'cross-type']),
+  targetSegmentId: z.string(),
+  desiredPhases: z.array(candidatePoiPhaseSchema).min(1),
+  excludedPhases: z.array(candidatePoiPhaseSchema),
+  query: z.string(),
+  hardConstraints: z.object({
+    startTime: z.string(),
+    endTime: z.string(),
+    locked: z.literal(false),
+    catalogOnly: z.literal(true),
+  }),
+  softPreferences: candidateSoftPreferencesSchema,
+})
 
 export const ProposedPlanCommandSchema = z.discriminatedUnion('type', [
   z.object({
@@ -71,6 +94,8 @@ export const ProposedPlanCommandSchema = z.discriminatedUnion('type', [
     searchQuery: z.string().optional(),
     excludeCandidateIds: z.array(z.string()).optional(),
     candidates: z.array(candidateSchema).min(1),
+    candidateIntent: CandidateIntentSchema.optional(),
+    resetSession: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('REFRESH_SERVICE_ITEMS'),
@@ -101,6 +126,10 @@ export const AgentIntentSchema = z.object({
   reason: z.string().min(1),
   targetPhase: z.enum(['activity', 'dining', 'drinks', 'leisure', 'transit']).optional(),
   targetSegmentId: z.string().optional(),
+  replacementScope: z.enum(['same-type', 'cross-type']).optional(),
+  desiredPhases: z.array(candidatePoiPhaseSchema).optional(),
+  excludedPhases: z.array(candidatePoiPhaseSchema).optional(),
+  softPreferences: candidateSoftPreferencesSchema.optional(),
   confidence: z.number().min(0).max(1).default(0.8),
 })
 
@@ -113,6 +142,10 @@ export const AgentRouteSchema = z.discriminatedUnion('kind', [
     afterSegmentId: z.string().nullable().optional(),
     query: z.string(),
     reason: z.string(),
+    replacementScope: z.enum(['same-type', 'cross-type']).optional(),
+    desiredPhases: z.array(candidatePoiPhaseSchema).optional(),
+    excludedPhases: z.array(candidatePoiPhaseSchema).optional(),
+    softPreferences: candidateSoftPreferencesSchema.optional(),
   }),
   z.object({
     kind: z.literal('service-search'),
@@ -177,12 +210,13 @@ export const PlanPalInterruptSchema = z.discriminatedUnion('kind', [
 
 export const PlanPalResumeSchema = z.object({
   actionId: z.string(),
-  decision: z.enum(['approved', 'rejected', 'selected', 'answered', 'retry']),
+  decision: z.enum(['approved', 'rejected', 'selected', 'answered', 'retry', 'revise']),
   candidateId: z.string().optional(),
   offeringId: z.string().optional(),
   variantId: z.string().optional(),
   quantity: z.number().positive().optional(),
   answer: z.string().optional(),
+  interactionSource: z.enum(['chat', 'candidate-card']).optional(),
 })
 
 export const FinalAgentResponseSchema = z.object({

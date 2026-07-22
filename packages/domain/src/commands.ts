@@ -1,7 +1,7 @@
-import type { AgentEvent, CommandResult, ConfirmablePlanCommand, MerchantOffering, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanServiceSelection, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
+import type { AgentEvent, CandidateIntent, CandidateOption, CandidatePoiPhase, CandidateSearchSession, CommandResult, ConfirmablePlanCommand, MerchantOffering, PendingAction, Plan, PlanCommand, PlanPatch, PlanRouteChoice, PlanSegment, PlanServiceSelection, PlanVariantSelection, ReorderPosition, RouteMode } from './types'
 import { createId, nowIso } from './ids'
-import { createAddSegmentCandidates, createReplacementCandidates } from './seed'
-import { getFictionalPoiById, getFictionalPoiByName, getMerchantOfferingById, searchMerchantOfferings, pickFictionalPoi } from './poiCatalog'
+import { createAddSegmentCandidates, createCandidateIntent, createReplacementCandidates } from './seed'
+import { getFictionalPoiById, getFictionalPoiByName, getMerchantOfferingById, searchMerchantOfferings, pickFictionalPoi, segmentFromPoi } from './poiCatalog'
 import { createSandboxOrderReceipt } from './mockServices'
 
 export function applyPlanCommand(plan: Plan, command: PlanCommand, runId = createId('cmd')): CommandResult {
@@ -206,15 +206,22 @@ function replaceSegment(plan: Plan, command: Extract<PlanCommand, { type: 'REPLA
     throw new Error('Locked segments cannot be replaced')
   }
   if (!command.replacement) {
+    const candidateTarget = requireCandidateTarget(plan, command.segmentId)
+    const actionId = createId('action')
+    const candidateIntent = createCandidateIntent(plan, command.segmentId, command.searchQuery)
+    const candidates = createReplacementCandidates(plan, command.segmentId, command.searchQuery, [], candidateIntent)
+    if (candidates.length === 0) throw new Error('Candidate search returned no results')
     const action: PendingAction = {
-      id: createId('action'),
+      id: actionId,
       kind: 'candidate-selection',
       mode: 'replace',
       targetSegmentId: command.segmentId,
-      title: '选择替换候选',
-      description: 'PlanPal 找到几个具体的虚构地点，选择一个后会直接更新拼图。',
+      title: candidateActionTitle(candidateTarget, candidateIntent),
+      description: candidateActionDescription(candidateTarget, candidateIntent),
       searchQuery: command.searchQuery?.trim() || undefined,
-      candidates: createReplacementCandidates(plan, command.segmentId, command.searchQuery),
+      candidates,
+      excludeCandidateIds: candidateTarget.poiId ? [candidateTarget.poiId] : [],
+      session: createCandidateSearchSession(actionId, candidateTarget, candidateIntent, candidateTarget.poiId ? [candidateTarget.poiId] : []),
     }
     return touch(plan, { pendingAction: action })
   }
@@ -261,6 +268,14 @@ function chooseCandidate(plan: Plan, actionId: string, candidateId: string) {
   if (!pending.targetSegmentId) {
     throw new Error('Candidate target segment is missing')
   }
+  const target = plan.segments.find((segment) => segment.id === pending.targetSegmentId)
+  if (!target) throw new Error('Candidate target segment is missing')
+  if (pending.session) {
+    const snapshot = pending.session.sourceSegmentSnapshot
+    if ((target.poiId ?? '') !== snapshot.poiId || target.startTime !== snapshot.startTime || target.endTime !== snapshot.endTime) {
+      throw new Error('Candidate action is stale because the target segment changed')
+    }
+  }
   return touch(plan, {
     segments: plan.segments.map((segment) =>
       segment.id === pending.targetSegmentId ? normalizeSegment({ ...segment, ...candidate.segment }, segment) : segment,
@@ -272,7 +287,7 @@ function chooseCandidate(plan: Plan, actionId: string, candidateId: string) {
 
 function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'REFRESH_CANDIDATES' }>) {
   const existing = command.actionId && plan.pendingAction?.id === command.actionId ? plan.pendingAction : undefined
-  if (command.actionId && plan.pendingAction && (!existing || existing.kind !== 'candidate-selection')) {
+  if (command.actionId && plan.pendingAction && plan.pendingAction.kind !== 'candidate-selection') {
     throw new Error('Candidate action is no longer active')
   }
   const mode = command.mode ?? (existing?.kind === 'candidate-selection' ? existing.mode : 'replace')
@@ -280,33 +295,207 @@ function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'RE
   const afterSegmentId = command.afterSegmentId ?? (existing?.kind === 'candidate-selection' ? existing.afterSegmentId : null)
   const explicitSearchQuery = command.searchQuery?.trim()
   const searchQuery = explicitSearchQuery || (existing?.kind === 'candidate-selection' ? existing.searchQuery : undefined)
-  const excluded = explicitSearchQuery
+  const resetSession = command.resetSession || isCandidateSessionResetRequest(explicitSearchQuery)
+  const excluded = resetSession
     ? [...(command.excludeCandidateIds ?? [])]
     : [
-        ...(existing?.kind === 'candidate-selection' ? existing.excludeCandidateIds ?? existing.candidates.map((candidate) => candidate.id) : []),
+        ...(existing?.kind === 'candidate-selection' ? existing.session?.seenPoiIds ?? existing.excludeCandidateIds ?? [] : []),
+        ...(existing?.kind === 'candidate-selection' ? existing.candidates.map((candidate) => candidate.id) : []),
         ...(command.excludeCandidateIds ?? []),
       ]
+  const uniqueExcluded = [...new Set(excluded)]
+  const target = mode === 'replace' ? requireCandidateTarget(plan, requireSegmentId(targetSegmentId)) : undefined
+  const candidateIntent = target
+    ? resolveCandidateIntent(plan, target, searchQuery ?? '', {
+        existing: existing?.kind === 'candidate-selection' ? existing.session?.intent : undefined,
+        incoming: command.candidateIntent,
+        explicitSearchQuery,
+        resetSession,
+      })
+    : undefined
   const candidates = command.candidates ?? (mode === 'add-after'
-    ? createAddSegmentCandidates(plan, afterSegmentId, searchQuery, excluded)
-    : createReplacementCandidates(plan, requireSegmentId(targetSegmentId), searchQuery, excluded))
+    ? createAddSegmentCandidates(plan, afterSegmentId, searchQuery, uniqueExcluded)
+    : createReplacementCandidates(plan, requireSegmentId(targetSegmentId), searchQuery, uniqueExcluded, candidateIntent))
   if (candidates.length === 0) {
     throw new Error('Candidate search returned no results')
   }
+  const actionId = existing?.kind === 'candidate-selection' ? existing.id : command.actionId ?? createId('action')
+  const groundedCandidates = groundCandidateOptions(candidates, candidateIntent, target)
+  if (groundedCandidates.length === 0) throw new Error('Candidate search returned no grounded results')
+  const session = target && candidateIntent
+    ? reviseCandidateSearchSession(
+        actionId,
+        target,
+        candidateIntent,
+        uniqueExcluded,
+        existing?.kind === 'candidate-selection' ? existing.session : undefined,
+      )
+    : undefined
   const action: PendingAction = {
-    id: existing?.kind === 'candidate-selection' ? existing.id : command.actionId ?? createId('action'),
+    id: actionId,
     kind: 'candidate-selection',
     mode,
     targetSegmentId,
     afterSegmentId,
-    title: mode === 'add-after' ? '给空档加点别的' : '选择替换候选',
+    title: mode === 'add-after' ? '给空档加点别的' : candidateActionTitle(target!, candidateIntent!),
     description: mode === 'add-after'
       ? 'PlanPal 找到几个适合塞进空档的具体地点，选择后会直接加入拼图。'
-      : 'PlanPal 找到几个具体的替换地点，选择后会直接更新拼图。',
-    searchQuery,
-    candidates,
-    excludeCandidateIds: [...new Set(excluded)],
+      : candidateActionDescription(target!, candidateIntent!),
+    searchQuery: candidateIntent?.query ?? searchQuery,
+    candidates: groundedCandidates,
+    excludeCandidateIds: uniqueExcluded,
+    session,
   }
   return touch(plan, { pendingAction: action })
+}
+
+function resolveCandidateIntent(
+  plan: Plan,
+  target: PlanSegment & { phase: CandidatePoiPhase },
+  query: string,
+  input: {
+    existing?: CandidateIntent
+    incoming?: CandidateIntent
+    explicitSearchQuery?: string
+    resetSession?: boolean
+  },
+) {
+  if (input.incoming) {
+    return createCandidateIntent(plan, target.id, input.incoming.query || query, input.incoming)
+  }
+  if (input.resetSession) return createCandidateIntent(plan, target.id, input.explicitSearchQuery || query)
+  if (input.explicitSearchQuery) {
+    const fresh = createCandidateIntent(plan, target.id, input.explicitSearchQuery)
+    if (!input.existing || fresh.replacementScope === 'cross-type') return { ...fresh, operation: 'refine' as const }
+    const mergedQuery = [...new Set([input.existing.query.trim(), input.explicitSearchQuery.trim()].filter(Boolean))].join('；')
+    return createCandidateIntent(plan, target.id, mergedQuery, {
+      ...fresh,
+      operation: 'refine',
+      query: mergedQuery,
+      softPreferences: {
+        ...input.existing.softPreferences,
+        ...fresh.softPreferences,
+        tags: [...new Set([
+          ...(input.existing.softPreferences.tags ?? []),
+          ...(fresh.softPreferences.tags ?? []),
+        ])],
+      },
+    })
+  }
+  if (input.existing) {
+    return createCandidateIntent(plan, target.id, input.existing.query || query, {
+      ...input.existing,
+      operation: 'refresh',
+    })
+  }
+  return createCandidateIntent(plan, target.id, query)
+}
+
+function createCandidateSearchSession(
+  actionId: string,
+  target: PlanSegment & { phase: CandidatePoiPhase },
+  intent: CandidateIntent,
+  seenPoiIds: string[],
+): CandidateSearchSession {
+  return {
+    actionId,
+    targetSegmentId: target.id,
+    sourceSegmentSnapshot: {
+      poiId: target.poiId ?? '',
+      phase: target.phase,
+      serviceCategory: target.serviceCategory,
+      startTime: target.startTime,
+      endTime: target.endTime,
+    },
+    intent,
+    seenPoiIds: [...new Set(seenPoiIds)],
+    revision: 0,
+  }
+}
+
+function reviseCandidateSearchSession(
+  actionId: string,
+  target: PlanSegment & { phase: CandidatePoiPhase },
+  intent: CandidateIntent,
+  seenPoiIds: string[],
+  existing?: CandidateSearchSession,
+) {
+  const reusable = existing?.targetSegmentId === target.id
+  return {
+    ...(reusable ? existing : createCandidateSearchSession(actionId, target, intent, seenPoiIds)),
+    actionId,
+    targetSegmentId: target.id,
+    intent,
+    seenPoiIds: [...new Set(seenPoiIds)],
+    revision: reusable ? existing.revision + 1 : 0,
+  } satisfies CandidateSearchSession
+}
+
+function groundCandidateOptions(
+  candidates: CandidateOption[],
+  intent?: CandidateIntent,
+  target?: PlanSegment & { phase: CandidatePoiPhase },
+) {
+  const seen = new Set<string>()
+  return candidates.flatMap((candidate) => {
+    const poi = getFictionalPoiById(candidate.segment.poiId ?? candidate.id)
+    if (!poi || seen.has(poi.id)) return []
+    if (intent && (!intent.desiredPhases.includes(poi.phase) || intent.excludedPhases.includes(poi.phase))) return []
+    if (target?.poiId && poi.id === target.poiId) return []
+    const startTime = target?.startTime ?? candidate.segment.startTime
+    const endTime = target?.endTime ?? candidate.segment.endTime
+    if (!startTime || !endTime) return []
+    seen.add(poi.id)
+    return [{
+      ...candidate,
+      id: poi.id,
+      label: poi.name,
+      description: poi.description,
+      segment: {
+        ...segmentFromPoi(poi, {
+          startTime,
+          endTime,
+          status: candidate.segment.status,
+          reason: candidate.segment.reason,
+        }),
+      },
+    }]
+  })
+}
+
+function requireCandidateTarget(plan: Plan, segmentId: string): PlanSegment & { phase: CandidatePoiPhase } {
+  const target = plan.segments.find((segment) => segment.id === segmentId)
+  if (!target || target.isTransit || target.phase === 'transit') throw new Error('Candidate target must be an executable segment')
+  if (target.locked) throw new Error('Locked segments cannot be replaced')
+  return target as PlanSegment & { phase: CandidatePoiPhase }
+}
+
+function candidateActionTitle(target: PlanSegment, intent: CandidateIntent) {
+  if (intent.replacementScope === 'cross-type') {
+    return `${candidatePhaseLabel(target.phase)} → ${intent.desiredPhases.map(candidatePhaseLabel).join('/')}`
+  }
+  return '选择替换候选'
+}
+
+function candidateActionDescription(target: PlanSegment, intent: CandidateIntent) {
+  const time = `${target.startTime}-${target.endTime}`
+  if (intent.replacementScope === 'cross-type') {
+    return `保留 ${time}，把“${target.title}”改成${intent.desiredPhases.map(candidatePhaseLabel).join('或')}；选中前不会修改计划。`
+  }
+  return `保留 ${time} 和当前行程上下文，选择后才会更新“${target.title}”。`
+}
+
+function candidatePhaseLabel(phase: PlanSegment['phase']) {
+  if (phase === 'activity') return '活动'
+  if (phase === 'dining') return '用餐'
+  if (phase === 'drinks') return '小酌'
+  if (phase === 'leisure') return '休闲'
+  return '交通'
+}
+
+function isCandidateSessionResetRequest(query: string | undefined) {
+  if (!query) return false
+  return ['重新开始', '清空要求', '重置要求', '从头来'].some((keyword) => query.includes(keyword))
 }
 
 function requestClarification(plan: Plan, command: Extract<PlanCommand, { type: 'REQUEST_CLARIFICATION' }>) {

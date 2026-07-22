@@ -15,6 +15,8 @@ import {
 
 const metadataSchema = z.object({
   selectedSegmentId: z.string().optional(),
+  candidateActionId: z.string().optional(),
+  interactionSource: z.enum(['chat', 'candidate-card']).default('chat'),
   userMessage: z.string().default(''),
   routeSource: z.enum(['model', 'deterministic', 'fallback']).default('deterministic'),
   fallbackReasons: z.array(z.string()).default(() => []),

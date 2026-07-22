@@ -37,6 +37,8 @@ describe('web API streaming client', () => {
     await streamAgentRun('plan_1', config, {
       message: '把晚饭换近一点',
       selectedSegmentId: 'seg_1',
+      candidateActionId: 'action_1',
+      interactionSource: 'candidate-card',
     }, (nextEvent) => {
       events.push(nextEvent)
     })
@@ -55,6 +57,8 @@ describe('web API streaming client', () => {
       providerMode: 'auto',
       resolvedBaseURL: config.resolvedBaseURL,
       selectedSegmentId: 'seg_1',
+      candidateActionId: 'action_1',
+      interactionSource: 'candidate-card',
     })
     expect(body.apiKey).toBeUndefined()
     expect(JSON.stringify(body)).not.toContain(config.apiKey)
