@@ -10,11 +10,15 @@ build/
 public/
 .next/
 .open-next/
+.turbo/
 .wrangler/
-*.tar
+.cache/
 .vite/
+*.tar
 *.tsbuildinfo
 coverage/
+.nyc_output/
+*.lcov
 
 # Local runtime data
 .planpal-data/
@@ -33,7 +37,7 @@ web-dev.err.log
 edge-*/
 playwright-report/
 test-results/
-/output/playwright/
+/output/
 /design-qa.md
 /*.png
 /*.webm
@@ -60,6 +64,7 @@ application-local.yml
 Thumbs.db
 
 # Agent/local assistant state
+.openai/
 .agents/
 .claude/
 .codex/

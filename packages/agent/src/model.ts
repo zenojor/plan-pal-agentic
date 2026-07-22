@@ -200,6 +200,7 @@ export async function streamAssistantReply(
   for (const candidate of candidates) {
     const endpoint = chatCompletionsEndpoint(candidate)
     attemptedEndpoints.push(endpoint)
+    let emittedDelta = false
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -222,11 +223,15 @@ export async function streamAssistantReply(
       }
 
       const text = response.body
-        ? await readAssistantTextStream(response.body, onDelta)
+        ? await readAssistantTextStream(response.body, async (delta) => {
+            emittedDelta = true
+            await onDelta(delta)
+          })
         : extractAssistantText(await response.json())
       if (text) return text
       errors.push('Provider stream did not include assistant text')
     } catch (error) {
+      if (emittedDelta) throw error
       errors.push(redactSecret(error instanceof Error ? error.message : 'Model stream failed'))
     }
   }

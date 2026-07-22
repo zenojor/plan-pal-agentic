@@ -21,7 +21,9 @@ export const chatDraftAtom = atom('')
 export const chatMessagesAtom = atom<ChatMessage[]>([])
 export const streamEventsAtom = atom<AgentEvent[]>([])
 export const streamPendingActionAtom = atom<PendingAction | undefined>(undefined)
-export const streamingAtom = atom(false)
+export const networkStreamingAtom = atom(false)
+export const typingAtom = atom(false)
+export const streamingAtom = atom((get) => get(networkStreamingAtom) || get(typingAtom))
 export const pendingActionRunIdAtom = atom<string | null>(null)
 
 export function createWorkspaceStore(initialLayout: WorkspaceLayoutState) {

@@ -1,5 +1,5 @@
 import { Icon } from 'animal-island-ui'
-import { useMemo, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import { appClasses } from '../../lib/appClasses'
 import { chipClassName, workspacePrimitives } from './workspacePrimitives'
 import {
@@ -34,11 +34,8 @@ export function MapColumn({
   onRouteModeChange,
   onSelectSegment,
 }: MapColumnProps) {
-  const routeNodes = useMemo(
-    () => displays.filter(hasCoordinates),
-    [displays],
-  )
-  const markerPositions = useMemo(() => buildMarkerPositions(routeNodes), [routeNodes])
+  const routeNodes = displays.filter(hasCoordinates)
+  const markerPositions = buildMarkerPositions(routeNodes)
 
   return (
     <div className={`${workspacePrimitives.scrollColumn} ${workspacePrimitives.columnGrid}`}>

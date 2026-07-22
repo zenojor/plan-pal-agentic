@@ -1,5 +1,5 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { CandidateOption, MerchantOffering, PendingAction, Plan, PlanVariantOption, PlanVariantSelection } from '@planpal/domain'
@@ -72,42 +72,24 @@ export function AgentChatColumn({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
-  const executableSegments = useMemo(
-    () => plan.segments.filter((segment) => !segment.isTransit),
-    [plan.segments],
-  )
-  const selectedSegment = useMemo(
-    () => selectedSegmentId
-      ? executableSegments.find((segment) => segment.id === selectedSegmentId)
-      : undefined,
-    [executableSegments, selectedSegmentId],
-  )
-  const suggestions = useMemo(
-    () => chatSuggestions(selectedSegment?.title),
-    [selectedSegment?.title],
-  )
+  const executableSegments = plan.segments.filter((segment) => !segment.isTransit)
+  const selectedSegment = selectedSegmentId
+    ? executableSegments.find((segment) => segment.id === selectedSegmentId)
+    : undefined
+  const suggestions = chatSuggestions(selectedSegment?.title)
   const disabledReason = getAgentChatDisabledReason(config, draft, isStreaming)
   const composerNotice = disabledReason === '请输入要发送给 Agent 的内容' ? '' : disabledReason
   const canSend = canSendAgentChat(config, draft, isStreaming)
   const pathLabel = config ? getChatExecutionPathLabel(config, draft) : '聊天未启用'
   const contextLabel = selectedSegment ? selectedSegment.title : '全局计划'
-  const visibleVariantSelection = useMemo(
-    () => visiblePlanVariantSelectionFromState(
-      pendingAction?.kind === 'plan-variant-selection' || !pendingAction ? pendingAction : undefined,
-      variantSelection,
-    ),
-    [pendingAction, variantSelection],
+  const visibleVariantSelection = visiblePlanVariantSelectionFromState(
+    pendingAction?.kind === 'plan-variant-selection' || !pendingAction ? pendingAction : undefined,
+    variantSelection,
   )
-  const attachedActionIndex = useMemo(
-    () => pendingAction?.kind && pendingAction.kind !== 'plan-variant-selection'
-      ? lastAttachedActionMessageIndex(messages, pendingAction)
-      : -1,
-    [messages, pendingAction],
-  )
-  const attachedVariantIndex = useMemo(
-    () => lastVariantSelectionMessageIndex(messages, visibleVariantSelection),
-    [messages, visibleVariantSelection],
-  )
+  const attachedActionIndex = pendingAction?.kind && pendingAction.kind !== 'plan-variant-selection'
+    ? lastAttachedActionMessageIndex(messages, pendingAction)
+    : -1
+  const attachedVariantIndex = lastVariantSelectionMessageIndex(messages, visibleVariantSelection)
   const topPendingAction = pendingAction && pendingAction.kind !== 'plan-variant-selection' && attachedActionIndex < 0
     ? pendingAction
     : undefined
@@ -148,6 +130,13 @@ export function AgentChatColumn({
     input.style.overflowY = input.scrollHeight > 120 ? 'auto' : 'hidden'
   }, [draft])
 
+  function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
+    const scroll = scrollRef.current
+    if (!scroll) return
+    scroll.scrollTo({ top: scroll.scrollHeight, behavior })
+    setIsNearBottom(true)
+  }
+
   useEffect(() => {
     if (!isNearBottom || messages.length === 0 || typeof window === 'undefined') return
     const frame = window.requestAnimationFrame(() => scrollToLatest('auto'))
@@ -165,13 +154,6 @@ export function AgentChatColumn({
   function updateScrollState(element: HTMLDivElement) {
     const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
     setIsNearBottom(distanceFromBottom < 80)
-  }
-
-  function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
-    const scroll = scrollRef.current
-    if (!scroll) return
-    scroll.scrollTo({ top: scroll.scrollHeight, behavior })
-    setIsNearBottom(true)
   }
 
   function useSuggestion(suggestion: string) {
@@ -327,6 +309,7 @@ export function AgentChatColumn({
               >
                 <div
                   className={agentChatClasses.bubble({ role: message.role, streaming: message.streaming, receipt: message.receipt })}
+                  aria-busy={message.streaming || undefined}
                 >
                   {!message.receipt && (
                     <span className={agentChatClasses.bubbleAvatar(message.role === 'user')} aria-hidden="true">

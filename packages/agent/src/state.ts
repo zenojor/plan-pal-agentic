@@ -22,7 +22,6 @@ const metadataSchema = z.object({
   modelCalls: z.number().int().nonnegative().default(0),
   toolRetries: z.number().int().nonnegative().default(0),
   activeToolCallIds: z.array(z.string()).default(() => []),
-  modelDeltas: z.array(z.string()).default(() => []),
   appliedCommands: z.array(z.custom<PlanCommand>()).default(() => []),
   appliedPatches: z.array(z.custom<PlanPatch>()).default(() => []),
   excludedCandidateIds: z.array(z.string()).default(() => []),

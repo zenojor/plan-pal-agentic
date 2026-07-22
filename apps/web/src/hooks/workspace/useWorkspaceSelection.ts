@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useAtom } from 'jotai'
 import type { Plan } from '@planpal/domain'
 import { reconcileWorkspaceSelection } from '../../components/workspace/workspaceModel'
@@ -9,10 +9,9 @@ type SelectionPlan = Pick<Plan, 'segments'> | undefined
 export function useWorkspaceSelection(plan: SelectionPlan) {
   const [selectedSegmentId, setSelectedSegmentId] = useAtom(selectedSegmentIdAtom)
 
-  const activeSelectedSegmentId = useMemo(() => {
-    if (!plan) return undefined
-    return reconcileWorkspaceSelection(plan.segments, selectedSegmentId).selectedSegmentId
-  }, [plan, selectedSegmentId, setSelectedSegmentId])
+  const activeSelectedSegmentId = plan
+    ? reconcileWorkspaceSelection(plan.segments, selectedSegmentId).selectedSegmentId
+    : undefined
 
   useEffect(() => {
     if (!plan) return

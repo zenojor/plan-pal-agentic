@@ -1,5 +1,5 @@
 import { Button, Card, Icon, Input } from 'animal-island-ui'
-import { useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import type { PlanCommand, PlanSegment, PlanServiceSelection } from '@planpal/domain'
 import { appClasses } from '../../lib/appClasses'
 import { puzzleClasses } from './puzzleClasses'
@@ -53,32 +53,16 @@ export function PuzzleColumn({
   onSelectSegment,
   onSetDragOverSegment,
 }: PuzzleColumnProps) {
-  const executableSegments = useMemo(
-    () => segments.filter((segment) => !segment.isTransit),
-    [segments],
+  const executableSegments = segments.filter((segment) => !segment.isTransit)
+  const executableSegmentIndexes = new Map(
+    executableSegments.map((segment, index) => [segment.id, index]),
   )
-  const executableSegmentIndexes = useMemo(
-    () => new Map(executableSegments.map((segment, index) => [segment.id, index])),
-    [executableSegments],
-  )
-  const serviceSelectionCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const selection of serviceSelections) {
-      counts.set(selection.segmentId, (counts.get(selection.segmentId) ?? 0) + 1)
-    }
-    return counts
-  }, [serviceSelections])
-  const routeEstimatesByLeg = useMemo(
-    () => new Map(routeEstimates.map((estimate) => [
-      routeLegKey(estimate.fromId, estimate.toId),
-      estimate,
-    ])),
-    [routeEstimates],
-  )
-  const displayItems = useMemo(
-    () => deriveWorkspaceDisplayItems(segments),
-    [segments],
-  )
+  const serviceSelectionCounts = countServiceSelections(serviceSelections)
+  const routeEstimatesByLeg = new Map(routeEstimates.map((estimate) => [
+    routeLegKey(estimate.fromId, estimate.toId),
+    estimate,
+  ]))
+  const displayItems = deriveWorkspaceDisplayItems(segments)
 
   return (
     <div
@@ -182,6 +166,14 @@ export function PuzzleColumn({
       )}
     </div>
   )
+}
+
+function countServiceSelections(serviceSelections: PlanServiceSelection[]) {
+  const counts = new Map<string, number>()
+  for (const selection of serviceSelections) {
+    counts.set(selection.segmentId, (counts.get(selection.segmentId) ?? 0) + 1)
+  }
+  return counts
 }
 
 function routeLegKey(fromId: string, toId: string) {

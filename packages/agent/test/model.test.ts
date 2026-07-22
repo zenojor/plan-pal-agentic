@@ -130,6 +130,35 @@ describe('model endpoint resolution', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { stream?: boolean }
     expect(body.stream).toBe(true)
   })
+
+  it('does not retry another endpoint after a partial stream was already delivered', async () => {
+    const encoder = new TextEncoder()
+    let pullCount = 0
+    const interruptedStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pullCount === 0) {
+          pullCount += 1
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'))
+          return
+        }
+        controller.error(new Error('provider connection lost'))
+      },
+    })
+    const fetchMock = vi.fn().mockResolvedValue(new Response(interruptedStream, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const deltas: string[] = []
+
+    await expect(streamAssistantReply({
+      baseURL: 'https://api.example.com',
+      apiKey: 'sk-secret',
+      model: 'demo-model',
+    }, [{ role: 'user', content: 'hello' }], (delta) => {
+      deltas.push(delta)
+    })).rejects.toThrow('provider connection lost')
+
+    expect(deltas).toEqual(['partial'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
   it('does not let a stale resolved base URL block runtime fallback candidates', async () => {
     const fetchMock = vi
       .fn()

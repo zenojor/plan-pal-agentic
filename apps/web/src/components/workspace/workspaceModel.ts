@@ -1486,6 +1486,16 @@ export function appendAssistantDeltaMessage(messages: ChatMessage[], delta: stri
   return [...messages, { role: 'planpal', content: delta, streaming: true }]
 }
 
+export function setAssistantStreamingMessageText(messages: ChatMessage[], displayedText: string): ChatMessage[] {
+  if (!displayedText) return messages
+  const last = messages.at(-1)
+  if (last?.role === 'planpal' && last.streaming) {
+    if (last.content === displayedText) return messages
+    return [...messages.slice(0, -1), { ...last, content: displayedText }]
+  }
+  return [...messages, { role: 'planpal', content: displayedText, streaming: true }]
+}
+
 export function finalizeAssistantStreamingMessage(messages: ChatMessage[], content: string): ChatMessage[] {
   const last = messages.at(-1)
   if (last?.role === 'planpal' && last.streaming) {
@@ -1507,6 +1517,13 @@ export function stopAssistantStreamingMessage(messages: ChatMessage[]): ChatMess
     content: '已停止本次生成。你可以修改输入后重新发送。',
     receipt: true,
   }]
+}
+
+export function cancelAssistantStreamingMessage(messages: ChatMessage[]): ChatMessage[] {
+  const last = messages.at(-1)
+  if (last?.role !== 'planpal' || !last.streaming) return messages
+  const { streaming: _streaming, ...rest } = last
+  return [...messages.slice(0, -1), rest]
 }
 
 export function attachPendingActionToLatestPlanpalMessage(messages: ChatMessage[], action: PendingAction): ChatMessage[] {

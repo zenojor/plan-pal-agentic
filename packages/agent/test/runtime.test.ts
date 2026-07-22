@@ -150,6 +150,53 @@ describe('agent runtime model transparency', () => {
     expect(JSON.stringify(events)).not.toContain(config.apiKey)
   })
 
+  it('emits the first delta while qaAgent is still running and never replays streamed deltas', async () => {
+    let releaseModel: (() => void) | undefined
+    let modelCompleted = false
+    let firstDeltaObserved: (() => void) | undefined
+    const modelGate = new Promise<void>((resolve) => {
+      releaseModel = resolve
+    })
+    const firstDelta = new Promise<void>((resolve) => {
+      firstDeltaObserved = resolve
+    })
+    const { plan, runtime } = await createRuntime({
+      generateAssistantReply: async () => 'unused',
+      streamAssistantReply: async (_config, _messages, onDelta) => {
+        await onDelta('第一段')
+        await modelGate
+        await onDelta('🙂 second')
+        modelCompleted = true
+        return '第一段🙂 second'
+      },
+    })
+    const events: AgentEvent[] = []
+
+    const runPromise = runtime.run({ planId: plan.id, message: '你是什么模型', modelConfig: config }, (event) => {
+      events.push(event)
+      if (event.type === 'agent.message.delta') firstDeltaObserved?.()
+    })
+
+    await firstDelta
+    expect(modelCompleted).toBe(false)
+    expect(events.some((event) => event.type === 'graph.node.finished'
+      && (event.payload as { node?: string } | undefined)?.node === 'qaAgent')).toBe(false)
+
+    releaseModel?.()
+    await runPromise
+
+    const deltas = events.filter((event) => event.type === 'agent.message.delta')
+    expect(deltas.map((event) => event.message)).toEqual(['第一段', '🙂 second'])
+    expect(deltas[0]?.payload).toMatchObject({ producedAt: expect.any(String) })
+    expect(deltas.map((event) => event.message).join('')).toBe('第一段🙂 second')
+    expect(events.filter((event) => event.type === 'agent.message.delta')).toHaveLength(2)
+    expect(events.find((event) => event.type === 'agent.finished')?.message).toBe('第一段🙂 second')
+    expect(events.findIndex((event) => event.type === 'agent.message.delta')).toBeLessThan(
+      events.findIndex((event) => event.type === 'graph.node.finished'
+        && (event.payload as { node?: string } | undefined)?.node === 'qaAgent'),
+    )
+  })
+
   it('pauses for clarification instead of guessing vague edits', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => {

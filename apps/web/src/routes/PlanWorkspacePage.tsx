@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { AgentChatColumn } from '../components/workspace/AgentChatColumn'
 import { ConfirmPlanModal } from '../components/workspace/ConfirmPlanModal'
@@ -58,19 +58,15 @@ function PlanWorkspaceContent({ config, planId }: PlanWorkspaceContentProps) {
   const plan = workspace.plan
   const selection = useWorkspaceSelection(plan)
 
-  const segmentDisplays = useMemo(
-    () => derivePlanSegmentDisplays(plan?.segments ?? [], plan?.serviceSelections ?? []),
-    [plan?.segments, plan?.serviceSelections],
-  )
-  const selectedRouteModes = useMemo(() => deriveSelectedRouteModes(plan), [plan])
-  const routeEstimates = useMemo(() => buildRouteEstimates(segmentDisplays), [segmentDisplays])
-  const executionBrief = useMemo(() => {
-    if (!plan) return undefined
-    const pendingAction = plan.pendingAction ?? workspace.visiblePendingAction
-    return derivePlanExecutionBrief(
-      pendingAction === plan.pendingAction ? plan : { ...plan, pendingAction },
-    )
-  }, [plan, workspace.visiblePendingAction])
+  const segmentDisplays = derivePlanSegmentDisplays(plan?.segments ?? [], plan?.serviceSelections ?? [])
+  const selectedRouteModes = deriveSelectedRouteModes(plan)
+  const routeEstimates = buildRouteEstimates(segmentDisplays)
+  const pendingAction = plan?.pendingAction ?? workspace.visiblePendingAction
+  const executionBrief = plan
+    ? derivePlanExecutionBrief(
+        pendingAction === plan.pendingAction ? plan : { ...plan, pendingAction },
+      )
+    : undefined
 
   if (workspace.planQuery.isLoading) return <main className={workspaceLoadingClassName}>正在加载计划...</main>
   if (workspace.planQuery.error) return <main className={workspaceLoadingClassName}>加载失败：{workspace.planQuery.error.message}</main>

@@ -1,7 +1,9 @@
 import { AIMessage } from '@langchain/core/messages'
+import type { LangGraphRunnableConfig } from '@langchain/langgraph'
 import { ZodError } from 'zod'
 import { AgentIntentSchema, AgentRouteSchema, FinalAgentResponseSchema, ProposedPlanCommandSchema, type AgentIntent, type AgentRoute } from '../schemas'
 import type { PlanPalGraphDependencies } from '../graph-types'
+import { writeQaModelStreamEvent } from '../graph-stream'
 import { invokeAnswerModel, invokeStructuredWithGateway } from '../graph-model'
 import { routeModelTurnIntent, routeNaturalLanguageTurn, type ModelTurnIntent, type RoutedTurn } from '../router'
 import type { PlanPalGraphStateUpdate, PlanPalGraphStateValue } from '../state'
@@ -27,7 +29,7 @@ export function createContextNodes(deps: PlanPalGraphDependencies) {
         resume: null,
         proposedCommands: [],
         pendingApproval: null,
-        metadata: { ...withNodePath(state, 'loadContext'), modelDeltas: [], activeToolCallIds: [] },
+        metadata: { ...withNodePath(state, 'loadContext'), activeToolCallIds: [] },
       }
     },
 
@@ -114,17 +116,33 @@ export function createContextNodes(deps: PlanPalGraphDependencies) {
       }
     },
 
-    qaAgent: async (state: PlanPalGraphStateValue): Promise<PlanPalGraphStateUpdate> => {
+    qaAgent: async (
+      state: PlanPalGraphStateValue,
+      config: LangGraphRunnableConfig,
+    ): Promise<PlanPalGraphStateUpdate> => {
       if (!state.plan || state.route?.kind !== 'qa') return invalidRoute('qaAgent', state)
       let text = ''
-      let deltas: string[] = []
       const fallbackUsed = state.metadata.routeSource === 'fallback'
+      const modelCalls = state.metadata.modelCalls + 1
+      writeQaModelStreamEvent(config, {
+        kind: 'qa.model.started',
+        modelCalls,
+        node: 'qaAgent',
+        phase: 'answer',
+      })
       try {
         const messages = answerMessages(state)
         if (deps.modelGateway.streamAssistantReply) {
           const coreMessages = messages.map(toCoreMessage)
-          text = await deps.modelGateway.streamAssistantReply(deps.modelConfig, coreMessages, (delta) => {
-            deltas.push(delta)
+          text = await deps.modelGateway.streamAssistantReply(deps.modelConfig, coreMessages, async (delta) => {
+            if (!delta) return
+            await writeQaModelStreamEvent(config, {
+              delta,
+              kind: 'qa.model.delta',
+              node: 'qaAgent',
+              phase: 'answer',
+              producedAt: new Date().toISOString(),
+            })
           })
         } else {
           const response = await invokeAnswerModel({
@@ -134,8 +152,21 @@ export function createContextNodes(deps: PlanPalGraphDependencies) {
           })
           text = messageText(response)
         }
+        writeQaModelStreamEvent(config, {
+          kind: 'qa.model.finished',
+          modelCalls,
+          node: 'qaAgent',
+          phase: 'answer',
+        })
       } catch (error) {
         const reason = redactError(error)
+        writeQaModelStreamEvent(config, {
+          code: 'MODEL_UNAVAILABLE',
+          kind: 'qa.model.error',
+          message: `模型调用失败：${reason}`,
+          node: 'qaAgent',
+          phase: 'answer',
+        })
         return {
           error: {
             code: 'MODEL_UNAVAILABLE',
@@ -145,12 +176,11 @@ export function createContextNodes(deps: PlanPalGraphDependencies) {
           },
           metadata: {
             ...withNodePath(state, 'qaAgent'),
-            modelDeltas: deltas,
-            modelCalls: state.metadata.modelCalls + 1,
+            modelCalls,
           },
         }
       }
-      return qaUpdate(state, text, deltas, fallbackUsed)
+      return qaUpdate(state, text, fallbackUsed)
     },
   }
 }
@@ -239,7 +269,6 @@ function guardCriticalIntent(model: AgentIntent, fallback: AgentIntent, route: R
 function qaUpdate(
   state: PlanPalGraphStateValue,
   text: string,
-  deltas: string[],
   fallbackUsed: boolean,
   fallbackReason?: string,
 ): PlanPalGraphStateUpdate {
@@ -257,7 +286,6 @@ function qaUpdate(
     }),
     metadata: {
       ...withNodePath(state, 'qaAgent'),
-      modelDeltas: deltas,
       modelCalls: state.metadata.modelCalls + 1,
       fallbackReasons: fallbackReason
         ? [...state.metadata.fallbackReasons, fallbackReason]

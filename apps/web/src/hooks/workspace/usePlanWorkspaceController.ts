@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAtom, useSetAtom, useStore } from 'jotai'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AgentEvent, CandidateOption, CommandResult, MerchantOffering, PendingAction, PlanCommand, PlanVariantOption } from '@planpal/domain'
@@ -7,13 +7,14 @@ import type { StoredModelConfig } from '../../lib/modelConfig'
 import {
   chatDraftAtom,
   chatMessagesAtom,
+  networkStreamingAtom,
   pendingActionRunIdAtom,
   streamEventsAtom,
   streamingAtom,
   streamPendingActionAtom,
+  typingAtom,
 } from '../../state/workspaceAtoms'
 import {
-  appendAssistantDeltaMessage,
   attachPendingActionToLatestPlanpalMessage,
   assistantDeltaFromAgentEvent,
   buildCandidateCommand,
@@ -28,6 +29,7 @@ import {
   buildSelectServiceItemCommand,
   buildSegmentReorderCommand,
   canSendAgentChat,
+  cancelAssistantStreamingMessage,
   chatMessageFromAgentEvent,
   chatMessageFromAgentFailure,
   chatMessageFromCommandError,
@@ -43,10 +45,12 @@ import {
   shouldOpenChatForAgentEvent,
   shouldOpenChatForCommandResult,
   shouldRefreshPlanForAgentEvent,
+  setAssistantStreamingMessageText,
   stopAssistantStreamingMessage,
   type RouteEstimate,
   type WorkspaceRouteMode,
 } from '../../components/workspace/workspaceModel'
+import { useStreamingTypewriter } from './useStreamingTypewriter'
 
 type MutationContext = {
   previous?: PlanEnvelope
@@ -65,29 +69,34 @@ export function usePlanWorkspaceController({
 }: UsePlanWorkspaceControllerArgs) {
   const queryClient = useQueryClient()
   const store = useStore()
-  const queryKey = useMemo(() => ['plan', planId] as const, [planId])
+  const queryKey = ['plan', planId] as const
   const setDraft = useSetAtom(chatDraftAtom)
   const setMessages = useSetAtom(chatMessagesAtom)
   const [streamEvents, setStreamEvents] = useAtom(streamEventsAtom)
   const [streamPendingAction, setStreamPendingAction] = useAtom(streamPendingActionAtom)
-  const setIsStreaming = useSetAtom(streamingAtom)
+  const setNetworkStreaming = useSetAtom(networkStreamingAtom)
+  const setTyping = useSetAtom(typingAtom)
   const setPendingActionRunId = useSetAtom(pendingActionRunIdAtom)
   const hydratedPlanIdRef = useRef<string | null>(null)
   const activeStreamRef = useRef<AbortController | null>(null)
+  const finalAssistantTextRef = useRef<string | undefined>(undefined)
+  const typewriter = useStreamingTypewriter({
+    onDisplayedText: (displayedText) => {
+      setMessages((current) => setAssistantStreamingMessageText(current, displayedText))
+    },
+    onSettled: (displayedText) => {
+      setMessages((current) => finalizeAssistantStreamingMessage(current, displayedText))
+    },
+    onTypingChange: setTyping,
+  })
 
   const planQuery = useQuery({
     queryKey,
     queryFn: ({ signal }) => getPlan(planId, signal),
   })
   const plan = planQuery.data?.plan
-  const events = useMemo(
-    () => mergeEvents(planQuery.data?.events ?? [], streamEvents),
-    [planQuery.data?.events, streamEvents],
-  )
-  const progressItems = useMemo(
-    () => deriveAgentProgressItems(streamEvents),
-    [streamEvents],
-  )
+  const events = mergeEvents(planQuery.data?.events ?? [], streamEvents)
+  const progressItems = deriveAgentProgressItems(streamEvents)
   const visiblePendingAction = plan?.pendingAction ?? streamPendingAction
 
   useEffect(() => {
@@ -164,18 +173,18 @@ export function usePlanWorkspaceController({
     const abortController = beginStreamRequest()
     setDraft('')
     setMessages((prev) => [...prev, { role: 'user', content: message }])
-    try {
-      const payload = activeSelectedSegmentId ? { message, selectedSegmentId: activeSelectedSegmentId } : { message }
-      await streamAgentRun(planId, config, payload, handleStreamEvent, abortController.signal)
-    } catch (error) {
-      if (!isAbortError(error)) {
+    const payload = activeSelectedSegmentId ? { message, selectedSegmentId: activeSelectedSegmentId } : { message }
+    await runWithCleanup(
+      () => streamAgentRun(planId, config, payload, handleStreamEvent, abortController.signal),
+      (error) => {
+        if (isAbortError(error)) return
+        cancelTypewriterForFailure()
         onOpenChat()
         setMessages((prev) => [...prev, chatMessageFromAgentFailure('run', error)])
         setDraft((current) => current.trim() ? current : message)
-      }
-    } finally {
-      finishStreamRequest(abortController)
-    }
+      },
+      () => finishStreamRequest(abortController),
+    )
   }
 
   async function chooseCandidate(actionId: string, candidate: CandidateOption) {
@@ -242,34 +251,47 @@ export function usePlanWorkspaceController({
 
   async function resumePendingAction(runId: string, actionId: string, payload: unknown) {
     const abortController = beginStreamRequest()
-    try {
-      await streamAgentResume(planId, config, {
+    await runWithCleanup(
+      () => streamAgentResume(planId, config, {
         actionId,
         payload,
         runId,
-      }, handleStreamEvent, abortController.signal)
-    } catch (error) {
-      if (!isAbortError(error)) {
+      }, handleStreamEvent, abortController.signal),
+      (error) => {
+        if (isAbortError(error)) return
+        cancelTypewriterForFailure()
         onOpenChat()
         setMessages((prev) => [...prev, chatMessageFromAgentFailure('resume', error)])
-      }
-    } finally {
-      if (finishStreamRequest(abortController)) setPendingActionRunId(null)
-    }
+      },
+      () => {
+        if (finishStreamRequest(abortController)) setPendingActionRunId(null)
+      },
+    )
   }
 
   function beginStreamRequest() {
-    activeStreamRef.current?.abort()
+    if (activeStreamRef.current) {
+      activeStreamRef.current.abort()
+      typewriter.cancel()
+      setMessages((current) => cancelAssistantStreamingMessage(current))
+    }
     const abortController = new AbortController()
     activeStreamRef.current = abortController
-    setIsStreaming(true)
+    finalAssistantTextRef.current = undefined
+    typewriter.start()
+    setNetworkStreaming(true)
     return abortController
   }
 
   function finishStreamRequest(abortController: AbortController) {
     if (activeStreamRef.current !== abortController) return false
     activeStreamRef.current = null
-    setIsStreaming(false)
+    setNetworkStreaming(false)
+    const snapshot = typewriter.getSnapshot()
+    if (snapshot.networkStreaming) {
+      if (typewriter.hasReceivedText()) typewriter.finish(finalAssistantTextRef.current)
+      else typewriter.cancel()
+    }
     return true
   }
 
@@ -278,7 +300,9 @@ export function usePlanWorkspaceController({
     if (!activeStream) return
     activeStreamRef.current = null
     activeStream.abort()
-    setIsStreaming(false)
+    typewriter.cancel()
+    finalAssistantTextRef.current = undefined
+    setNetworkStreaming(false)
     setMessages((current) => stopAssistantStreamingMessage(current))
     void queryClient.invalidateQueries({ queryKey })
   }
@@ -333,14 +357,28 @@ export function usePlanWorkspaceController({
     }
     const delta = assistantDeltaFromAgentEvent(event)
     if (delta) {
-      setMessages((prev) => appendAssistantDeltaMessage(prev, delta))
+      typewriter.push(delta)
       return
     }
     const chatMessage = chatMessageFromAgentEvent(event)
     if (chatMessage) {
-      setMessages((prev) => event.type === 'agent.finished'
-        ? finalizeAssistantStreamingMessage(prev, chatMessage.content)
-        : [...prev, chatMessage])
+      if (event.type === 'agent.finished' && typewriter.hasReceivedText()) {
+        finalAssistantTextRef.current = chatMessage.content
+        return
+      }
+      if (event.type === 'agent.error') cancelTypewriterForFailure()
+      setMessages((prev) => [...prev, chatMessage])
+    }
+    if (event.type === 'run.status' && readRunStatus(event) === 'completed' && typewriter.hasReceivedText()) {
+      typewriter.finish(finalAssistantTextRef.current)
+    }
+  }
+
+  function cancelTypewriterForFailure() {
+    const hadReceivedText = typewriter.cancel()
+    finalAssistantTextRef.current = undefined
+    if (hadReceivedText) {
+      setMessages((current) => cancelAssistantStreamingMessage(current))
     }
   }
 
@@ -365,6 +403,26 @@ export function usePlanWorkspaceController({
     stopStreaming,
     visiblePendingAction,
     confirmCommandAction,
+  }
+}
+
+function readRunStatus(event: AgentEvent) {
+  if (!event.payload || typeof event.payload !== 'object' || !('status' in event.payload)) return undefined
+  const status = (event.payload as { status?: unknown }).status
+  return typeof status === 'string' ? status : undefined
+}
+
+async function runWithCleanup(
+  operation: () => Promise<void>,
+  onError: (error: unknown) => void,
+  onFinally: () => void,
+) {
+  try {
+    await operation()
+  } catch (error) {
+    onError(error)
+  } finally {
+    onFinally()
   }
 }
 

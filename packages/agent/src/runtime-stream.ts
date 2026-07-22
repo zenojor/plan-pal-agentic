@@ -1,18 +1,47 @@
 import type { PlanPalStores } from '@planpal/db'
 import type { PlanCommand, PlanPatch } from '@planpal/domain'
 import type { ToolCallRequest, ToolResult } from './schemas'
+import { readQaModelStreamEvent } from './graph-stream'
 import type { RuntimeEventEmitter } from './runtime-events'
+
+export type GraphStreamTracker = {
+  startedNodes: Set<string>
+}
+
+export function createGraphStreamTracker(): GraphStreamTracker {
+  return { startedNodes: new Set() }
+}
+
+export async function mapGraphStreamChunk(
+  stores: PlanPalStores,
+  chunk: unknown,
+  emitter: RuntimeEventEmitter,
+  tracker: GraphStreamTracker,
+) {
+  if (!Array.isArray(chunk) || chunk.length !== 2) return
+  const [mode, data] = chunk
+  if (mode === 'custom') {
+    await mapGraphCustomEvent(data, emitter, tracker)
+    return
+  }
+  if (mode === 'updates') {
+    await mapGraphUpdate(stores, data, emitter, tracker)
+  }
+}
 
 export async function mapGraphUpdate(
   stores: PlanPalStores,
   chunk: unknown,
   emitter: RuntimeEventEmitter,
+  tracker?: GraphStreamTracker,
 ) {
   const updates = readObject(chunk)
   for (const [node, rawUpdate] of Object.entries(updates)) {
     if (node === '__interrupt__') continue
     const update = readObject(rawUpdate)
-    await emitter.emit('graph.node.started', `Node ${node} started`, { node })
+    if (!tracker?.startedNodes.delete(node)) {
+      await emitter.emit('graph.node.started', `Node ${node} started`, { node })
+    }
     await mapModelEvents(node, update, emitter)
     await mapToolEvents(stores, update, emitter)
     await mapProposalEvents(update, emitter)
@@ -24,6 +53,60 @@ export async function mapGraphUpdate(
       error: update.error,
     })
   }
+}
+
+async function mapGraphCustomEvent(
+  chunk: unknown,
+  emitter: RuntimeEventEmitter,
+  tracker: GraphStreamTracker,
+) {
+  const event = readQaModelStreamEvent(chunk)
+  if (!event) return
+  if (event.kind === 'qa.model.started') {
+    if (!tracker.startedNodes.has(event.node)) {
+      tracker.startedNodes.add(event.node)
+      await emitter.emit('graph.node.started', `Node ${event.node} started`, {
+        node: event.node,
+        streaming: true,
+      })
+    }
+    await emitter.emit('agent.model.started', `Model phase ${event.node} started`, {
+      node: event.node,
+      phase: event.phase,
+      modelCalls: event.modelCalls,
+      usedModel: true,
+      fallbackUsed: false,
+    })
+    return
+  }
+  if (event.kind === 'qa.model.delta') {
+    await emitter.emit('agent.message.delta', event.delta, {
+      node: event.node,
+      delta: event.delta,
+      phase: event.phase,
+      producedAt: event.producedAt,
+      usedModel: true,
+      fallbackUsed: false,
+    })
+    return
+  }
+  if (event.kind === 'qa.model.error') {
+    await emitter.emit('agent.model.error', event.message, {
+      node: event.node,
+      phase: event.phase,
+      code: event.code,
+      usedModel: true,
+      fallbackUsed: false,
+    })
+    return
+  }
+  await emitter.emit('agent.model.finished', `Model phase ${event.node} finished`, {
+    node: event.node,
+    phase: event.phase,
+    modelCalls: event.modelCalls,
+    usedModel: true,
+    fallbackUsed: false,
+  })
 }
 
 export function readActionContext(state: unknown) {
@@ -47,12 +130,11 @@ async function mapModelEvents(
   update: Record<string, unknown>,
   emitter: RuntimeEventEmitter,
 ) {
-  if (node !== 'understandIntent' && node !== 'planningAgent' && node !== 'qaAgent') return
+  if (node !== 'understandIntent' && node !== 'planningAgent') return
   const metadata = readObject(update.metadata)
   const modelCalls = readNumber(metadata.modelCalls)
-  const deltas = readArray(metadata.modelDeltas).filter((item): item is string => typeof item === 'string')
-  if (!modelCalls && deltas.length === 0) return
-  const phase = node === 'qaAgent' ? 'answer' : node === 'understandIntent' ? 'intent' : 'tool-selection'
+  if (!modelCalls) return
+  const phase = node === 'understandIntent' ? 'intent' : 'tool-selection'
   await emitter.emit('agent.model.started', `Model phase ${node} started`, {
     node,
     phase,
@@ -60,15 +142,6 @@ async function mapModelEvents(
     usedModel: true,
     fallbackUsed: false,
   })
-  for (const delta of deltas) {
-    await emitter.emit('agent.message.delta', delta, {
-      node,
-      delta,
-      phase,
-      usedModel: true,
-      fallbackUsed: false,
-    })
-  }
   const modelError = readObject(update.error)
   if (typeof modelError.message === 'string') {
     await emitter.emit('agent.model.error', modelError.message, {

@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
-import react from '@vitejs/plugin-react'
+import babel from '@rolldown/plugin-babel'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 function animalIslandAssetUrlFix(): Plugin {
@@ -22,7 +23,12 @@ export default defineConfig({
     emptyOutDir: true,
     outDir: '../../public',
   },
-  plugins: [animalIslandAssetUrlFix(), tailwindcss(), react()],
+  plugins: [
+    animalIslandAssetUrlFix(),
+    tailwindcss(),
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
+  ],
   server: {
     port: 5174,
   },

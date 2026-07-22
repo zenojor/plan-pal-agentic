@@ -86,6 +86,7 @@ describe('mature LangGraph runtime', () => {
     const result = await runtime.run({ planId: plan.id, message: '把晚饭换近一点', modelConfig }, collect(events))
 
     expect(result.status).toBe('waiting_for_user')
+    expect(events.some((event) => event.type === 'agent.message.delta')).toBe(false)
     expect(boundToolNames).toEqual(expect.arrayContaining([
       'poi_search', 'offering_search', 'route_estimate', 'weather_check', 'order_preview', 'get_current_plan',
     ]))

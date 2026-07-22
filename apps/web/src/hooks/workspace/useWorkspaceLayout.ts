@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAtom } from 'jotai'
 import { saveWorkspaceLayout } from '../../lib/workspaceLayoutStorage'
 import {
@@ -42,10 +42,7 @@ export function useWorkspaceLayout(planId: string) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isColumnMenuOpen, setIsColumnMenuOpen])
 
-  const closedColumns = useMemo(
-    () => getClosedWorkspaceColumns(layout.columns),
-    [layout.columns],
-  )
+  const closedColumns = getClosedWorkspaceColumns(layout.columns)
 
   function openColumn(column: WorkspaceColumnId) {
     setLayout((current) => updateLayout(current, {
@@ -84,17 +81,17 @@ export function useWorkspaceLayout(planId: string) {
     }))
   }
 
+  function resetColumnDrag() {
+    setDraggingColumn(null)
+    setDragOverColumn(null)
+  }
+
   function dropColumn(targetColumn: WorkspaceColumnId) {
     setLayout((current) => updateLayout(current, {
       ...current,
       columns: moveWorkspaceColumn(current.columns, draggingColumn, targetColumn),
     }))
     resetColumnDrag()
-  }
-
-  function resetColumnDrag() {
-    setDraggingColumn(null)
-    setDragOverColumn(null)
   }
 
   return {

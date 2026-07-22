@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Icon } from 'animal-island-ui'
 import { useQuery } from '@tanstack/react-query'
 import type { AgentEvent, AgentTraceSnapshot, Plan, TraceReplayFrame, TraceSafetyFinding, TraceStep, TraceToolCallSummary } from '@planpal/domain'
@@ -27,13 +27,10 @@ export function TraceColumn({ commandBusy, confirmDisabled, confirmLabel, events
   const [selectedRunId, setSelectedRunId] = useState('')
   const [replayIndex, setReplayIndex] = useState(0)
   const receiptResetTimerRef = useRef<number | null>(null)
-  const timelineEvents = useMemo(
-    () => events.filter((event) => event.type !== 'agent.message.delta'),
-    [events],
-  )
-  const latestEvents = useMemo(() => timelineEvents.slice(-10).reverse(), [timelineEvents])
-  const latestVersions = useMemo(() => versions.slice(-4).reverse(), [versions])
-  const receipt = useMemo(() => derivePlanReceiptDisplay(plan), [plan])
+  const timelineEvents = events.filter((event) => event.type !== 'agent.message.delta')
+  const latestEvents = timelineEvents.slice(-10).reverse()
+  const latestVersions = versions.slice(-4).reverse()
+  const receipt = derivePlanReceiptDisplay(plan)
   const traceRevision = timelineEvents.at(-1)?.id ?? ''
   const runsQuery = useQuery({
     queryKey: ['agent-runs', plan.id, traceRevision, plan.currentVersion],

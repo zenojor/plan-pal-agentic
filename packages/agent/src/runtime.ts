@@ -13,7 +13,7 @@ import { defaultModelGateway, type AgentModelGateway } from './graph-model'
 import { assertClientModelConfig, type ClientModelConfig } from './model'
 import { PlanPalResumeSchema, type PlanPalResume } from './schemas'
 import { RuntimeEventEmitter } from './runtime-events'
-import { mapGraphUpdate, readActionContext } from './runtime-stream'
+import { createGraphStreamTracker, mapGraphStreamChunk, readActionContext } from './runtime-stream'
 import { createDefaultToolRegistry, type ToolRegistry } from './tools'
 
 export type AgentRunInput = {
@@ -98,7 +98,6 @@ export class PlanPalAgentRuntime {
         modelCalls: 0,
         toolRetries: 0,
         activeToolCallIds: [],
-        modelDeltas: [],
         appliedCommands: [],
         appliedPatches: [],
         excludedCandidateIds: [],
@@ -152,10 +151,11 @@ export class PlanPalAgentRuntime {
     try {
       const stream = await input.graph.stream(input.graphInput, {
         ...input.config,
-        streamMode: 'updates',
+        streamMode: ['updates', 'custom'],
       })
+      const streamTracker = createGraphStreamTracker()
       for await (const chunk of stream) {
-        await mapGraphUpdate(this.stores, chunk, input.emitter)
+        await mapGraphStreamChunk(this.stores, chunk, input.emitter, streamTracker)
       }
       const snapshot = await input.graph.getState(input.config)
       const state = snapshot.values
