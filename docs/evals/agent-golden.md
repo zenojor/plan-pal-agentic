@@ -1,5 +1,5 @@
 # PlanPal Agent golden Eval
-Generated: 2026-07-20T21:29:35.805Z
+Generated: 2026-07-22T05:26:27.993Z
 Summary: 52/52 passed
 | Scenario | Result | Checks |
 | --- | --- | --- |

@@ -29,7 +29,7 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - 商家可带 `MerchantOffering` 商品/服务项；酒店房型、电影场次、票务、花礼、SPA 等仍是 fictional local mock。
 - Trace 列展示 Agent / model / tool / command 事件、版本历史、run 级 trace replay 和安全检查。
 - Agent API 真实执行 12 节点 LangGraph `StateGraph`，支持条件边、多轮 messages、原生 tool calling 和 graph stream。
-- command、候选、服务、clarification 和 plan variant 共用 typed `interrupt()` / `Command({ resume })` 模型。
+- command approval、候选、服务和 clarification 共用 typed `interrupt()` / `Command({ resume })` 模型；plan variant 目前只保留 typed schema，首页仍通过 `CHOOSE_PLAN_VARIANT` command 选择方案。
 - `packages/eval` 提供 52 项离线 Agent eval 与 3 项 DeepSeek live smoke；默认不读取真实 key、不发外部网络请求。
 - 本地 demo 默认使用文件 Plan store + SQLite LangGraph checkpoint，测试环境使用内存存储和 `MemorySaver`。
 
@@ -175,6 +175,8 @@ $env:PLANPAL_STORE_MODE="memory"
 
 测试环境会使用 memory store。
 
+Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-build.mjs` 会把 API store wiring 替换为 `scripts/sites-worker-store.ts`，当前使用进程内 Plan store 和默认 `MemorySaver`，因此不保证跨 Worker isolate 重启恢复。该构建目前还存在 LangGraph `interrupt()` 的 `AsyncLocalStorage` 兼容问题，详见 `docs/product-review-issues.md` 的 ISSUE-002。
+
 ## 产品流程
 
 1. 打开 `/`，输入想安排的活动。
@@ -217,6 +219,7 @@ $env:PLANPAL_STORE_MODE="memory"
 - `REQUEST_COMMAND_CONFIRMATION`
 - `CONFIRM_COMMAND_ACTION`
 - `CLEAR_PLAN_SEGMENTS`
+- `RESTORE_PLAN_VERSION`
 - `CHOOSE_PLAN_VARIANT`
 - `REORDER_SEGMENT`
 - `DELETE_SEGMENT`
@@ -265,7 +268,7 @@ $env:PLANPAL_STORE_MODE="memory"
 
 ## Agent Eval
 
-默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 52 个 golden/architecture 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、故障恢复、Plan invariants 和 trace correctness：
+默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 52 个 golden/architecture 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、locked-segment recovery、PlanCommand 写边界和 trace correctness：
 
 ```powershell
 pnpm eval:agent -- --suite golden

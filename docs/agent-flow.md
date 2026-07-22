@@ -31,7 +31,10 @@ flowchart LR
 - Interrupt/apply nodes：`packages/agent/src/nodes/approval.ts`
 - Runtime facade：`packages/agent/src/runtime.ts`
 - Graph event 映射：`packages/agent/src/runtime-stream.ts`
+- Graph custom stream 事件：`packages/agent/src/graph-stream.ts`
+- OpenAI-compatible 请求与流式适配：`packages/agent/src/model.ts`
 - API wiring：`apps/api/src/store.ts`、`apps/api/src/index.ts`
+- Sites Worker store override：`scripts/sites-worker-store.ts`
 
 ## Graph state
 
@@ -94,7 +97,7 @@ finalize -> END
 
 ```text
 POST /agent/runs
-  -> graph.stream(updates)
+  -> graph.stream(..., streamMode = ["updates", "custom"])
   -> loadContext -> understandIntent -> routeIntent(qa)
   -> qaAgent -> finalize
   -> SSE graph/model/message/run events
@@ -154,7 +157,7 @@ sequenceDiagram
 actionId, runId, planId, baseVersion, kind, action
 ```
 
-统一支持 command approval、candidate selection、service selection、clarification 和 plan variant。API 恢复时使用同一 `thread_id` 调用：
+当前对话 Graph 统一支持 command approval、candidate selection、service selection 和 clarification。API 恢复时使用同一 `thread_id` 调用：
 
 ```ts
 graph.stream(new Command({ resume: typedResume }), config)
@@ -166,10 +169,14 @@ LangGraph 从 checkpoint 恢复并重新进入 interrupt 节点，然后继续 `
 
 - 单元测试和 memory mode：`MemorySaver`
 - 本地 API：`.planpal-data/langgraph-checkpoints.sqlite` 中的 `SqliteSaver`
+- Sites Worker：`scripts/sites-worker-store.ts` 注入进程内 Plan store，并让 runtime 使用默认 `MemorySaver`；这是临时、非跨 isolate 持久化模式
 - 稳定 thread：`plan:${planId}`
-- run 在 Plan store 中持久化 `threadId/checkpointId`，pending action 同时绑定 `actionId/runId/planId/baseVersion`
+- run 在 Plan store 中持久化 `threadId`；兼容字段 `checkpointId` 当前写入同一个 thread id，并不是真实的 LangGraph checkpoint UUID。真实 checkpoint 由 saver 内部管理，尚未暴露到 `AgentRun`
+- pending action 绑定 `actionId/runId/planId/baseVersion`
 
 SQLite 集成测试会关闭第一个 saver、创建新的 runtime/saver，再从同一数据库 resume；测试同时验证 interrupt 前节点没有重跑，事件 sequence 从原 run 最大值继续递增。
+
+当前 Sites bundle 还显式选择 `browser` 条件，导致 LangGraph 使用 `MockAsyncLocalStorage`，线上审批类路径的 `interrupt()` 会失败。该部署缺口记录在 `docs/product-review-issues.md` 的 ISSUE-002；它不影响本地 Node + SQLite recovery 测试，但意味着托管演示尚不能宣称具备同等恢复能力。
 
 故障策略：
 
@@ -220,18 +227,20 @@ Graph 的 preview、pending action、候选选择、确认、取消和最终 mut
 - intent/negation routing、tool selection、tool grounding
 - structured command validity、graph path、trace correctness
 - interrupt/resume、SQLite checkpoint recovery、multi-turn context
-- tool exception/empty result、model failure/invalid schema
-- Plan invariants 和 command boundary
+- empty tool result、model/provider failure、invalid structured output
+- locked-segment recovery、PlanCommand command gate 和 external-write safety guard
 - 指定中文回归输入
 
-报告输出到 `docs/evals/`。真实模型 key 只通过 `PLANPAL_EVAL_API_KEY` 临时注入，不写入 state、checkpoint、store 或报告。
+报告输出到 `docs/evals/`。生成时间是验证边界：离线 golden 报告应随 runtime 变更重跑；live smoke 只有在显式提供 key 并实际调用 provider 后才更新，旧报告不能视为当前 HEAD 的实时验证。真实模型 key 只通过 `PLANPAL_EVAL_API_KEY` 临时注入，不写入 state、checkpoint、store 或报告。
+
+tool exception 的一次重试目前由 `packages/agent/test/graph-runtime.test.ts` 覆盖，不属于上述 52 项 eval；base-version mismatch 也尚无独立 eval 场景。
 
 ## 仍未实现
 
 - `route_estimate`、`weather_check` 和 `get_current_plan` 已是可绑定 typed tools，但当前产品路由主要使用 POI、offering 和 order preview。
 - `plan-variant` 已纳入 typed interrupt schema，初始方案 UI 仍走直接 `CHOOSE_PLAN_VARIANT` command，尚未迁入对话 graph。
 - 没有真实地图、商家、预订、支付或外部写工具；全部为 fictional/local/sandbox 数据。
-- 没有分布式 worker、远程 checkpoint backend、并发 thread 锁或 LangSmith 托管 trace。
+- 没有分布式 Agent executor、远程 checkpoint backend、并发 thread 锁或 LangSmith 托管 trace；Sites Cloudflare Worker 只是当前托管容器，并不提供这些能力。
 
 ## LangGraph 参考
 
