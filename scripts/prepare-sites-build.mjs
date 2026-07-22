@@ -38,18 +38,26 @@ cpSync(publicDirectory, output, { recursive: true })
 cpSync(publicDirectory, staticDirectory, { recursive: true })
 cpSync(hosting, resolve(output, '.openai'), { recursive: true })
 
-await build({
+const buildResult = await build({
   entryPoints: [workerEntry],
   outfile: resolve(serverDirectory, 'index.js'),
   bundle: true,
-  conditions: ['worker', 'browser', 'import', 'default'],
+  // Cloudflare Workers supports node:async_hooks when nodejs_compat is enabled.
+  // Do not select the browser export here: LangGraph's browser entry skips its
+  // AsyncLocalStorage initialization, which makes interrupt() lose the active
+  // graph config and fail with "Called interrupt() outside the context of a graph."
+  conditions: ['worker', 'import', 'default'],
   external: ['node:*'],
   format: 'esm',
   legalComments: 'none',
   loader: { '.html': 'text' },
   mainFields: ['browser', 'module', 'main'],
+  metafile: true,
   minify: true,
-  platform: 'browser',
+  // `platform: 'browser'` implicitly enables the browser export condition even
+  // when it is omitted above. A Worker is a neutral ESM runtime with selected
+  // Node compatibility APIs, so keep condition selection explicit.
+  platform: 'neutral',
   plugins: [{
     name: 'sites-in-memory-store',
     setup(build) {
@@ -77,6 +85,8 @@ await build({
   target: 'es2022',
 })
 
+assertLangGraphAsyncContextBundled(buildResult.metafile)
+
 writeFileSync(
   resolve(output, 'wrangler.jsonc'),
   `${JSON.stringify({
@@ -94,6 +104,22 @@ writeFileSync(
 assertArchiveSafeTree(output)
 
 console.log('Prepared dist with a bundled Sites worker, metadata, and static assets.')
+
+function assertLangGraphAsyncContextBundled(metafile) {
+  const normalizedInputs = Object.keys(metafile.inputs).map((path) => path.replaceAll('\\', '/'))
+  const hasLangGraphNodeInitializer = normalizedInputs.some((path) => (
+    path.includes('/@langchain/langgraph/dist/node.js')
+  ))
+  const importsAsyncHooks = Object.values(metafile.outputs).some((output) => (
+    output.imports.some((entry) => entry.external && entry.path === 'node:async_hooks')
+  ))
+
+  if (!hasLangGraphNodeInitializer || !importsAsyncHooks) {
+    throw new Error(
+      'Sites worker was built without LangGraph AsyncLocalStorage support; interrupt/resume would fail at runtime.',
+    )
+  }
+}
 
 function assertArchiveSafeTree(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
