@@ -104,9 +104,17 @@ app.get('/api/mock/pois', (context) => {
     limit: parsePositiveInt(context.req.query('limit'), 20),
     maxPriceLevel: parsePositiveInt(context.req.query('maxPriceLevel') ?? context.req.query('priceLevel'), 0) || undefined,
     nearLnglat: Number.isFinite(lng) && Number.isFinite(lat) ? [lng!, lat!] : undefined,
+    maxDistanceKm: parseFiniteNumber(context.req.query('maxDistanceKm')),
     phase: parseSegmentPhase(context.req.query('phase')),
     query: context.req.query('q') ?? context.req.query('query'),
     tags: parseCsv(context.req.query('tags')),
+    requiredTags: parseCsv(context.req.query('requiredTags')),
+    excludedTags: parseCsv(context.req.query('excludedTags')),
+    headcount: parsePositiveInt(context.req.query('headcount'), 0) || undefined,
+    timeWindow: parseTimeWindow(context.req.query('startTime'), context.req.query('endTime')),
+    indoorOnly: parseBoolean(context.req.query('indoorOnly')),
+    quietOnly: parseBoolean(context.req.query('quietOnly')),
+    avoidSpicy: parseBoolean(context.req.query('avoidSpicy')),
   })
   return context.json({
     source: 'fictional-local-mock-v2',
@@ -131,16 +139,28 @@ app.get('/api/mock/merchants', (context) => {
   const query = context.req.query('q') ?? context.req.query('query')
   const lng = parseFiniteNumber(context.req.query('lng') ?? context.req.query('nearLng'))
   const lat = parseFiniteNumber(context.req.query('lat') ?? context.req.query('nearLat'))
-  const results = query || phase || category || context.req.query('area') || context.req.query('tags')
+  const hasSearchConstraints = query || phase || category || context.req.query('area') || context.req.query('tags')
+    || context.req.query('requiredTags') || context.req.query('excludedTags') || context.req.query('headcount')
+    || context.req.query('startTime') || context.req.query('maxDistanceKm') || context.req.query('indoorOnly')
+    || context.req.query('quietOnly') || context.req.query('avoidSpicy')
+  const results = hasSearchConstraints
     ? searchFictionalPois({
         area: context.req.query('area'),
         limit: parsePositiveInt(context.req.query('limit'), 20),
         maxPriceLevel: parsePositiveInt(context.req.query('maxPriceLevel') ?? context.req.query('priceLevel'), 0) || undefined,
         nearLnglat: Number.isFinite(lng) && Number.isFinite(lat) ? [lng!, lat!] : undefined,
+        maxDistanceKm: parseFiniteNumber(context.req.query('maxDistanceKm')),
         phase,
         query,
         serviceCategory: category,
         tags: parseCsv(context.req.query('tags')),
+        requiredTags: parseCsv(context.req.query('requiredTags')),
+        excludedTags: parseCsv(context.req.query('excludedTags')),
+        headcount: parsePositiveInt(context.req.query('headcount'), 0) || undefined,
+        timeWindow: parseTimeWindow(context.req.query('startTime'), context.req.query('endTime')),
+        indoorOnly: parseBoolean(context.req.query('indoorOnly')),
+        quietOnly: parseBoolean(context.req.query('quietOnly')),
+        avoidSpicy: parseBoolean(context.req.query('avoidSpicy')),
       }).map((result) => ({
         ...result.poi,
         searchScore: result.score,
@@ -551,6 +571,19 @@ function parseFiniteNumber(value: string | undefined) {
   if (!value) return undefined
   const parsed = Number.parseFloat(value)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseTimeWindow(startTime: string | undefined, endTime: string | undefined) {
+  const validClock = /^(?:[01]\d|2[0-3]):[0-5]\d$|^24:00$/
+  return startTime && endTime && validClock.test(startTime) && validClock.test(endTime)
+    ? { startTime, endTime }
+    : undefined
+}
+
+function parseBoolean(value: string | undefined) {
+  if (value === 'true' || value === '1') return true
+  if (value === 'false' || value === '0') return false
+  return undefined
 }
 
 async function writeAgentEvent(stream: Parameters<Parameters<typeof streamSSE>[1]>[0], event: AgentEvent) {

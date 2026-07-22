@@ -246,10 +246,16 @@ function intentFromRoute(route: RoutedTurn): AgentIntent {
 }
 
 function guardCriticalIntent(model: AgentIntent, fallback: AgentIntent, route: RoutedTurn) {
-  // The lexical guard only resolves the high-frequency replace-vs-rewrite
-  // ambiguity. Other candidate/add disagreements remain model decisions (for
-  // example “加一个套餐” can correctly be a service intent).
-  const requiredAction = route.kind === 'candidate-search' && route.mode === 'replace' && model.action === 'rewrite'
+  // High-confidence dining preferences must remain a grounded replacement even
+  // when the model mistakes them for QA/rewrite/delete. Other candidate/add
+  // disagreements remain model decisions (for example “加一个套餐” can
+  // correctly be a service intent).
+  const guardedDiningReplacement = route.kind === 'candidate-search'
+    && route.mode === 'replace'
+    && route.reason === 'dining preference replacement request'
+  const requiredAction = guardedDiningReplacement && model.action !== 'replace'
+    ? 'replace'
+    : route.kind === 'candidate-search' && route.mode === 'replace' && model.action === 'rewrite'
     ? 'replace'
     : route.kind === 'service-item-search' ? 'service'
       : route.kind === 'command'

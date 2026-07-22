@@ -182,19 +182,41 @@ export async function listPlans(signal?: AbortSignal): Promise<Plan[]> {
 
 export async function searchMockPois(input: {
   area?: string
+  avoidSpicy?: boolean
+  endTime?: string
+  excludedTags?: string[]
+  headcount?: number
+  indoorOnly?: boolean
+  lat?: number
   limit?: number
+  lng?: number
+  maxDistanceKm?: number
   maxPriceLevel?: number
   phase?: SegmentPhase
   q?: string
+  quietOnly?: boolean
+  requiredTags?: string[]
+  startTime?: string
   tags?: string[]
 } = {}): Promise<MockPoiSearchResult> {
   const params = new URLSearchParams()
   if (input.area) params.set('area', input.area)
   if (input.limit) params.set('limit', String(input.limit))
   if (input.maxPriceLevel) params.set('maxPriceLevel', String(input.maxPriceLevel))
+  if (input.headcount) params.set('headcount', String(input.headcount))
+  if (input.lng !== undefined) params.set('lng', String(input.lng))
+  if (input.lat !== undefined) params.set('lat', String(input.lat))
+  if (input.maxDistanceKm) params.set('maxDistanceKm', String(input.maxDistanceKm))
   if (input.phase) params.set('phase', input.phase)
   if (input.q) params.set('q', input.q)
   if (input.tags?.length) params.set('tags', input.tags.join(','))
+  if (input.requiredTags?.length) params.set('requiredTags', input.requiredTags.join(','))
+  if (input.excludedTags?.length) params.set('excludedTags', input.excludedTags.join(','))
+  if (input.startTime) params.set('startTime', input.startTime)
+  if (input.endTime) params.set('endTime', input.endTime)
+  if (input.indoorOnly !== undefined) params.set('indoorOnly', String(input.indoorOnly))
+  if (input.quietOnly !== undefined) params.set('quietOnly', String(input.quietOnly))
+  if (input.avoidSpicy !== undefined) params.set('avoidSpicy', String(input.avoidSpicy))
   const suffix = params.toString() ? `?${params.toString()}` : ''
   const response = await safeFetch(`${API_BASE}/api/mock/pois${suffix}`, {
     method: 'GET',

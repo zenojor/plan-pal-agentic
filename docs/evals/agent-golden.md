@@ -1,6 +1,6 @@
 # PlanPal Agent golden Eval
-Generated: 2026-07-22T05:26:27.993Z
-Summary: 52/52 passed
+Generated: 2026-07-22T09:14:19.582Z
+Summary: 64/64 passed
 | Scenario | Result | Checks |
 | --- | --- | --- |
 | golden-replace-nearby | PASS | 5 checks passed |
@@ -55,3 +55,15 @@ Summary: 52/52 passed
 | eval-checkpoint-restart | PASS | 4 checks passed |
 | eval-empty-tool-result | PASS | 3 checks passed |
 | eval-invalid-structured-output | PASS | 3 checks passed |
+| retrieval-spicy-lunch | PASS | 4 checks passed |
+| retrieval-no-spicy | PASS | 4 checks passed |
+| retrieval-rainy-indoor | PASS | 4 checks passed |
+| retrieval-quiet-chat | PASS | 4 checks passed |
+| retrieval-eight-people | PASS | 4 checks passed |
+| retrieval-hotel-category | PASS | 4 checks passed |
+| retrieval-movie-category | PASS | 4 checks passed |
+| retrieval-budget-cap | PASS | 4 checks passed |
+| retrieval-required-tag | PASS | 4 checks passed |
+| retrieval-excluded-poi | PASS | 4 checks passed |
+| retrieval-distance-radius | PASS | 4 checks passed |
+| retrieval-diversity | PASS | 5 checks passed |

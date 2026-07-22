@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runArchitectureEval } from './architecture.ts'
+import { runRetrievalEval } from './retrieval.ts'
 import { createDefaultToolRegistry, PlanPalAgentRuntime, type AgentModelGateway, type ClientModelConfig } from '../../agent/src/index.ts'
 import { createInMemoryStores } from '../../db/src/index.ts'
 import {
@@ -118,6 +119,7 @@ async function runGoldenSuite(): Promise<EvalReport> {
     results.push(await runScenario(scenario))
   }
   results.push(...await runArchitectureEval())
+  results.push(...runRetrievalEval())
   const passed = results.filter((result) => result.passed).length
   return {
     generatedAt: new Date().toISOString(),

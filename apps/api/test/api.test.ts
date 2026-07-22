@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getPlanRouteChoiceId, type AgentEvent, type CommandResult, type PendingAction, type Plan } from '@planpal/domain'
+import { getFictionalPoiById, getPlanRouteChoiceId, type AgentEvent, type CommandResult, type PendingAction, type Plan } from '@planpal/domain'
 import app from '../src'
 
 const modelConfig = {
@@ -118,9 +118,27 @@ describe('PlanPal API', () => {
 
     const detailResponse = await app.request('/api/mock/pois/poi_copper_cloud_hotpot')
     expect(detailResponse.status).toBe(200)
-    const detail = (await detailResponse.json()) as { poi: { id: string; orderableItems: unknown[] } }
+    const detail = (await detailResponse.json()) as {
+      poi: {
+        capacityRange: { min: number; max: number }
+        id: string
+        openWindows: Array<{ startTime: string; endTime: string }>
+        orderableItems: unknown[]
+      }
+    }
     expect(detail.poi.id).toBe('poi_copper_cloud_hotpot')
     expect(detail.poi.orderableItems.length).toBeGreaterThan(0)
+    expect(detail.poi.openWindows.length).toBeGreaterThan(0)
+    expect(detail.poi.capacityRange.max).toBeGreaterThanOrEqual(detail.poi.capacityRange.min)
+
+    const constrainedResponse = await app.request('/api/mock/pois?phase=dining&q=%E6%88%91%E4%BB%AC%E5%85%AB%E4%B8%AA%E4%BA%BA%E4%B8%AD%E5%8D%88%E5%90%83%E9%A5%AD&headcount=8&startTime=11%3A00&endTime=14%3A00&requiredTags=%E5%A4%9A%E4%BA%BA%E5%8F%8B%E5%A5%BD&limit=8')
+    expect(constrainedResponse.status).toBe(200)
+    const constrained = (await constrainedResponse.json()) as {
+      count: number
+      pois: Array<{ capacityRange: { max: number }; tags: string[] }>
+    }
+    expect(constrained.count).toBeGreaterThan(0)
+    expect(constrained.pois.every((poi) => poi.capacityRange.max >= 8 && poi.tags.includes('多人友好'))).toBe(true)
 
     const missingResponse = await app.request('/api/mock/pois/poi_missing')
     expect(missingResponse.status).toBe(404)
@@ -487,7 +505,7 @@ describe('PlanPal API', () => {
                 tags: ['轻松'],
                 reasons: ['匹配需求'],
                 segments: [
-                  { phase: 'activity', title: '模型活动', place: '模型地点', startTime: '14:00', endTime: '15:30', reason: '轻松', budget: 'CNY 50-100/人' },
+                  { poiId: 'poi_echo_karaoke_pod', startTime: '14:00', endTime: '15:30', reason: '轻松' },
                 ],
               },
               {
@@ -496,7 +514,16 @@ describe('PlanPal API', () => {
                 tags: ['近'],
                 reasons: ['少绕路'],
                 segments: [
-                  { phase: 'dining', title: '模型晚餐', place: '模型餐厅', startTime: '17:00', endTime: '18:10', reason: '近', budget: 'CNY 80-120/人' },
+                  { poiId: 'poi_sesame_family_table', startTime: '17:00', endTime: '18:10', reason: '近' },
+                ],
+              },
+              {
+                title: '模型方案 C',
+                summary: '模型生成方案 C',
+                tags: ['收尾'],
+                reasons: ['保留选择'],
+                segments: [
+                  { poiId: 'poi_willow_tea_bench', startTime: '18:30', endTime: '19:30', reason: '轻松收尾' },
                 ],
               },
             ],
@@ -520,11 +547,18 @@ describe('PlanPal API', () => {
     })
 
     expect(response.status).toBe(200)
-    const body = (await response.json()) as {
-      plan: { pendingAction?: { kind: string; variants?: Array<{ title: string }> } }
-    }
+    const body = (await response.json()) as { plan: Plan }
     expect(body.plan.pendingAction?.kind).toBe('plan-variant-selection')
-    expect(body.plan.pendingAction?.variants?.[0]?.title).toBe('模型方案 A')
+    const variantAction = expectPendingAction(body.plan.pendingAction, 'plan-variant-selection')
+    expect(variantAction.variants[0]?.title).toBe('模型方案 A')
+    for (const segment of variantAction.variants.flatMap((variant) => variant.segments)) {
+      expect(segment.poiId).toBeTruthy()
+      const detailResponse = await app.request(`/api/mock/pois/${segment.poiId}`)
+      expect(detailResponse.status).toBe(200)
+      const detail = (await detailResponse.json()) as { poi: { id: string; offerings: unknown[] } }
+      expect(detail.poi.id).toBe(segment.poiId)
+      expect(detail.poi.offerings.length).toBeGreaterThan(0)
+    }
     expect(JSON.stringify(body)).not.toContain('sk-secret-for-test')
   })
 
@@ -540,7 +574,7 @@ describe('PlanPal API', () => {
                 tags: ['进度'],
                 reasons: ['先展示进度'],
                 segments: [
-                  { phase: 'activity', title: '流式活动', place: '流式地点', startTime: '14:00', endTime: '15:20', reason: '轻松', budget: 'CNY 50-90/人' },
+                  { poiId: 'poi_echo_karaoke_pod', startTime: '14:00', endTime: '15:20', reason: '轻松' },
                 ],
               },
               {
@@ -549,7 +583,16 @@ describe('PlanPal API', () => {
                 tags: ['备选'],
                 reasons: ['保留选择'],
                 segments: [
-                  { phase: 'dining', title: '流式晚餐', place: '流式餐厅', startTime: '17:00', endTime: '18:10', reason: '近', budget: 'CNY 80-120/人' },
+                  { poiId: 'poi_sesame_family_table', startTime: '17:00', endTime: '18:10', reason: '近' },
+                ],
+              },
+              {
+                title: '流式方案 C',
+                summary: '边生成边展示 C',
+                tags: ['收尾'],
+                reasons: ['保留选择'],
+                segments: [
+                  { poiId: 'poi_willow_tea_bench', startTime: '18:30', endTime: '19:30', reason: '轻松收尾' },
                 ],
               },
             ],
@@ -634,7 +677,7 @@ describe('PlanPal API', () => {
 
 async function createModelPlan(prompt: string) {
   const originalFetch = globalThis.fetch
-  vi.stubGlobal('fetch', async () => modelPlanResponse())
+  vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => modelPlanResponse(init))
   try {
     const response = await app.request('/api/plans', {
       method: 'POST',
@@ -656,13 +699,46 @@ async function createModelPlan(prompt: string) {
   }
 }
 
-function modelPlanResponse() {
-  const segments = [
-    { phase: 'activity', title: '纸月手作体验', place: '纸月手作工房', startTime: '14:00', endTime: '15:20', reason: '轻松开场', budget: 'CNY 60-120/人' },
-    { phase: 'leisure', title: '云窗休息', place: '云窗茶歇室', startTime: '15:35', endTime: '16:10', reason: '吸收时间误差', budget: 'CNY 30-50/人' },
-    { phase: 'dining', title: '铜锅晚餐', place: '铜锅云汤火锅社', startTime: '17:00', endTime: '18:30', reason: '晚饭就近', budget: 'CNY 100-160/人' },
-    { phase: 'drinks', title: '安静收尾', place: '暮色茶语间', startTime: '18:45', endTime: '19:30', reason: '留出复盘时间', budget: 'CNY 40-80/人' },
-  ]
+function modelPlanResponse(init?: RequestInit) {
+  const request = JSON.parse(String(init?.body ?? '{}')) as { messages?: Array<{ content?: string }> }
+  const userContent = request.messages?.[1]?.content
+  const planning = userContent ? JSON.parse(userContent) as {
+    planningContext?: { minimumSegments?: number; requiredActivities?: string[] }
+    poiCandidates?: Array<{ poiId: string }>
+  } : undefined
+  const candidates = planning?.poiCandidates ?? []
+  const requiredActivities = planning?.planningContext?.requiredActivities ?? []
+  const selected: Array<{ poiId: string }> = []
+  const add = (candidate: { poiId: string } | undefined) => {
+    if (candidate && !selected.some((item) => item.poiId === candidate.poiId)) selected.push(candidate)
+  }
+  const catalogText = (candidate: { poiId: string }) => {
+    const poi = getFictionalPoiById(candidate.poiId)
+    return poi ? [poi.activityTitle, poi.description, poi.notes, ...poi.tags, ...poi.suitableFor].join(' ') : ''
+  }
+  for (const activity of requiredActivities) {
+    add(candidates.find((candidate) => {
+      const poi = getFictionalPoiById(candidate.poiId)
+      if (activity === '用餐') return poi?.phase === 'dining'
+      if (activity === '电影') return poi?.serviceCategory === 'movie'
+      if (activity === '酒店住宿') return poi?.serviceCategory === 'hotel'
+      if (activity === '咖啡或茶歇') return poi?.serviceCategory === 'drinks'
+      if (activity === '产品演示') return /演示|展示|汇报/.test(catalogText(candidate))
+      if (activity === '复盘') return /复盘|总结|回顾|下一步/.test(catalogText(candidate))
+      return true
+    }))
+  }
+  const minimumSegments = planning?.planningContext?.minimumSegments ?? 1
+  for (const candidate of candidates) {
+    if (selected.length >= Math.max(3, minimumSegments)) break
+    add(candidate)
+  }
+  const segments = selected.map((candidate, index) => ({
+    poiId: candidate.poiId,
+    startTime: apiTestClock(14 * 60 + index * 100),
+    endTime: apiTestClock(14 * 60 + index * 100 + 70),
+    reason: index === 0 ? '轻松开场' : index === 1 ? '晚饭就近' : '留出复盘时间',
+  }))
   return new Response(JSON.stringify({
     choices: [{
       message: {
@@ -670,11 +746,16 @@ function modelPlanResponse() {
           variants: [
             { title: '模型轻松版', summary: '轻松且路线紧凑', tags: ['轻松'], reasons: ['符合需求'], segments },
             { title: '模型稳妥版', summary: '保留更多缓冲', tags: ['稳妥'], reasons: ['减少赶路'], segments },
+            { title: '模型收尾版', summary: '强调晚间收尾', tags: ['收尾'], reasons: ['保留选择'], segments },
           ],
         }),
       },
     }],
   }), { status: 200 })
+}
+
+function apiTestClock(minutes: number) {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
 async function postCommand(planId: string, command: unknown) {

@@ -222,7 +222,7 @@ Graph 的 preview、pending action、候选选择、确认、取消和最终 mut
 
 ## Eval
 
-`packages/eval` 当前包含 52 个离线 golden/architecture 场景和 3 个真实 DeepSeek smoke 场景，覆盖：
+`packages/eval` 当前包含 64 个离线 golden/architecture/retrieval 场景和 3 个真实 DeepSeek smoke 场景，覆盖：
 
 - intent/negation routing、tool selection、tool grounding
 - structured command validity、graph path、trace correctness
@@ -233,7 +233,7 @@ Graph 的 preview、pending action、候选选择、确认、取消和最终 mut
 
 报告输出到 `docs/evals/`。生成时间是验证边界：离线 golden 报告应随 runtime 变更重跑；live smoke 只有在显式提供 key 并实际调用 provider 后才更新，旧报告不能视为当前 HEAD 的实时验证。真实模型 key 只通过 `PLANPAL_EVAL_API_KEY` 临时注入，不写入 state、checkpoint、store 或报告。
 
-tool exception 的一次重试目前由 `packages/agent/test/graph-runtime.test.ts` 覆盖，不属于上述 52 项 eval；base-version mismatch 也尚无独立 eval 场景。
+其中 12 个 retrieval 场景专门检查营业时间、人数容量、距离、标签、室内、低噪音、忌辣、服务类目、Catalog grounding、precision@k 与结果多样性。tool exception 的一次重试目前由 `packages/agent/test/graph-runtime.test.ts` 覆盖，不属于上述 64 项 eval；base-version mismatch 也尚无独立 eval 场景。
 
 ## 仍未实现
 

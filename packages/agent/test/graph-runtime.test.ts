@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AIMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import { createInMemoryStores } from '@planpal/db'
-import { createPlanFromPrompt, type AgentEvent, type PendingAction } from '@planpal/domain'
+import { createPlanFromPrompt, getFictionalPoiById, type AgentEvent, type PendingAction } from '@planpal/domain'
 import { describe, expect, it } from 'vitest'
 import {
   buildPlanPalLangGraph,
@@ -109,6 +109,66 @@ describe('mature LangGraph runtime', () => {
     const toolMessage = messages.find((message) => ToolMessage.isInstance(message) && message.tool_call_id === 'call_native_poi')
     expect(ai).toBeDefined()
     expect(toolMessage).toBeDefined()
+  })
+
+  it('keeps “我中午想吃辣” grounded in spicy lunch POIs despite model intent and argument drift', async () => {
+    const stores = createInMemoryStores()
+    const plan = await stores.plans.createPlan(createPlanFromPrompt('今天中午两个人吃饭'))
+    const tools = createDefaultToolRegistry()
+    const gateway: AgentModelGateway = {
+      generateAssistantReply: async () => '',
+      invokeStructured: async (_config, _messages, schema) => schema.parse({
+        action: 'qa',
+        answer: '模型误判为问答',
+        reason: 'incorrect model classification',
+        confidence: 0.91,
+      }),
+      invokeWithTools: async () => new AIMessage({
+        content: '',
+        tool_calls: [{
+          id: 'call_spicy_lunch',
+          name: 'poi_search',
+          args: {
+            planId: 'wrong-plan',
+            mode: 'replace',
+            segmentId: 'wrong-segment',
+            query: '不吃辣',
+          },
+          type: 'tool_call',
+        }],
+      }),
+    }
+    const runtime = new PlanPalAgentRuntime(stores, tools, gateway, createMemoryCheckpointer())
+    const events: AgentEvent[] = []
+
+    const result = await runtime.run({
+      planId: plan.id,
+      message: '我中午想吃辣',
+      modelConfig,
+    }, collect(events))
+
+    expect(result.status).toBe('waiting_for_user')
+    expect(events.some((event) => (
+      event.type === 'agent.model.error'
+      && JSON.stringify(event.payload).includes('intent-guard:model-qa-conflicted-with-replace')
+    ))).toBe(true)
+    const toolCall = (await stores.agents.listToolCalls(result.runId))[0]!
+    expect(JSON.parse(toolCall.argsJson)).toMatchObject({
+      planId: plan.id,
+      mode: 'replace',
+      query: '我中午想吃辣',
+      segmentId: plan.segments.find((segment) => segment.phase === 'dining')?.id,
+    })
+    const action = actionFromEvents(events)
+    expect(action.kind).toBe('candidate-selection')
+    if (action.kind !== 'candidate-selection') throw new Error('expected spicy candidates')
+    expect(action.candidates).toHaveLength(3)
+    for (const candidate of action.candidates) {
+      const poi = getFictionalPoiById(candidate.id)
+      expect(poi).toBeDefined()
+      expect(`${poi!.name}${poi!.description}${poi!.tags.join('')}`).toMatch(/辣|川湘|串串|麻辣|香辣/)
+      expect(poi!.hours).toMatch(/10:|11:|12:/)
+    }
   })
 
   it('retries invalid structured output once, then records deterministic fallback', async () => {
