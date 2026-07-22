@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="PlanPal">
+  <rect width="64" height="64" rx="18" fill="#fff9e8"/>
+  <circle cx="32" cy="32" r="24" fill="#6fae8a"/>
+  <path d="M23 47V17h11.2c7.5 0 12.3 4.2 12.3 10.8 0 6.8-5 11.2-12.7 11.2h-3.6v8H23Zm7.2-14.2h3.3c3.7 0 5.8-1.7 5.8-4.8 0-3-2-4.7-5.6-4.7h-3.5v9.5Z" fill="#fff"/>
+</svg>

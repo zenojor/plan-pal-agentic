@@ -7,7 +7,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
-public/
+/public/
 .next/
 .open-next/
 .turbo/
@@ -33,6 +33,7 @@ web-dev.err.log
 .codex-vite-*.err.log
 
 # Browser QA profiles and screenshots
+.playwright-cli/
 .edge-*/
 edge-*/
 playwright-report/
