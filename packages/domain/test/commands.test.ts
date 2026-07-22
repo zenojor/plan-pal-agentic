@@ -4,6 +4,7 @@ import {
   attachPlanVariants,
   buildMockRouteEstimates,
   createPlanFromPrompt,
+  deriveCandidateSearchIntent,
   fictionalPoiCatalog,
   getFictionalPoiById,
   getPlanRouteChoiceId,
@@ -195,8 +196,55 @@ describe('PlanCommand deterministic handler', () => {
       && poi.mockSource === 'fictional-local-mock-v2'
       && poi.offerings.length > 0
       && poi.orderableItems.length > 0
-      && poi.availabilitySlots.length > 0,
+      && poi.availabilitySlots.length > 0
+      && poi.openWindows.length > 0
+      && poi.openWindows.every((window) => /^\d{2}:\d{2}$/.test(window.startTime) && /^\d{2}:\d{2}$/.test(window.endTime))
+      && poi.capacityRange.min >= 1
+      && poi.capacityRange.max >= poi.capacityRange.min,
     )).toBe(true)
+  })
+
+  it('extracts machine-readable retrieval constraints from natural language', () => {
+    const intent = deriveCandidateSearchIntent('我们八个人中午想吃辣，找附近室内安静一点的')
+    expect(intent.constraints).toMatchObject({
+      headcount: 8,
+      timeWindow: { startTime: '11:00', endTime: '14:00' },
+      indoorOnly: true,
+    })
+    expect(intent.hardConstraints).toContain('室内/天气稳定')
+
+    const noSpicy = deriveCandidateSearchIntent('中午不吃辣，要清淡')
+    expect(noSpicy.constraints.avoidSpicy).toBe(true)
+  })
+
+  it('runs hard filters before relevance scoring and diversity reranking', () => {
+    const lunchForEight = searchFictionalPois({
+      phase: 'dining',
+      query: '我们八个人中午吃饭',
+      requiredTags: ['多人友好'],
+      limit: 8,
+    })
+    expect(lunchForEight.length).toBeGreaterThan(0)
+    expect(lunchForEight.every(({ poi }) => poi.capacityRange.max >= 8)).toBe(true)
+    expect(lunchForEight.every(({ poi }) => poi.tags.includes('多人友好'))).toBe(true)
+    expect(lunchForEight.every(({ reasons }) => reasons.some((reason) => reason.includes('营业时段匹配 11:00-14:00')))).toBe(true)
+
+    const indoorQuiet = searchFictionalPois({
+      phase: 'activity',
+      query: '雨天找安静的室内活动',
+      limit: 6,
+    })
+    expect(indoorQuiet.length).toBeGreaterThan(0)
+    expect(indoorQuiet.every(({ poi }) => poi.indoorScore >= 4 && poi.noiseLevel !== 'lively')).toBe(true)
+    expect(new Set(indoorQuiet.map(({ poi }) => poi.area)).size).toBeGreaterThanOrEqual(3)
+
+    const excluded = searchFictionalPois({
+      phase: 'dining',
+      excludePoiIds: ['poi_copper_cloud_hotpot'],
+      query: '火锅',
+      limit: 5,
+    })
+    expect(excluded.some(({ poi }) => poi.id === 'poi_copper_cloud_hotpot')).toBe(false)
   })
 
   it('keeps merchant offerings broad enough for hotels, movies, and life services', () => {
@@ -235,10 +283,11 @@ describe('PlanCommand deterministic handler', () => {
   })
 
   it('ranks spicy, mild, family, and business dining candidates with explainable reasons', () => {
-    const spicy = searchFictionalPois({ phase: 'dining', query: '想吃辣的', limit: 3 })
+    const spicy = searchFictionalPois({ phase: 'dining', query: '我中午想吃辣', limit: 3 })
     expect(spicy).toHaveLength(3)
     expect(spicy[0]?.reasons).toEqual(expect.arrayContaining(['匹配辣味需求']))
     expect(spicy.every((item) => `${item.poi.name}${item.poi.description}${item.poi.tags.join('')}`.match(/辣|川湘|串串|麻辣|香辣/))).toBe(true)
+    expect(spicy.every((item) => /10:|11:|12:/.test(item.poi.hours))).toBe(true)
 
     const mild = searchFictionalPois({ phase: 'dining', query: '不吃辣', limit: 3 })
     expect(mild).toHaveLength(3)

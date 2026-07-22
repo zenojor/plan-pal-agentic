@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getFictionalPoiById } from '@planpal/domain'
 import { createPlanWithVariants } from '../src'
 
 const config = {
@@ -7,117 +8,93 @@ const config = {
   model: 'demo-chat',
 }
 
+const defaultPoiIds = [
+  'poi_echo_karaoke_pod',
+  'poi_sesame_family_table',
+  'poi_willow_tea_bench',
+] as const
+
+const businessPoiIds = [
+  'poi_warmup_demo_lounge',
+  'poi_pearl_private_kitchen',
+  'poi_maple_quiet_cafe',
+] as const
+
 describe('plan creation variants', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('uses BYOK model output for plan variants without leaking the API key', async () => {
-    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            variants: [
-              {
-                title: '模型轻松版',
-                summary: '模型生成的轻松方案',
-                tags: ['轻松'],
-                reasons: ['匹配偏好'],
-                segments: [
-                  { phase: 'activity', title: '模型活动', place: '模型地点', startTime: '14:00', endTime: '15:30', reason: '轻松开始', budget: 'CNY 50-100/人', notes: '确认天气和场次', lnglat: [121.471, 31.231] },
-                  { phase: 'leisure', title: '模型缓冲', place: '模型咖啡', startTime: '15:40', endTime: '16:10', reason: '吸收时间误差', budget: 'CNY 30-60/人', notes: '吸收时间误差', locked: true },
-                  { phase: 'activity', title: '模型体验', place: '星桥陶艺实验室', startTime: '16:20', endTime: '17:00', reason: '增加互动', budget: 'CNY 80-160/人' },
-                  { phase: 'dining', title: '模型晚饭', place: '模型餐厅', startTime: '17:20', endTime: '18:30', reason: '近一点', budget: 'CNY 80-120/人' },
-                ],
-              },
-              {
-                title: '模型近距离版',
-                summary: '模型生成的近距离方案',
-                tags: ['近一点'],
-                reasons: ['少绕路'],
-                segments: [
-                  { phase: 'activity', title: '近处活动', place: '近处地点', startTime: '14:00', endTime: '15:30', reason: '近', budget: 'CNY 50-100/人' },
-                ],
-              },
-            ],
-          }),
-        },
-      }],
-    }), { status: 200 }))
+  it('grounds every initial segment in the provided POI candidate pool', async () => {
+    let requestBody: Record<string, unknown> | undefined
+    const response = catalogResponse(defaultPoiIds, ['轻松开始', '附近晚饭', '安静收尾'], {
+      firstSegmentExtras: {
+        budget: '模型伪造预算',
+        lnglat: [0, 0],
+        phase: 'dining',
+        place: '模型伪造地点',
+        serviceCategory: 'hotel',
+        title: '模型伪造标题',
+      },
+      titlePrefix: '模型',
+    })
+    vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return modelResponse(response)
+    })
 
     const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
 
     expect(result.plan.pendingAction?.kind).toBe('plan-variant-selection')
-    expect(result.plan.pendingAction?.kind === 'plan-variant-selection' && result.plan.pendingAction.variants[0]?.title).toBe('模型轻松版')
     if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
-    const firstVariant = result.plan.pendingAction.variants[0]!
-    expect(firstVariant.segments).toHaveLength(4)
-    expect(firstVariant.segments[1]).toMatchObject({ locked: true, notes: '吸收时间误差' })
-    expect(firstVariant.segments[2]?.serviceCategory).toBe('activity')
-    expect(firstVariant.segments[2]?.poiId).toBe('model-activity-3')
-    expect(firstVariant.segments[3]?.serviceCategory).toBe('dining')
-    expect(firstVariant.segments.every((segment) => segment.lnglat)).toBe(true)
+    expect(result.plan.pendingAction.variants).toHaveLength(3)
+    const firstSegment = result.plan.pendingAction.variants[0]!.segments[0]!
+    const poi = getFictionalPoiById(firstSegment.poiId)
+    expect(poi).toBeDefined()
+    expect(firstSegment).toMatchObject({
+      poiId: poi!.id,
+      place: poi!.name,
+      title: poi!.activityTitle,
+      budget: poi!.budget,
+      lnglat: poi!.lnglat,
+      phase: poi!.phase,
+      serviceCategory: poi!.serviceCategory,
+    })
+    expect(firstSegment.place).not.toBe('模型伪造地点')
+    expect(firstSegment.budget).not.toBe('模型伪造预算')
+    for (const variant of result.plan.pendingAction.variants) {
+      for (const segment of variant.segments) {
+        const catalogPoi = getFictionalPoiById(segment.poiId)
+        expect(catalogPoi).toBeDefined()
+        expect(catalogPoi?.offerings.length).toBeGreaterThan(0)
+      }
+    }
+    expect(JSON.stringify(requestBody)).toContain('poiCandidates')
+    expect(JSON.stringify(requestBody)).toContain(defaultPoiIds[0])
     expect(JSON.stringify(result.events)).not.toContain(config.apiKey)
+    expect(result.events.some((event) => (
+      event.payload
+      && typeof event.payload === 'object'
+      && (event.payload as { catalogGrounded?: unknown }).catalogGrounded === true
+    ))).toBe(true)
   })
 
-  it('repairs under-expanded complex model plans through model-led repair', async () => {
+  it('repairs an under-expanded complex plan using only catalog POI IDs', async () => {
     let calls = 0
     vi.stubGlobal('fetch', async () => {
       calls += 1
       const content = calls === 1
-        ? {
-            variants: [
-              {
-                title: '压缩方案 A',
-                summary: '第一次把复杂任务压缩了',
-                tags: ['商务'],
-                reasons: ['需要修复'],
-                segments: [
-                  { phase: 'activity', title: '演示', place: '会议室', startTime: '14:00', endTime: '16:00', reason: '产品演示', budget: 'CNY 100-200/人' },
-                ],
-              },
-              {
-                title: '压缩方案 B',
-                summary: '同样不足',
-                tags: ['稳妥'],
-                reasons: ['需要修复'],
-                segments: [
-                  { phase: 'activity', title: '演示', place: '会议室', startTime: '14:00', endTime: '16:00', reason: '产品演示', budget: 'CNY 100-200/人' },
-                ],
-              },
-            ],
-          }
-        : {
-            variants: [
-              {
-                title: '修复方案 A',
-                summary: '拆出缓冲和检查点',
-                tags: ['商务', '稳妥'],
-                reasons: ['按复杂任务拆解'],
-                segments: [
-                  { phase: 'activity', title: '到达校准', place: '会客区', startTime: '14:00', endTime: '14:25', reason: '确认客户目标', budget: 'CNY 40-80/人', notes: '确认人数、禁忌、时间' },
-                  { phase: 'activity', title: '产品演示', place: '会议室', startTime: '14:35', endTime: '15:50', reason: '核心任务', budget: 'CNY 100-200/人' },
-                  { phase: 'leisure', title: '缓冲交流', place: '休息区', startTime: '16:00', endTime: '16:35', reason: '吸收超时', budget: 'CNY 0-60/人', locked: true },
-                  { phase: 'dining', title: '商务晚餐', place: '餐厅', startTime: '17:00', endTime: '18:30', reason: '稳定沟通', budget: 'CNY 200-300/人' },
-                  { phase: 'drinks', title: '简短复盘', place: '大堂吧', startTime: '19:00', endTime: '20:00', reason: '沉淀下一步', budget: 'CNY 80-160/人' },
-                ],
-              },
-              {
-                title: '修复方案 B',
-                summary: '另一套拆解',
-                tags: ['效率'],
-                reasons: ['按复杂任务拆解'],
-                segments: [
-                  { phase: 'activity', title: '接待', place: '会客区', startTime: '14:00', endTime: '14:20', reason: '开场', budget: 'CNY 40-80/人' },
-                  { phase: 'activity', title: '演示', place: '会议室', startTime: '14:30', endTime: '15:45', reason: '核心任务', budget: 'CNY 100-200/人' },
-                  { phase: 'leisure', title: '缓冲', place: '休息区', startTime: '15:55', endTime: '16:25', reason: '不赶', budget: 'CNY 0-60/人' },
-                  { phase: 'dining', title: '晚餐', place: '餐厅', startTime: '17:00', endTime: '18:30', reason: '商务晚餐', budget: 'CNY 200-300/人' },
-                  { phase: 'drinks', title: '简短复盘', place: '茶室', startTime: '18:45', endTime: '19:15', reason: '确认下一步', budget: 'CNY 40-80/人' },
-                ],
-              },
-            ],
-          }
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }), { status: 200 })
+        ? catalogResponse(
+            ['poi_paperkite_board'],
+            ['产品演示'],
+            { titlePrefix: '压缩' },
+          )
+        : catalogResponse(
+            businessPoiIds,
+            ['产品演示', '商务晚餐', '简短复盘'],
+            { titlePrefix: '修复' },
+          )
+      return modelResponse(content)
     })
 
     const result = await createPlanWithVariants(
@@ -126,29 +103,33 @@ describe('plan creation variants', () => {
     )
 
     expect(calls).toBe(2)
-    expect(result.events.some((event) => event.payload && typeof event.payload === 'object' && (event.payload as { phase?: unknown }).phase === 'repair-plan')).toBe(true)
+    const repairStarted = result.events.find((event) => (
+      event.type === 'agent.model.started'
+      && event.payload
+      && typeof event.payload === 'object'
+      && (event.payload as { phase?: unknown }).phase === 'repair-plan'
+    ))
+    expect(repairStarted?.payload).toMatchObject({
+      candidatePoolSize: expect.any(Number),
+      minimumSegments: 3,
+    })
     if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
-    expect(result.plan.pendingAction.variants[0]?.title).toBe('修复方案 A')
-    expect(result.plan.pendingAction.variants[0]?.segments.length).toBeGreaterThanOrEqual(2)
+    expect(result.plan.pendingAction.variants).toHaveLength(3)
+    expect(result.plan.pendingAction.variants.every((variant) => variant.segments.length === 3)).toBe(true)
+    expect(result.plan.pendingAction.variants.flatMap((variant) => variant.segments).every((segment) => (
+      Boolean(getFictionalPoiById(segment.poiId))
+    ))).toBe(true)
   })
 
   it('accepts three explicit activities without turning constraints into a fourth node', async () => {
     let calls = 0
     vi.stubGlobal('fetch', async () => {
       calls += 1
-      const segments = [
-        { phase: 'activity', title: '产品演示', place: '栖光会议室', startTime: '14:00', endTime: '16:00', reason: '完成产品演示', budget: 'CNY 100-200/人' },
-        { phase: 'dining', title: '商务晚餐', place: '松庭餐叙馆', startTime: '17:00', endTime: '18:30', reason: '稳定交流', budget: 'CNY 200-300/人' },
-        { phase: 'drinks', title: '简短复盘', place: '云廊茶室', startTime: '19:00', endTime: '20:00', reason: '沉淀下一步', budget: 'CNY 80-160/人' },
-      ]
-      const variants = ['稳妥版', '紧凑版', '交流版'].map((title) => ({
-        title,
-        summary: '演示、晚餐和复盘',
-        tags: ['商务'],
-        reasons: ['覆盖明确活动'],
-        segments,
-      }))
-      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ variants }) } }] }), { status: 200 })
+      return modelResponse(catalogResponse(
+        businessPoiIds,
+        ['产品演示', '商务晚餐', '简短复盘'],
+        { titlePrefix: '商务' },
+      ))
     })
 
     const result = await createPlanWithVariants(
@@ -157,77 +138,130 @@ describe('plan creation variants', () => {
     )
 
     expect(calls).toBe(1)
-    expect(result.events.some((event) => event.payload && typeof event.payload === 'object' && (event.payload as { phase?: unknown }).phase === 'repair-plan')).toBe(false)
-    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
+    expect(result.events.some((event) => (
+      event.payload
+      && typeof event.payload === 'object'
+      && (event.payload as { phase?: unknown }).phase === 'repair-plan'
+    ))).toBe(false)
+    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected plan variants')
     expect(result.plan.pendingAction.variants).toHaveLength(3)
     expect(result.plan.pendingAction.variants.every((variant) => variant.segments.length === 3)).toBe(true)
   })
 
-  it('sanitizes model-generated variant text and invalid segment times', async () => {
-    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            variants: [
-              {
-                title: `泄露 ${config.apiKey}`,
-                summary: 'provider echoed Bearer abc.def',
-                tags: [config.apiKey, '轻松'],
-                reasons: ['provider echoed Bearer abc.def'],
-                segments: [
-                  {
-                    phase: 'activity',
-                    title: `活动 ${config.apiKey}`,
-                    place: '模型地点',
-                    startTime: 'soon',
-                    endTime: 'later',
-                    reason: 'bad Bearer abc.def',
-                    budget: 'CNY 50-100/人',
-                  },
-                ],
-              },
-              {
-                title: '时间错乱版',
-                summary: '结束早于开始也要被修正',
-                tags: ['时间'],
-                reasons: ['测试时间修正'],
-                segments: [
-                  {
-                    phase: 'dining',
-                    title: '模型晚饭',
-                    place: '模型餐厅',
-                    startTime: '19:30',
-                    endTime: '18:00',
-                    reason: '时间错乱',
-                    budget: 'CNY 80-120/人',
-                  },
-                ],
-              },
-            ],
-          }),
-        },
-      }],
-    }), { status: 200 }))
+  it('adds every explicitly requested service category to the balanced candidate pool', async () => {
+    let requestBody = ''
+    vi.stubGlobal('fetch', async (_input: unknown, init?: RequestInit) => {
+      requestBody = String(init?.body)
+      return modelResponse(catalogResponse(
+        ['poi_orbit_cinema', 'poi_linen_clock_hotel'],
+        ['安排电影场次', '电影后入住酒店'],
+        { titlePrefix: '电影住宿' },
+      ))
+    })
+
+    const result = await createPlanWithVariants('晚上先看电影，然后住一晚酒店', config)
+
+    const request = JSON.parse(requestBody) as { messages: Array<{ content: string }> }
+    const userMessage = JSON.parse(request.messages[1]!.content) as {
+      poiCandidates: Array<{ poiId: string; serviceCategory: string }>
+    }
+    expect(userMessage.poiCandidates.some((candidate) => candidate.poiId === 'poi_orbit_cinema')).toBe(true)
+    expect(userMessage.poiCandidates.some((candidate) => candidate.poiId === 'poi_linen_clock_hotel')).toBe(true)
+    expect(userMessage.poiCandidates.some((candidate) => candidate.serviceCategory === 'movie')).toBe(true)
+    expect(userMessage.poiCandidates.some((candidate) => candidate.serviceCategory === 'hotel')).toBe(true)
+    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
+    expect(result.plan.pendingAction.variants.every((variant) => (
+      variant.segments.map((segment) => segment.serviceCategory).join(',') === 'movie,hotel'
+    ))).toBe(true)
+  })
+
+  it('repairs unknown POI IDs and includes validation reasons in trace events', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      return modelResponse(calls === 1
+        ? catalogResponse(
+            ['poi_not_in_catalog', defaultPoiIds[1], defaultPoiIds[2]],
+            ['轻松开始', '附近晚饭', '安静收尾'],
+          )
+        : catalogResponse(defaultPoiIds, ['轻松开始', '附近晚饭', '安静收尾']))
+    })
+
+    const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
+
+    expect(calls).toBe(2)
+    const repairEvent = result.events.find((event) => (
+      event.type === 'agent.model.started'
+      && event.payload
+      && typeof event.payload === 'object'
+      && (event.payload as { phase?: unknown }).phase === 'repair-plan'
+    ))
+    expect(JSON.stringify(repairEvent?.payload)).toContain('候选池外')
+    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
+    expect(result.plan.pendingAction.variants.flatMap((variant) => variant.segments).every((segment) => (
+      Boolean(getFictionalPoiById(segment.poiId))
+    ))).toBe(true)
+  })
+
+  it('fails after one repair when the model keeps returning unknown POI IDs', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      return modelResponse(catalogResponse(
+        ['poi_not_in_catalog', defaultPoiIds[1], defaultPoiIds[2]],
+        ['轻松开始', '附近晚饭', '安静收尾'],
+      ))
+    })
+
+    await expect(createPlanWithVariants('下午两个人附近轻松玩', config)).rejects.toThrow('修复后仍不合法')
+    expect(calls).toBe(2)
+  })
+
+  it('repairs duplicate POIs and overlapping or invalid time ranges', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      if (calls === 1) {
+        const invalid = catalogResponse(
+          [defaultPoiIds[0], defaultPoiIds[0], defaultPoiIds[2]],
+          ['轻松开始', '重复地点', '安静收尾'],
+        )
+        invalid.variants[0]!.segments[2]!.startTime = '14:30'
+        invalid.variants[0]!.segments[2]!.endTime = '14:00'
+        return modelResponse(invalid)
+      }
+      return modelResponse(catalogResponse(defaultPoiIds, ['轻松开始', '附近晚饭', '安静收尾']))
+    })
+
+    const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
+
+    expect(calls).toBe(2)
+    if (result.plan.pendingAction?.kind !== 'plan-variant-selection') throw new Error('expected variants')
+    for (const variant of result.plan.pendingAction.variants) {
+      expect(new Set(variant.segments.map((segment) => segment.poiId)).size).toBe(variant.segments.length)
+    }
+  })
+
+  it('redacts model-generated variant text without changing catalog authority', async () => {
+    const response = catalogResponse(defaultPoiIds, [
+      `活动理由 ${config.apiKey}`,
+      'provider echoed Bearer abc.def',
+      '安静收尾',
+    ], {
+      notes: `备注 ${config.apiKey}`,
+      titlePrefix: `泄露 ${config.apiKey}`,
+    })
+    vi.stubGlobal('fetch', async () => modelResponse(response))
 
     const result = await createPlanWithVariants('下午两个人附近轻松玩', config)
     const action = result.plan.pendingAction
 
     expect(action?.kind).toBe('plan-variant-selection')
     if (action?.kind !== 'plan-variant-selection') throw new Error('expected plan variants')
-    const serialized = JSON.stringify(action)
+    const serialized = JSON.stringify({ action, events: result.events })
     expect(serialized).not.toContain(config.apiKey)
     expect(serialized).not.toContain('Bearer abc.def')
     expect(serialized).toContain('[redacted]')
-    for (const variant of action.variants) {
-      for (const segment of variant.segments) {
-        expect(segment.startTime).toMatch(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/)
-        expect(segment.endTime).toMatch(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/)
-        expect(Number.isFinite(segment.durationMinutes)).toBe(true)
-        expect(segment.durationMinutes).toBeGreaterThanOrEqual(30)
-        expect(segment.endTime).not.toBe('later')
-        expect(segment.startTime).not.toBe('soon')
-      }
-    }
   })
 
   it('fails without creating local variants when the model connection fails', async () => {
@@ -247,3 +281,44 @@ describe('plan creation variants', () => {
     expect(JSON.stringify(events)).toContain('[redacted]')
   })
 })
+
+type CatalogResponseOptions = {
+  firstSegmentExtras?: Record<string, unknown>
+  notes?: string
+  titlePrefix?: string
+}
+
+function catalogResponse(
+  poiIds: readonly string[],
+  segmentReasons: readonly string[],
+  options: CatalogResponseOptions = {},
+) {
+  return {
+    variants: Array.from({ length: 3 }, (_, variantIndex) => ({
+      title: `${options.titlePrefix ?? 'Catalog'}方案 ${variantIndex + 1}`,
+      summary: '从 POI Catalog 候选池编排的方案',
+      tags: ['Catalog', '可回查'],
+      reasons: ['地点全部来自候选池'],
+      segments: poiIds.map((poiId, segmentIndex) => ({
+        poiId,
+        startTime: clockFor(14 * 60 + segmentIndex * 100),
+        endTime: clockFor(14 * 60 + segmentIndex * 100 + 70),
+        reason: segmentReasons[segmentIndex] ?? '匹配用户需求',
+        notes: options.notes ?? '模型只补充执行约束',
+        ...(segmentIndex === 0 ? options.firstSegmentExtras : {}),
+      })),
+    })),
+  }
+}
+
+function clockFor(minutes: number) {
+  const hour = Math.floor(minutes / 60)
+  const minute = minutes % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function modelResponse(content: unknown) {
+  return new Response(JSON.stringify({
+    choices: [{ message: { content: JSON.stringify(content) } }],
+  }), { status: 200 })
+}

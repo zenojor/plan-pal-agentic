@@ -1,6 +1,6 @@
 import type { CandidateOption, MerchantServiceCategory, Plan, PlanIntent, PlanSegment, PlanVariantOption, SegmentPhase } from './types'
 import { createId, nowIso } from './ids'
-import { deriveCandidateSearchIntent, fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type CandidateSearchIntent, type FictionalPoi } from './poiCatalog'
+import { deriveCandidateSearchIntent, fictionalPoiCatalog, pickFictionalPoi, searchFictionalPois, segmentFromPoi, type CandidateSearchIntent, type FictionalPoi, type PoiSearchConstraints } from './poiCatalog'
 
 
 export function createPlanFromPrompt(prompt: string): Plan {
@@ -148,7 +148,12 @@ export function createReplacementCandidates(
     startTime: target.startTime,
     endTime: target.endTime,
     status: '待确认',
-  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory, 'replace')
+  } : {}, inferServiceCategoryFromQuery(query) ?? target?.serviceCategory, 'replace', {
+    timeWindow: target ? { startTime: target.startTime, endTime: target.endTime } : undefined,
+    headcount: plan.intent.headcount,
+    nearLnglat: target?.lnglat,
+    maxDistanceKm: queryRequestsNearby(query) ? 3 : undefined,
+  })
 }
 
 export function createAddSegmentCandidates(
@@ -176,7 +181,12 @@ export function createAddSegmentCandidates(
     startTime,
     endTime,
     status: '待确认',
-  }, serviceCategory, 'add-after')
+  }, serviceCategory, 'add-after', {
+    timeWindow: { startTime, endTime },
+    headcount: plan.intent.headcount,
+    nearLnglat: after?.lnglat,
+    maxDistanceKm: queryRequestsNearby(query) ? 3 : undefined,
+  })
 }
 
 function createCandidatesForPhase(
@@ -186,6 +196,7 @@ function createCandidatesForPhase(
   defaults: Partial<PlanSegment> = {},
   serviceCategory?: MerchantServiceCategory,
   mode?: 'replace' | 'add-after',
+  constraints: PoiSearchConstraints & { nearLnglat?: [number, number] } = {},
 ): CandidateOption[] {
   const intent = deriveCandidateSearchIntent(query, { mode, phase, serviceCategory })
   const results = searchFictionalPois({
@@ -195,10 +206,12 @@ function createCandidatesForPhase(
     intent,
     limit: 3,
     serviceCategory,
+    ...constraints,
+    timeWindow: intent.constraints.timeWindow ?? constraints.timeWindow,
+    headcount: intent.constraints.headcount ?? constraints.headcount,
   })
-  const fallbackResults = results.length > 0 ? results : searchFictionalPois({ phase, query, intent, limit: 3, serviceCategory })
 
-  return fallbackResults.map(({ poi, score, reasons }, index) => ({
+  return results.map(({ poi, score, reasons }, index) => ({
     id: poi.id,
     label: poi.name,
     description: poi.description,
@@ -220,6 +233,11 @@ function createCandidatesForPhase(
       lnglat: poi.lnglat,
     },
   }))
+}
+
+function queryRequestsNearby(query: string) {
+  const normalized = query.toLowerCase()
+  return query.includes('附近') || query.includes('就近') || query.includes('少绕路') || normalized.includes('near')
 }
 
 function buildVariantSegments(intent: PlanIntent, pois: FictionalPoi[], durations: number[]) {

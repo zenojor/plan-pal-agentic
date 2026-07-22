@@ -13,6 +13,27 @@ export type PoiOrderableItem = {
   category: string
 }
 
+export type PoiTimeWindow = {
+  startTime: string
+  endTime: string
+}
+
+export type PoiCapacityRange = {
+  min: number
+  max: number
+}
+
+export type PoiSearchConstraints = {
+  timeWindow?: PoiTimeWindow
+  headcount?: number
+  maxDistanceKm?: number
+  requiredTags?: string[]
+  excludedTags?: string[]
+  indoorOnly?: boolean
+  quietOnly?: boolean
+  avoidSpicy?: boolean
+}
+
 export type FictionalPoi = {
   id: string
   name: string
@@ -35,6 +56,8 @@ export type FictionalPoi = {
   suitableFor: string[]
   avoidFor: string[]
   capacity: string
+  capacityRange: PoiCapacityRange
+  openWindows: PoiTimeWindow[]
   noiseLevel: MockNoiseLevel
   indoorScore: number
   queueRisk: MockQueueRisk
@@ -77,6 +100,7 @@ export type CandidateSearchIntent = {
   confidence: number
   summary: string
   rankingSignals: string[]
+  constraints: PoiSearchConstraints
 }
 
 export type CandidateSearchIntentSummary = Pick<
@@ -90,9 +114,10 @@ export type CandidateSearchIntentSummary = Pick<
   | 'confidence'
   | 'summary'
   | 'rankingSignals'
+  | 'constraints'
 >
 
-export type FictionalPoiSearchInput = {
+export type FictionalPoiSearchInput = PoiSearchConstraints & {
   area?: string
   excludePoiIds?: string[]
   intent?: CandidateSearchIntent
@@ -143,6 +168,8 @@ type CompactPoiSeed = {
   suitableFor?: string[]
   avoidFor?: string[]
   capacity?: string
+  capacityRange?: PoiCapacityRange
+  openWindows?: PoiTimeWindow[]
   noiseLevel?: MockNoiseLevel
   indoorScore?: number
   queueRisk?: MockQueueRisk
@@ -1593,6 +1620,8 @@ export function deriveCandidateSearchIntent(query = '', context: CandidateSearch
   const negativeTags: string[] = []
   const hardConstraints: string[] = []
   const softPreferences: string[] = []
+  const timeWindow = inferQueryTimeWindow(normalizedQuery)
+  const headcount = inferQueryHeadcount(normalizedQuery)
 
   const noSpicy = hasNoSpicyIntent(normalizedQuery)
   const spicy = !noSpicy && hasSpicyIntent(normalizedQuery)
@@ -1653,6 +1682,8 @@ export function deriveCandidateSearchIntent(query = '', context: CandidateSearch
     : 0.32
   const summaryParts = [
     targetPhase ? `目标 ${targetPhase}` : '目标待推断',
+    timeWindow ? `时段 ${timeWindow.startTime}-${timeWindow.endTime}` : '',
+    headcount ? `人数 ${headcount}` : '',
     requestedTags.length ? `偏好 ${requestedTags.join('/')}` : '',
     negativeTags.length ? `避开 ${negativeTags.join('/')}` : '',
     hardConstraints.length ? `约束 ${hardConstraints.join('/')}` : '',
@@ -1678,6 +1709,13 @@ export function deriveCandidateSearchIntent(query = '', context: CandidateSearch
       ...negativeTags.map((tag) => `penalty:${tag}`),
       ...hardConstraints.map((item) => `hard:${item}`),
     ]),
+    constraints: {
+      timeWindow,
+      headcount,
+      indoorOnly: hardConstraints.includes('室内/天气稳定') || undefined,
+      quietOnly: hardConstraints.includes('控制噪音') || undefined,
+      avoidSpicy: hardConstraints.includes('避免重辣') || undefined,
+    },
   }
 }
 
@@ -1692,11 +1730,11 @@ export function summarizeCandidateSearchIntent(intent: CandidateSearchIntent): C
     confidence: intent.confidence,
     summary: intent.summary,
     rankingSignals: intent.rankingSignals,
+    constraints: intent.constraints,
   }
 }
 
 export function searchFictionalPois(input: FictionalPoiSearchInput): FictionalPoiSearchResult[] {
-  const phase = input.phase ? normalizePoiPhase(input.phase) : undefined
   const normalizedQuery = normalizeSearchText(input.query)
   const intent = input.intent ?? deriveCandidateSearchIntent(input.query, {
     phase: input.phase,
@@ -1706,20 +1744,103 @@ export function searchFictionalPois(input: FictionalPoiSearchInput): FictionalPo
     ...intent.requestedTags,
     ...(input.tags ?? []).map(normalizeSearchText).filter(Boolean),
   ])
-  const excluded = new Set(input.excludePoiIds ?? [])
   const limit = Math.max(1, Math.min(50, input.limit ?? 20))
+  const resolvedInput: FictionalPoiSearchInput & {
+    intent: CandidateSearchIntent
+    normalizedQuery: string
+    requestedTags: string[]
+  } = {
+    ...input,
+    timeWindow: input.timeWindow ?? intent.constraints.timeWindow,
+    headcount: input.headcount ?? intent.constraints.headcount,
+    requiredTags: input.requiredTags ?? intent.constraints.requiredTags,
+    excludedTags: input.excludedTags ?? intent.constraints.excludedTags,
+    indoorOnly: input.indoorOnly ?? intent.constraints.indoorOnly,
+    quietOnly: input.quietOnly ?? intent.constraints.quietOnly,
+    avoidSpicy: input.avoidSpicy ?? intent.constraints.avoidSpicy,
+    intent,
+    normalizedQuery,
+    requestedTags,
+  }
 
-  const scored = fictionalPoiCatalog
-    .filter((poi) => !phase || poi.phase === phase)
-    .filter((poi) => !input.serviceCategory || poi.serviceCategory === input.serviceCategory)
-    .filter((poi) => !excluded.has(poi.id))
-    .filter((poi) => !input.area || normalizeSearchText(poi.area).includes(normalizeSearchText(input.area)))
-    .filter((poi) => !input.maxPriceLevel || poi.priceLevel <= input.maxPriceLevel)
-    .map((poi, index) => scorePoi(poi, index, { ...input, intent, normalizedQuery, requestedTags }))
+  // Stage 1: deterministic hard filtering. A POI that cannot satisfy an explicit
+  // time, capacity, distance, tag or safety constraint never reaches ranking.
+  const eligible = filterPoiCandidates(fictionalPoiCatalog, resolvedInput)
+
+  // Stage 2: score only eligible POIs for textual and semantic relevance.
+  const scored = eligible
+    .map((poi, index) => withConstraintReasons(scorePoi(poi, index, resolvedInput), resolvedInput))
     .filter((result) => result.score > 0)
     .sort((left, right) => right.score - left.score || left.poi.id.localeCompare(right.poi.id))
 
-  return scored.slice(0, limit)
+  // Stage 3: greedily re-rank to avoid near-identical top results while keeping
+  // relevance dominant. Returned scores remain the original relevance scores.
+  return rerankPoiDiversity(scored, limit)
+}
+
+function filterPoiCandidates(
+  catalog: FictionalPoi[],
+  input: FictionalPoiSearchInput & { intent: CandidateSearchIntent },
+) {
+  const phase = input.phase ? normalizePoiPhase(input.phase) : undefined
+  const excluded = new Set(input.excludePoiIds ?? [])
+  const requiredTags = uniqueCompact((input.requiredTags ?? []).map(normalizeSearchText))
+  const excludedTags = uniqueCompact((input.excludedTags ?? []).map(normalizeSearchText))
+  const normalizedArea = normalizeSearchText(input.area)
+
+  return catalog
+    .filter((poi) => !phase || poi.phase === phase)
+    .filter((poi) => !input.serviceCategory || poi.serviceCategory === input.serviceCategory)
+    .filter((poi) => !excluded.has(poi.id))
+    .filter((poi) => !normalizedArea || normalizeSearchText(poi.area).includes(normalizedArea))
+    .filter((poi) => !input.maxPriceLevel || poi.priceLevel <= input.maxPriceLevel)
+    .filter((poi) => !input.timeWindow || poi.openWindows.some((window) => timeWindowsOverlap(window, input.timeWindow!)))
+    .filter((poi) => !input.headcount || poi.capacityRange.max >= input.headcount)
+    .filter((poi) => !input.maxDistanceKm || !input.nearLnglat || distanceKm(input.nearLnglat, poi.lnglat) <= input.maxDistanceKm)
+    .filter((poi) => requiredTags.every((tag) => poiMatchesTag(poi, tag)))
+    .filter((poi) => excludedTags.every((tag) => !poiMatchesTag(poi, tag)))
+    .filter((poi) => !input.indoorOnly || poi.indoorScore >= 4)
+    .filter((poi) => !input.quietOnly || poi.noiseLevel !== 'lively')
+    .filter((poi) => !input.avoidSpicy || !hasSpicyPoiSignal(poi) || hasNoSpicyPoiSignal(poi))
+}
+
+function withConstraintReasons(
+  result: FictionalPoiSearchResult,
+  input: FictionalPoiSearchInput,
+): FictionalPoiSearchResult {
+  const reasons = new Set(result.reasons)
+  if (input.timeWindow) reasons.add(`营业时段匹配 ${input.timeWindow.startTime}-${input.timeWindow.endTime}`)
+  if (input.headcount) reasons.add(`容量支持 ${input.headcount} 人`)
+  if (input.maxDistanceKm && input.nearLnglat) reasons.add(`距离不超过 ${input.maxDistanceKm}km`)
+  if (input.indoorOnly) reasons.add('满足室内硬约束')
+  if (input.quietOnly) reasons.add('满足低噪音硬约束')
+  return { ...result, reasons: [...reasons].slice(0, 8) }
+}
+
+function rerankPoiDiversity(scored: FictionalPoiSearchResult[], limit: number) {
+  const remaining = [...scored]
+  const selected: FictionalPoiSearchResult[] = []
+  const areaCounts = new Map<string, number>()
+  const categoryCounts = new Map<string, number>()
+  const priceCounts = new Map<number, number>()
+
+  while (selected.length < limit && remaining.length > 0) {
+    remaining.sort((left, right) => {
+      const adjusted = (result: FictionalPoiSearchResult) => result.score
+        - (areaCounts.get(result.poi.area) ?? 0) * 8
+        - (categoryCounts.get(result.poi.serviceCategory) ?? 0) * 3
+        - (priceCounts.get(result.poi.priceLevel) ?? 0) * 2
+      return adjusted(right) - adjusted(left)
+        || right.score - left.score
+        || left.poi.id.localeCompare(right.poi.id)
+    })
+    const next = remaining.shift()!
+    selected.push(next)
+    areaCounts.set(next.poi.area, (areaCounts.get(next.poi.area) ?? 0) + 1)
+    categoryCounts.set(next.poi.serviceCategory, (categoryCounts.get(next.poi.serviceCategory) ?? 0) + 1)
+    priceCounts.set(next.poi.priceLevel, (priceCounts.get(next.poi.priceLevel) ?? 0) + 1)
+  }
+  return selected
 }
 
 export function getFictionalPoiById(poiId: string | undefined) {
@@ -1811,6 +1932,8 @@ function seed(seedInput: CompactPoiSeed): FictionalPoi {
   const indoorScore = seedInput.indoorScore ?? inferIndoorScore(seedInput.tags)
   const noiseLevel = seedInput.noiseLevel ?? inferNoiseLevel(seedInput.tags)
   const serviceCategory = seedInput.serviceCategory ?? defaultServiceCategory(seedInput.phase, seedInput.tags)
+  const hours = seedInput.hours ?? defaultHours[seedInput.phase]
+  const capacity = seedInput.capacity ?? defaultCapacity(seedInput.phase, seedInput.tags)
   const availabilitySlots = seedInput.availabilitySlots ?? defaultAvailabilitySlots(seedInput.phase, serviceCategory)
   const offerings = seedInput.offerings ?? defaultOfferings({
     id: seedInput.id,
@@ -1834,7 +1957,7 @@ function seed(seedInput: CompactPoiSeed): FictionalPoi {
     lnglat: seedInput.lnglat,
     notes: seedInput.notes,
     address: seedInput.address ?? `${seedInput.area} ${12 + stableIndex} 号`,
-    hours: seedInput.hours ?? defaultHours[seedInput.phase],
+    hours,
     booking: seedInput.booking ?? bookingText(reservationMode),
     queue: seedInput.queue ?? queueText(queueRisk),
     confidence: seedInput.confidence ?? `Mock 可信度 ${80 + stableIndex % 10}%`,
@@ -1844,7 +1967,9 @@ function seed(seedInput: CompactPoiSeed): FictionalPoi {
     sceneTags: seedInput.sceneTags ?? uniqueCompact([...seedInput.tags, seedInput.area]),
     suitableFor: seedInput.suitableFor ?? defaultSuitableFor(seedInput.phase, seedInput.tags),
     avoidFor: seedInput.avoidFor ?? defaultAvoidFor(seedInput.tags),
-    capacity: seedInput.capacity ?? defaultCapacity(seedInput.phase, seedInput.tags),
+    capacity,
+    capacityRange: seedInput.capacityRange ?? parseCapacityRange(capacity),
+    openWindows: seedInput.openWindows ?? parseOpenWindows(hours),
     noiseLevel,
     indoorScore,
     queueRisk,
@@ -2364,6 +2489,87 @@ function defaultCapacity(phase: FictionalPoiPhase, tags: string[]) {
   if (tags.includes('包间')) return '4-10 人'
   if (phase === 'drinks') return '2-6 人'
   return '1-4 人'
+}
+
+function parseCapacityRange(value: string): PoiCapacityRange {
+  const numbers = [...value.matchAll(/\d+/g)].map((match) => Number(match[0])).filter(Number.isFinite)
+  if (numbers.length >= 2) return { min: Math.max(1, numbers[0]!), max: Math.max(numbers[0]!, numbers[1]!) }
+  if (numbers.length === 1) return { min: 1, max: Math.max(1, numbers[0]!) }
+  return { min: 1, max: 4 }
+}
+
+function parseOpenWindows(value: string): PoiTimeWindow[] {
+  const windows = [...value.matchAll(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/g)]
+    .map((match) => ({ startTime: match[1]!, endTime: match[2]! }))
+    .filter((window) => isValidClockTime(window.startTime) && isValidClockTime(window.endTime))
+  return windows.length > 0 ? windows : [{ startTime: '00:00', endTime: '24:00' }]
+}
+
+function inferQueryTimeWindow(query: string): PoiTimeWindow | undefined {
+  const windows: PoiTimeWindow[] = []
+  if (containsAnyText(query, ['早餐', '早饭', '早上'])) windows.push({ startTime: '07:00', endTime: '11:00' })
+  if (containsAnyText(query, ['上午'])) windows.push({ startTime: '09:00', endTime: '12:00' })
+  if (containsAnyText(query, ['中午', '午餐', '午饭'])) windows.push({ startTime: '11:00', endTime: '14:00' })
+  if (containsAnyText(query, ['下午', '下午茶'])) windows.push({ startTime: '13:00', endTime: '18:00' })
+  if (containsAnyText(query, ['晚上', '今晚', '晚餐', '晚饭'])) windows.push({ startTime: '17:00', endTime: '22:00' })
+  if (containsAnyText(query, ['夜宵', '深夜', '宵夜'])) windows.push({ startTime: '21:00', endTime: '24:00' })
+  if (windows.length === 0) return undefined
+  return {
+    startTime: windows.reduce((earliest, window) => clockMinutes(window.startTime) < clockMinutes(earliest) ? window.startTime : earliest, windows[0]!.startTime),
+    endTime: windows.reduce((latest, window) => clockMinutes(window.endTime) > clockMinutes(latest) ? window.endTime : latest, windows[0]!.endTime),
+  }
+}
+
+function inferQueryHeadcount(query: string) {
+  const arabic = query.match(/(?:我们|一共|总共|大概|约)?\s*(\d{1,2})\s*(?:个人|人|位)/)
+  if (arabic) return Math.max(1, Math.min(50, Number(arabic[1])))
+  const chineseDigits: Record<string, number> = {
+    一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  }
+  const chinese = query.match(/([一二两三四五六七八九十])\s*(?:个人|人|位)/)
+  return chinese ? chineseDigits[chinese[1]!] : undefined
+}
+
+function isValidClockTime(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value)
+  if (!match) return false
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  return (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) || (hours === 24 && minutes === 0)
+}
+
+function clockMinutes(value: string) {
+  if (!isValidClockTime(value)) return Number.NaN
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours! * 60 + minutes!
+}
+
+function timeWindowsOverlap(left: PoiTimeWindow, right: PoiTimeWindow) {
+  const interval = (window: PoiTimeWindow): [number, number] => {
+    const start = clockMinutes(window.startTime)
+    let end = clockMinutes(window.endTime)
+    if (end <= start) end += 24 * 60
+    return [start, end]
+  }
+  const [leftStart, leftEnd] = interval(left)
+  const [rightStart, rightEnd] = interval(right)
+  return [0, 24 * 60].some((leftOffset) => [0, 24 * 60].some((rightOffset) =>
+    leftStart + leftOffset < rightEnd + rightOffset && rightStart + rightOffset < leftEnd + leftOffset,
+  ))
+}
+
+function poiMatchesTag(poi: FictionalPoi, tag: string) {
+  if (isStrongIntentTag(tag)) return hasStrongPoiSignal(poi, tag)
+  return normalizeSearchText([
+    poi.name,
+    poi.activityTitle,
+    poi.description,
+    poi.notes,
+    poi.area,
+    ...poi.tags,
+    ...poi.sceneTags,
+    ...poi.suitableFor,
+  ].join(' ')).includes(normalizeSearchText(tag))
 }
 
 function defaultDuration(phase: FictionalPoiPhase): [number, number] {

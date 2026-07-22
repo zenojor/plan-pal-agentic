@@ -23,7 +23,7 @@ export function createPlanningNodes(deps: PlanPalGraphDependencies) {
       let requests: ToolCallRequest[] = []
       let fallbackReason: string | undefined
       try {
-        message = await invokeToolCallingModel({
+        const modelMessage = await invokeToolCallingModel({
           config: deps.modelConfig,
           gateway: deps.modelGateway,
           messages: [
@@ -32,7 +32,15 @@ export function createPlanningNodes(deps: PlanPalGraphDependencies) {
           ],
           tools: deps.tools.list(),
         })
-        requests = readToolCalls(message).filter((call) => call.name === expected)
+        if (modelMessage) {
+          message = modelMessage
+          requests = readToolCalls(modelMessage)
+            .filter((call) => call.name === expected)
+            .map((call) => canonicalToolCall(state, expected, call.id))
+        }
+        if (modelMessage && requests.length > 0) {
+          message = new AIMessage({ content: modelMessage.content, tool_calls: requests })
+        }
         if (requests.length === 0) fallbackReason = `tool-selection:model-did-not-call-${expected}`
       } catch (error) {
         const reason = redactError(error)
@@ -51,7 +59,7 @@ export function createPlanningNodes(deps: PlanPalGraphDependencies) {
         }
       }
       if (requests.length === 0) {
-        const request = deterministicToolCall(state, expected)
+        const request = canonicalToolCall(state, expected)
         requests = [request]
         message = new AIMessage({ content: '', tool_calls: [request] })
       }
@@ -248,7 +256,11 @@ function expectedToolName(state: PlanPalGraphStateValue) {
   return null
 }
 
-function deterministicToolCall(state: PlanPalGraphStateValue, name: NonNullable<ReturnType<typeof expectedToolName>>): ToolCallRequest {
+function canonicalToolCall(
+  state: PlanPalGraphStateValue,
+  name: NonNullable<ReturnType<typeof expectedToolName>>,
+  id = createId('call'),
+): ToolCallRequest {
   const route = state.route!
   const args: Record<string, unknown> = { planId: state.planId }
   if (route.kind === 'candidate-search') Object.assign(args, {
@@ -265,7 +277,7 @@ function deterministicToolCall(state: PlanPalGraphStateValue, name: NonNullable<
     query: route.query,
     limit: 6,
   })
-  return ToolCallRequestSchema.parse({ id: createId('call'), name, args, type: 'tool_call' })
+  return ToolCallRequestSchema.parse({ id, name, args, type: 'tool_call' })
 }
 
 function readToolCalls(message: AIMessage | null) {

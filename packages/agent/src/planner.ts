@@ -2,16 +2,20 @@ import {
   attachPlanVariants,
   createId,
   createPlanFromPrompt,
-  isGenericPlaceName,
+  deriveCandidateSearchIntent,
   nowIso,
-  pickFictionalPoi,
+  searchFictionalPois,
+  segmentFromPoi,
   type AgentEvent,
+  type FictionalPoi,
+  type FictionalPoiSearchResult,
   type MerchantServiceCategory,
   type Plan,
   type PlanSegment,
   type PlanVariantOption,
   type SegmentPhase,
 } from '@planpal/domain'
+import { z } from 'zod'
 import {
   generateAssistantReply,
   getOpenAICompatibleAttemptedEndpoints,
@@ -27,12 +31,56 @@ export type PlanCreationResult = {
 
 export type PlanCreationProgressSink = (event: AgentEvent) => void | Promise<void>
 
+type PlanPoiCandidate = {
+  poi: FictionalPoi
+  retrievalReasons: string[]
+  retrievalScore: number
+}
+
+type PlanVariantDraft = z.infer<typeof PlanVariantDraftSchema>
+
+type ParsedPlanVariants = {
+  errors: string[]
+  variants: PlanVariantOption[]
+}
+
+const CLOCK_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/
+const PLAN_VARIANT_COUNT = 3
+const MAX_SEGMENTS_PER_VARIANT = 7
+const PHASE_CANDIDATE_LIMIT = 6
+const SERVICE_CANDIDATE_LIMIT = 4
+const MAX_PLAN_CANDIDATES = 32
+const planCandidatePhases = ['activity', 'dining', 'drinks', 'leisure'] as const satisfies readonly SegmentPhase[]
+
+const PlanVariantSegmentDraftSchema = z.object({
+  poiId: z.string().trim().min(1).max(160),
+  startTime: z.string().regex(CLOCK_TIME_PATTERN),
+  endTime: z.string().regex(CLOCK_TIME_PATTERN),
+  reason: z.string().trim().min(1).max(1000),
+  notes: z.string().trim().max(1000).optional(),
+})
+
+const PlanVariantDraftSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().trim().min(1).max(1000),
+  tags: z.array(z.string().trim().min(1).max(100)).max(8),
+  reasons: z.array(z.string().trim().min(1).max(500)).min(1).max(8),
+  segments: z.array(PlanVariantSegmentDraftSchema).min(1).max(MAX_SEGMENTS_PER_VARIANT),
+})
+
+const PlanVariantResponseSchema = z.object({
+  variants: z.array(PlanVariantDraftSchema).length(PLAN_VARIANT_COUNT),
+})
+
 export async function createPlanWithVariants(
   prompt: string,
   modelConfig: ClientModelConfig,
   onProgress?: PlanCreationProgressSink,
 ): Promise<PlanCreationResult> {
   const basePlan = createPlanFromPrompt(prompt)
+  const requiredActivities = requiredActivitiesForPrompt(prompt)
+  const minimumSegments = Math.max(1, requiredActivities.length)
+  const candidates = buildPlanPoiCandidatePool(prompt, basePlan, requiredActivities)
   const runId = createId('run')
   const events: AgentEvent[] = []
   let sequence = 0
@@ -52,75 +100,87 @@ export async function createPlanWithVariants(
     await onProgress?.(event)
   }
 
-  await emit('agent.started', 'Plan creation started', { node: 'createPlan' })
+  await emit('agent.started', 'Plan creation started', {
+    node: 'createPlan',
+    candidatePoolSize: candidates.length,
+    catalogGrounded: true,
+  })
   const model = sanitizeModelConfig(modelConfig)
   const attemptedEndpoints = getOpenAICompatibleAttemptedEndpoints(modelConfig)
   try {
-    await emit('agent.model.started', 'Calling model for plan variants', {
+    if (candidates.length === 0) throw new Error('POI Catalog 没有可用于创建计划的候选')
+    await emit('agent.model.started', 'Calling model for catalog-grounded plan variants', {
       model,
       phase: 'create-plan',
       usedModel: true,
       fallbackUsed: false,
       attemptedEndpoints,
+      candidatePoolSize: candidates.length,
     })
-    const text = await generateAssistantReply(modelConfig, buildPlanVariantMessages(prompt, basePlan))
-    const requiredActivities = requiredActivitiesForPrompt(prompt)
-    const minimumSegments = requiredActivities.length >= 2 ? 2 : 0
-    let variants = parsePlanVariantResponse(text, basePlan)
-    if (variants.length >= 2 && variants.some((variant) => !variantSatisfiesStructure(variant, minimumSegments, requiredActivities))) {
-      await emit('agent.model.started', 'Calling model to repair plan structure', {
+    const text = await generateAssistantReply(modelConfig, buildPlanVariantMessages(
+      prompt,
+      basePlan,
+      candidates,
+      minimumSegments,
+      requiredActivities.map((activity) => activity.label),
+    ))
+    let parsed = parsePlanVariantResponse(text, candidates, minimumSegments, requiredActivities)
+    if (parsed.errors.length > 0) {
+      await emit('agent.model.started', 'Calling model to repair catalog-grounded plan variants', {
         model,
         phase: 'repair-plan',
         usedModel: true,
         fallbackUsed: false,
         attemptedEndpoints,
+        candidatePoolSize: candidates.length,
         minimumSegments,
+        validationErrors: parsed.errors,
       })
       const repairedText = await generateAssistantReply(modelConfig, buildPlanRepairMessages(
         prompt,
         text,
+        candidates,
         minimumSegments,
         requiredActivities.map((activity) => activity.label),
+        parsed.errors,
       ))
-      const repairedVariants = parsePlanVariantResponse(repairedText, basePlan)
-      if (repairedVariants.length >= 2 && repairedVariants.every((variant) => variantSatisfiesStructure(
-        variant,
-        minimumSegments,
-        requiredActivities,
-      ))) {
-        variants = repairedVariants
-      }
-      await emit('agent.model.finished', 'Model plan structure repaired', {
+      parsed = parsePlanVariantResponse(repairedText, candidates, minimumSegments, requiredActivities)
+      await emit('agent.model.finished', 'Model plan variants repair finished', {
         model,
         phase: 'repair-plan',
         usedModel: true,
         fallbackUsed: false,
         attemptedEndpoints,
+        candidatePoolSize: candidates.length,
         minimumSegments,
-        variantCount: repairedVariants.length,
+        validationErrors: parsed.errors,
+        variantCount: parsed.variants.length,
       })
     }
-    if (variants.length < 2) throw new Error('模型返回的方案不足')
-    if (minimumSegments > 0 && variants.some((variant) => variant.segments.length < minimumSegments)) {
-      throw new Error(`模型返回的方案未覆盖多活动需求，至少需要 ${minimumSegments} 个节点`)
+    if (parsed.errors.length > 0) {
+      throw new Error(`模型方案修复后仍不合法：${parsed.errors.join('；')}`)
     }
-    const missingActivities = [...new Set(variants.flatMap((variant) => missingRequiredActivities(variant, requiredActivities)))]
-    if (missingActivities.length > 0) {
-      throw new Error(`模型返回的方案缺少明确活动：${missingActivities.join('、')}`)
-    }
-    const plan = attachPlanVariants(basePlan, variants.slice(0, 3))
-    await emit('agent.model.finished', 'Model plan variants generated', {
+
+    const plan = attachPlanVariants(basePlan, parsed.variants)
+    const groundedSegmentCount = parsed.variants.reduce((total, variant) => total + variant.segments.length, 0)
+    await emit('agent.model.finished', 'Catalog-grounded plan variants generated', {
       model,
       phase: 'create-plan',
       usedModel: true,
       fallbackUsed: false,
       attemptedEndpoints,
-      variantCount: plan.pendingAction?.kind === 'plan-variant-selection' ? plan.pendingAction.variants.length : 0,
+      candidatePoolSize: candidates.length,
+      catalogGrounded: true,
+      groundedSegmentCount,
+      variantCount: parsed.variants.length,
     })
-    await emit('agent.finished', '已生成可选方案', {
+    await emit('agent.finished', '已生成 POI Catalog 强绑定的可选方案', {
       usedModel: true,
       fallbackUsed: false,
-      variantCount: plan.pendingAction?.kind === 'plan-variant-selection' ? plan.pendingAction.variants.length : 0,
+      candidatePoolSize: candidates.length,
+      catalogGrounded: true,
+      groundedSegmentCount,
+      variantCount: parsed.variants.length,
     })
     return { events, plan }
   } catch (error) {
@@ -132,31 +192,48 @@ export async function createPlanWithVariants(
       fallbackUsed: false,
       error: message,
       attemptedEndpoints,
+      candidatePoolSize: candidates.length,
+      catalogGrounded: true,
     })
     throw new Error(`模型方案生成失败：${message}`)
   }
 }
 
-function buildPlanVariantMessages(prompt: string, basePlan: Plan): CoreMessage[] {
+function buildPlanVariantMessages(
+  prompt: string,
+  basePlan: Plan,
+  candidates: PlanPoiCandidate[],
+  minimumSegments: number,
+  requiredActivities: string[],
+): CoreMessage[] {
   return [
     {
       role: 'system',
       content: [
         'You are PlanPal plan variant generator.',
         'Return only JSON. No markdown.',
-        'Schema: {"variants":[{"title":"string","summary":"string","tags":["string"],"reasons":["string"],"segments":[{"phase":"activity|dining|drinks|leisure","serviceCategory":"optional dining|drinks|activity|hotel|movie|retail|wellness|ticket|other","title":"string","place":"string","startTime":"HH:mm","endTime":"HH:mm","reason":"string","budget":"string","notes":"optional execution constraints/checklist","locked":false,"lnglat":[121.47,31.23]}]}]}.',
-        'Return 3 variants. Infer the task structure from userPrompt; do not choose from predefined plan branches. Use 1-7 executable segments according to the explicit activities. Every distinct activity should be covered, but constraints such as route stability, pace, budget, participant count, weather, and preferences belong in notes, reason, or budget rather than separate segments. Do not add filler or a buffer solely to reach a count; add a buffer/checkpoint only when it has execution value. Every place must be fictional but specific, like a named shop/studio/restaurant; never use real merchant names and never use generic category names such as 展览, 餐厅, 咖啡店, 小馆, 附近可选地点. Do not include secrets or API keys.',
+        'Schema: {"variants":[{"title":"string","summary":"string","tags":["string"],"reasons":["string"],"segments":[{"poiId":"one exact ID from poiCandidates","startTime":"HH:mm","endTime":"HH:mm","reason":"string","notes":"optional execution constraints/checklist"}]}]}.',
+        `Return exactly ${PLAN_VARIANT_COUNT} variants with ${minimumSegments}-${MAX_SEGMENTS_PER_VARIANT} executable segments each.`,
+        'Every segment must select one exact poiId from poiCandidates. Never invent an ID, place, merchant, coordinates, budget, phase, service category, or catalog data.',
+        'Do not repeat the same poiId within one variant. The same poiId may appear in different variants.',
+        'Keep segments in chronological order and do not overlap their time ranges.',
+        'Infer the task structure from userPrompt. Every required activity must be covered in every variant.',
+        'Constraints such as route stability, pace, budget, participant count, weather, and preferences belong in selection, reason, or notes rather than separate filler segments.',
+        'Use candidate area, tags, hours, time windows, queue risk, reservation mode, capacity, retrieval score, and retrieval reasons when choosing.',
+        'Do not include secrets or API keys.',
       ].join(' '),
     },
     {
       role: 'user',
       content: JSON.stringify({
         userPrompt: prompt,
-        fallbackReference: {
+        planningContext: {
           intent: basePlan.intent,
-          note: 'Use only as a minimal fallback reference. The model should parse the actual userPrompt and may create more or fewer segments.',
-          segments: basePlan.segments.map(({ id: _id, ...segment }) => segment),
+          retrievalConstraints: deriveCandidateSearchIntent(prompt).constraints,
+          minimumSegments,
+          requiredActivities,
         },
+        poiCandidates: candidates.map(serializePlanPoiCandidate),
       }),
     },
   ]
@@ -165,47 +242,247 @@ function buildPlanVariantMessages(prompt: string, basePlan: Plan): CoreMessage[]
 function buildPlanRepairMessages(
   prompt: string,
   previousResponse: string,
+  candidates: PlanPoiCandidate[],
   minimumSegments: number,
   requiredActivities: string[],
+  validationErrors: string[],
 ): CoreMessage[] {
   return [
     {
       role: 'system',
       content: [
-        'You are PlanPal plan variant repairer.',
+        'You are PlanPal catalog-grounded plan variant repairer.',
         'Return only JSON. No markdown.',
-        'Repair the previous response so each variant has enough executable segments. Do not use predefined plan branches. Every place must be fictional but specific; never use real merchant names or generic category names.',
-        `Each variant must include at least ${minimumSegments} and at most 7 segments because the prompt contains multiple explicit activities.`,
-        'Keep the user intent and split collapsed activities into separate segments with clear times, reasons, budgets, and notes. Keep route, pace, budget, participant, weather, and preference constraints in segment fields; do not turn them into filler segments.',
+        'Return the exact same schema requested for initial plan variants.',
+        `Return exactly ${PLAN_VARIANT_COUNT} variants with ${minimumSegments}-${MAX_SEGMENTS_PER_VARIANT} executable segments each.`,
+        'Every segment must use one exact poiId from poiCandidates. Never invent an ID or catalog data.',
+        'Do not repeat a poiId within one variant. Keep segments chronological and non-overlapping.',
+        'Repair every validation error while preserving the user intent and covering every required activity.',
+        'Do not include secrets or API keys.',
       ].join(' '),
     },
     {
       role: 'user',
       content: JSON.stringify({
         userPrompt: prompt,
-        validationError: `Each variant must have at least ${minimumSegments} executable segments.`,
+        retrievalConstraints: deriveCandidateSearchIntent(prompt).constraints,
+        minimumSegments,
         requiredActivities,
+        validationErrors: validationErrors.map(redactModelText),
         previousResponse: redactModelText(previousResponse),
+        poiCandidates: candidates.map(serializePlanPoiCandidate),
       }),
     },
   ]
 }
 
-function requiredActivitiesForPrompt(prompt: string) {
-  const matched = explicitActivityRequirements.filter((activity) => activity.promptPattern.test(prompt))
-  return matched.length >= 2 ? matched : []
+function buildPlanPoiCandidatePool(
+  prompt: string,
+  basePlan: Plan,
+  requiredActivities: ExplicitActivityRequirement[],
+): PlanPoiCandidate[] {
+  const selected = new Map<string, PlanPoiCandidate>()
+  const addPoi = (poi: FictionalPoi | undefined, score: number, reasons: string[]) => {
+    if (!poi || selected.has(poi.id)) return
+    selected.set(poi.id, {
+      poi,
+      retrievalScore: Number(score.toFixed(2)),
+      retrievalReasons: uniqueStrings(reasons).slice(0, 6),
+    })
+  }
+  const addResults = (results: FictionalPoiSearchResult[]) => {
+    for (const result of results) addPoi(result.poi, result.score, result.reasons)
+  }
+
+  const inferredIntent = deriveCandidateSearchIntent(prompt)
+  const hardSearchConstraints = {
+    ...inferredIntent.constraints,
+    headcount: inferredIntent.constraints.headcount ?? basePlan.intent.headcount,
+  }
+  const requiredCategories = uniqueStrings([
+    ...(inferredIntent.serviceCategory ? [inferredIntent.serviceCategory] : []),
+    ...requiredActivities.flatMap((activity) => activity.categories ?? []),
+  ]) as MerchantServiceCategory[]
+  for (const serviceCategory of requiredCategories) {
+    const preferred = searchFictionalPois({
+      query: prompt,
+      serviceCategory,
+      limit: SERVICE_CANDIDATE_LIMIT,
+      ...hardSearchConstraints,
+    })
+    addResults(preferred)
+    if (preferred.length < SERVICE_CANDIDATE_LIMIT) {
+      addResults(searchFictionalPois({ serviceCategory, limit: SERVICE_CANDIDATE_LIMIT, ...hardSearchConstraints }))
+    }
+  }
+
+  for (const phase of planCandidatePhases) {
+    const preferred = searchFictionalPois({ query: prompt, phase, limit: PHASE_CANDIDATE_LIMIT, ...hardSearchConstraints })
+    addResults(preferred)
+    if (preferred.length < PHASE_CANDIDATE_LIMIT) {
+      addResults(searchFictionalPois({ phase, limit: PHASE_CANDIDATE_LIMIT, ...hardSearchConstraints }))
+    }
+  }
+
+  return [...selected.values()].slice(0, MAX_PLAN_CANDIDATES)
 }
 
-function variantSatisfiesStructure(
-  variant: PlanVariantOption,
+function serializePlanPoiCandidate(candidate: PlanPoiCandidate) {
+  const { poi } = candidate
+  return {
+    poiId: poi.id,
+    name: poi.name,
+    activityTitle: poi.activityTitle,
+    phase: poi.phase,
+    serviceCategory: poi.serviceCategory,
+    area: poi.area,
+    description: poi.description,
+    budget: poi.budget,
+    tags: poi.tags,
+    hours: poi.hours,
+    openWindows: poi.openWindows,
+    bestTimeWindows: poi.bestTimeWindows,
+    availabilitySlots: poi.availabilitySlots,
+    capacity: poi.capacity,
+    capacityRange: poi.capacityRange,
+    noiseLevel: poi.noiseLevel,
+    indoorScore: poi.indoorScore,
+    queueRisk: poi.queueRisk,
+    reservationMode: poi.reservationMode,
+    durationRangeMinutes: poi.durationRangeMinutes,
+    lnglat: poi.lnglat,
+    retrievalScore: candidate.retrievalScore,
+    retrievalReasons: candidate.retrievalReasons,
+  }
+}
+
+function parsePlanVariantResponse(
+  raw: string,
+  candidates: PlanPoiCandidate[],
   minimumSegments: number,
   requiredActivities: ExplicitActivityRequirement[],
-) {
-  return variant.segments.length >= minimumSegments
-    && missingRequiredActivities(variant, requiredActivities).length === 0
+): ParsedPlanVariants {
+  const json = extractJsonObject(raw)
+  if (!json) return invalidVariants('模型没有返回 JSON 对象')
+
+  let input: unknown
+  try {
+    input = JSON.parse(json)
+  } catch {
+    return invalidVariants('模型返回的 JSON 无法解析')
+  }
+
+  const parsed = PlanVariantResponseSchema.safeParse(input)
+  if (!parsed.success) {
+    return invalidVariants(...parsed.error.issues.map((issue) => {
+      const path = issue.path.length ? issue.path.join('.') : 'response'
+      return `${path}: ${issue.message}`
+    }))
+  }
+
+  const candidateById = new Map(candidates.map((candidate) => [candidate.poi.id, candidate] as const))
+  const errors: string[] = []
+  const variants = parsed.data.variants.map((draft, variantIndex) => materializeVariant(
+    draft,
+    variantIndex,
+    candidateById,
+    minimumSegments,
+    requiredActivities,
+    errors,
+  ))
+  if (errors.length > 0) return invalidVariants(...errors)
+  return { errors: [], variants }
 }
 
-function missingRequiredActivities(variant: PlanVariantOption, requiredActivities: ExplicitActivityRequirement[]) {
+function materializeVariant(
+  draft: PlanVariantDraft,
+  variantIndex: number,
+  candidateById: Map<string, PlanPoiCandidate>,
+  minimumSegments: number,
+  requiredActivities: ExplicitActivityRequirement[],
+  errors: string[],
+): PlanVariantOption {
+  const variantLabel = `方案 ${variantIndex + 1}`
+  const seenPoiIds = new Set<string>()
+  let previousEnd = -1
+  const segments: PlanSegment[] = []
+
+  if (draft.segments.length < minimumSegments) {
+    errors.push(`${variantLabel} 至少需要 ${minimumSegments} 个节点`)
+  }
+
+  for (const [segmentIndex, segmentDraft] of draft.segments.entries()) {
+    const segmentLabel = `${variantLabel} 节点 ${segmentIndex + 1}`
+    const candidate = candidateById.get(segmentDraft.poiId)
+    if (!candidate) {
+      errors.push(`${segmentLabel} 使用了候选池外的 poiId：${redactModelText(segmentDraft.poiId)}`)
+      continue
+    }
+    if (seenPoiIds.has(segmentDraft.poiId)) {
+      errors.push(`${variantLabel} 重复使用 poiId：${redactModelText(segmentDraft.poiId)}`)
+      continue
+    }
+    seenPoiIds.add(segmentDraft.poiId)
+
+    const start = toMinutes(segmentDraft.startTime)
+    const end = toMinutes(segmentDraft.endTime)
+    if (end <= start) {
+      errors.push(`${segmentLabel} 的结束时间必须晚于开始时间`)
+      continue
+    }
+    if (start < previousEnd) {
+      errors.push(`${segmentLabel} 与前一个节点时间重叠或顺序错误`)
+      continue
+    }
+    previousEnd = end
+
+    const modelNotes = redactModelText(segmentDraft.notes ?? '')
+    const authoritative = segmentFromPoi(candidate.poi, {
+      startTime: segmentDraft.startTime,
+      endTime: segmentDraft.endTime,
+      reason: redactModelText(segmentDraft.reason),
+      status: '待确认',
+    })
+    segments.push({
+      id: createId('seg'),
+      ...authoritative,
+      notes: mergeNotes(candidate.poi.notes, modelNotes),
+      locked: false,
+    })
+  }
+
+  if (segments.length === draft.segments.length) {
+    const missing = missingRequiredActivities({ segments }, requiredActivities)
+    if (missing.length > 0) errors.push(`${variantLabel} 缺少明确活动：${missing.join('、')}`)
+  }
+
+  return {
+    id: createId('variant'),
+    title: redactModelText(draft.title),
+    summary: redactModelText(draft.summary),
+    tags: uniqueStrings(draft.tags.map(redactModelText)).slice(0, 4),
+    segments,
+    score: Math.max(0, 0.94 - variantIndex * 0.04),
+    reasons: uniqueStrings(draft.reasons.map(redactModelText)).slice(0, 4),
+  }
+}
+
+function invalidVariants(...errors: string[]): ParsedPlanVariants {
+  return {
+    errors: uniqueStrings(errors.map(redactModelText)),
+    variants: [],
+  }
+}
+
+function requiredActivitiesForPrompt(prompt: string) {
+  const matched = explicitActivityRequirements.filter((activity) => activity.promptPattern.test(prompt))
+  return matched
+}
+
+function missingRequiredActivities(
+  variant: Pick<PlanVariantOption, 'segments'>,
+  requiredActivities: ExplicitActivityRequirement[],
+) {
   return requiredActivities
     .filter((activity) => !variant.segments.some((segment) => {
       const text = [segment.title, segment.place, segment.reason, segment.notes].filter(Boolean).join(' ')
@@ -234,96 +511,7 @@ const explicitActivityRequirements: ExplicitActivityRequirement[] = [
   { label: '购物', promptPattern: /购物|逛街/, segmentPattern: /购物|逛街|商场/, categories: ['retail'] },
   { label: '散步或游览', promptPattern: /散步|游览|参观/, segmentPattern: /散步|游览|参观/ },
   { label: '会议或会谈', promptPattern: /会议|会谈|沟通会/, segmentPattern: /会议|会谈|沟通/ },
-] as const
-
-function parsePlanVariantResponse(raw: string, basePlan: Plan): PlanVariantOption[] {
-  const json = extractJsonObject(raw)
-  if (!json) return []
-  try {
-    const parsed = JSON.parse(json) as { variants?: unknown[] }
-    if (!Array.isArray(parsed.variants)) return []
-    return parsed.variants
-      .map((variant, index) => coerceVariant(variant, basePlan, index))
-      .filter((variant): variant is PlanVariantOption => Boolean(variant))
-  } catch {
-    return []
-  }
-}
-
-function coerceVariant(value: unknown, basePlan: Plan, index: number): PlanVariantOption | null {
-  if (!value || typeof value !== 'object') return null
-  const input = value as {
-    reasons?: unknown
-    score?: unknown
-    segments?: unknown
-    summary?: unknown
-    tags?: unknown
-    title?: unknown
-  }
-  if (!Array.isArray(input.segments)) return null
-  const segments = input.segments
-    .map((segmentValue, segmentIndex) => coerceSegment(segmentValue, basePlan.segments[segmentIndex], basePlan, segmentIndex))
-    .filter((segment): segment is PlanSegment => Boolean(segment))
-  if (segments.length === 0) return null
-  const title = readModelString(input.title)
-  const summary = readModelString(input.summary)
-  return {
-    id: createId('variant'),
-    title: title || `方案 ${index + 1}`,
-    summary: summary || '模型生成的备选方案。',
-    tags: Array.isArray(input.tags)
-      ? input.tags.map(readModelString).filter(Boolean).slice(0, 4)
-      : [],
-    segments,
-    score: typeof input.score === 'number' ? Math.max(0, Math.min(1, input.score)) : 0.86 - index * 0.05,
-    reasons: Array.isArray(input.reasons)
-      ? input.reasons.map(readModelString).filter(Boolean).slice(0, 4)
-      : ['模型根据你的需求生成。'],
-  }
-}
-
-function coerceSegment(value: unknown, fallback: PlanSegment | undefined, basePlan: Plan, segmentIndex: number): PlanSegment | null {
-  if (!value || typeof value !== 'object') return fallback ? { ...fallback, id: createId('seg') } : null
-  const input = value as Partial<Record<keyof PlanSegment, unknown>>
-  const phase = isSegmentPhase(input.phase) ? input.phase : fallback?.phase ?? 'leisure'
-  const fallbackPoi = pickFictionalPoi(phase, segmentIndex)
-  const phaseFallback = fallback?.phase === phase ? fallback : undefined
-  const serviceCategory = isMerchantServiceCategory(input.serviceCategory)
-    ? input.serviceCategory
-    : phaseFallback?.serviceCategory ?? fallbackPoi.serviceCategory
-  const startTime = readClockTime(input.startTime)
-    || readClockTime(phaseFallback?.startTime)
-    || readClockTime(basePlan.intent.startTime)
-    || '12:00'
-  const endCandidate = readClockTime(input.endTime) || readClockTime(phaseFallback?.endTime)
-  const endTime = endCandidate && toMinutes(endCandidate) > toMinutes(startTime)
-    ? endCandidate
-    : addMinutes(startTime, 60)
-  const modelPlace = readModelString(input.place)
-  const fallbackPlace = isGenericPlaceName(phaseFallback?.place) ? '' : phaseFallback?.place
-  const useFallbackPoi = isGenericPlaceName(modelPlace) && !fallbackPlace
-  const place = useFallbackPoi ? fallbackPoi.name : modelPlace || fallbackPlace || fallbackPoi.name
-  const placeFallback = fallback?.place === place ? fallback : undefined
-  const title = readModelString(input.title) || (useFallbackPoi ? fallbackPoi.activityTitle : phaseFallback?.title) || fallbackPoi.activityTitle
-  const lnglat = readLngLat(input.lnglat) ?? placeFallback?.lnglat ?? (place === fallbackPoi.name ? fallbackPoi.lnglat : undefined) ?? mockLngLatForSegment(phase, segmentIndex)
-  return {
-    id: createId('seg'),
-    phase,
-    title,
-    place,
-    startTime,
-    endTime,
-    durationMinutes: Math.max(30, toMinutes(endTime) - toMinutes(startTime)),
-    status: '待确认',
-    reason: readModelString(input.reason) || phaseFallback?.reason || fallbackPoi.description,
-    budget: readModelString(input.budget) || phaseFallback?.budget || fallbackPoi.budget,
-    notes: readModelString(input.notes) || phaseFallback?.notes || fallbackPoi.notes,
-    poiId: readModelString(input.poiId) || placeFallback?.poiId || (place === fallbackPoi.name ? fallbackPoi.id : ['model', phase, segmentIndex + 1].join('-')),
-    serviceCategory,
-    locked: typeof input.locked === 'boolean' ? input.locked : phaseFallback?.locked,
-    lnglat,
-  }
-}
+]
 
 function extractJsonObject(raw: string) {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)
@@ -334,74 +522,17 @@ function extractJsonObject(raw: string) {
   return value.slice(start, end + 1)
 }
 
-function isSegmentPhase(value: unknown): value is SegmentPhase {
-  return value === 'activity'
-    || value === 'dining'
-    || value === 'drinks'
-    || value === 'leisure'
+function mergeNotes(catalogNotes: string, modelNotes: string) {
+  return uniqueStrings([catalogNotes, modelNotes]).join('；')
 }
 
-function isMerchantServiceCategory(value: unknown): value is MerchantServiceCategory {
-  return value === 'dining'
-    || value === 'drinks'
-    || value === 'activity'
-    || value === 'hotel'
-    || value === 'movie'
-    || value === 'retail'
-    || value === 'wellness'
-    || value === 'ticket'
-    || value === 'other'
-}
-
-function readLngLat(value: unknown): [number, number] | undefined {
-  if (!Array.isArray(value) || value.length !== 2) return undefined
-  const [lng, lat] = value
-  if (typeof lng !== 'number' || typeof lat !== 'number') return undefined
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return undefined
-  if (Math.abs(lng) > 180 || Math.abs(lat) > 90) return undefined
-  return [lng, lat]
-}
-
-function mockLngLatForSegment(phase: SegmentPhase, index: number): [number, number] {
-  const baseByPhase: Record<SegmentPhase, [number, number]> = {
-    activity: [121.4737, 31.2304],
-    dining: [121.478, 31.232],
-    drinks: [121.481, 31.233],
-    leisure: [121.476, 31.2312],
-    transit: [121.475, 31.231],
-  }
-  const [lng, lat] = baseByPhase[phase]
-  const offset = Math.min(8, Math.max(0, index)) * 0.0012
-  return [Number((lng + offset).toFixed(4)), Number((lat + offset * 0.55).toFixed(4))]
-}
-
-function readString(value: unknown) {
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function readModelString(value: unknown) {
-  return redactModelText(readString(value))
-}
-
-function readClockTime(value: unknown) {
-  const text = readString(value)
-  return isClockTime(text) ? text : ''
-}
-
-function isClockTime(value: string) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) || value === '24:00'
+function uniqueStrings<T extends string>(values: readonly T[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))] as T[]
 }
 
 function toMinutes(value: string) {
   const [hour = '0', minute = '0'] = value.split(':')
   return Number.parseInt(hour, 10) * 60 + Number.parseInt(minute, 10)
-}
-
-function addMinutes(value: string, minutes: number) {
-  const total = Math.max(0, Math.min(24 * 60, toMinutes(value) + minutes))
-  const hour = Math.floor(total / 60)
-  const minute = total % 60
-  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
 }
 
 function redactModelError(error: unknown) {
@@ -414,5 +545,3 @@ function redactModelText(value: string) {
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
     .replace(/Bearer\s+(?!token\b)[A-Za-z0-9._~+/=-]{6,}/gi, 'Bearer [redacted]')
 }
-
-

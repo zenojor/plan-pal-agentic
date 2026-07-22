@@ -28,9 +28,9 @@ describe('agent natural language router', () => {
 
   it('routes spicy and mild dining preferences to dinner candidate search', () => {
     const plan = createPlanFromPrompt('晚上两个人附近吃饭')
-    const spicyRoute = routeNaturalLanguageTurn(plan, '想吃辣的')
+    const spicyRoute = routeNaturalLanguageTurn(plan, '我中午想吃辣')
     expect(spicyRoute.kind).toBe('candidate-search')
-    expect(spicyRoute).toMatchObject({ kind: 'candidate-search', mode: 'replace', query: '想吃辣的' })
+    expect(spicyRoute).toMatchObject({ kind: 'candidate-search', mode: 'replace', query: '我中午想吃辣' })
     if (spicyRoute.kind === 'candidate-search' && spicyRoute.mode === 'replace') {
       expect(plan.segments.find((item) => item.id === spicyRoute.segmentId)?.phase).toBe('dining')
     }

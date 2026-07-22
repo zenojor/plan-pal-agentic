@@ -20,7 +20,9 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - 首页快速创建计划，支持时间、人数、范围、节奏和补充需求。
 - `/settings/model` 配置 OpenAI-compatible 模型，内置 DeepSeek/OpenAI 预设，API key 只保存在浏览器本地。
 - 模型连接必须先测试成功再保存；没有已验证连接时不能创建计划或进入工作台，不提供伪 Agent 离线模式。
-- 创建计划时生成 3 个方案方向，用户选择后写入拼图主轴。
+- 创建计划时先从本地虚构 POI Catalog 批量召回候选，再让模型只用候选 `poiId` 编排 3 个方案方向；用户选择后写入拼图主轴。
+- POI 的营业窗口和容量同时保留展示文本与 `openWindows/capacityRange` 结构化字段；自然语言中的时段、人数、距离、必需/排除标签、室内、安静和忌辣约束进入统一检索请求。
+- POI 搜索固定执行“硬约束过滤 → 相关性评分 → 区域/类目/价位多样性重排”，后续替换和新增节点不再通过无约束 fallback 把被排除候选召回。
 - 工作台保留多列框架：对话、拼图、商家、详情、路线、记录。
 - 对话列支持全局计划或选中活动上下文，Agent-first 进入替换、加点候选和命令流程。
 - 拼图列支持替换、上移/下移、删除、锁定、备注、路线模式选择、生成模拟确认单。
@@ -30,7 +32,7 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - Trace 列展示 Agent / model / tool / command 事件、版本历史、run 级 trace replay 和安全检查。
 - Agent API 真实执行 12 节点 LangGraph `StateGraph`，支持条件边、多轮 messages、原生 tool calling 和 graph stream。
 - command approval、候选、服务和 clarification 共用 typed `interrupt()` / `Command({ resume })` 模型；plan variant 目前只保留 typed schema，首页仍通过 `CHOOSE_PLAN_VARIANT` command 选择方案。
-- `packages/eval` 提供 52 项离线 Agent eval 与 3 项 DeepSeek live smoke；默认不读取真实 key、不发外部网络请求。
+- `packages/eval` 提供 64 项离线 Agent/retrieval eval 与 3 项 DeepSeek live smoke；其中 12 项检索评测覆盖约束违规、Catalog grounding、precision@k 和多样性；默认不读取真实 key、不发外部网络请求。
 - 本地 demo 默认使用文件 Plan store + SQLite LangGraph checkpoint，测试环境使用内存存储和 `MemorySaver`。
 
 ## 技术栈
@@ -181,7 +183,7 @@ Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-bui
 
 1. 打开 `/`，输入想安排的活动。
 2. 首页通过 `/api/plans/stream` 创建计划，并显示 SSE 进度。
-3. API 调 `createPlanWithVariants` 生成方案；缺少模型配置或 provider 调用失败时直接失败，不持久化本地替代计划。
+3. API 调 `createPlanWithVariants`，按活动阶段和服务类别批量召回本地虚构 POI，模型只返回候选 `poiId`、时间和理由；后端用 Catalog 权威字段物化并校验 3 个方案。缺少模型配置、未知 `poiId` 修复失败或 provider 调用失败时直接失败，不持久化本地替代计划。
 4. 用户在对话列选择 3 个方案之一。
 5. 前端发送 `CHOOSE_PLAN_VARIANT` 到 `/api/plans/:planId/commands`。
 6. domain 应用命令，替换拼图主轴并产生版本。
@@ -268,7 +270,7 @@ Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-bui
 
 ## Agent Eval
 
-默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 52 个 golden/architecture 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、locked-segment recovery、PlanCommand 写边界和 trace correctness：
+默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 64 个 golden/architecture/retrieval 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、locked-segment recovery、PlanCommand 写边界、trace correctness，以及 POI 检索 precision@k、硬约束违规和结果多样性：
 
 ```powershell
 pnpm eval:agent -- --suite golden
