@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AgentEvent } from '@planpal/domain'
 import { CaretRightIcon as CaretRight } from '@phosphor-icons/react/CaretRight'
-import { ChatCircleDotsIcon as ChatCircleDots } from '@phosphor-icons/react/ChatCircleDots'
 import { SlidersHorizontalIcon as SlidersHorizontal } from '@phosphor-icons/react/SlidersHorizontal'
 import { SparkleIcon as Sparkle } from '@phosphor-icons/react/Sparkle'
+import { XIcon as X } from '@phosphor-icons/react/X'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { deletePlan, isAbortError, listPlans, streamCreatePlan } from '../lib/api'
@@ -24,22 +24,22 @@ const defaultQuickPlan: QuickPlanState = {
 const demoPromptExamples = [
   {
     title: '雨天约会',
+    summary: '明天下雨，两个人下午约会…',
     prompt: '明天下雨，2 个人下午到晚上约会，室内优先，少走路，晚饭别排队，最后想有一个安静收尾。',
   },
   {
     title: '客户接待',
+    summary: '周五下午接待 4 位客户…',
     prompt: '周五下午接待 4 位客户，从产品演示到晚餐和简短复盘，路线要稳，不能太赶，预算中高。',
   },
   {
     title: '生日聚会',
+    summary: '周末给朋友过生日，想有惊喜…',
     prompt: '周末给朋友过生日，6 个人，从下午玩到晚上，需要一个小惊喜，晚餐适合聊天，预算别失控。',
-  },
-  {
-    title: '亲子半日',
-    prompt: '周日上午亲子 3 人室内半日计划，孩子 6 岁，节奏轻松，要有休息点，尽量不依赖天气。',
   },
 ] satisfies Array<{
   prompt: string
+  summary: string
   title: string
 }>
 
@@ -73,6 +73,22 @@ export function HomePage() {
     createPlanAbortRef.current = null
     activeRequest?.abort()
   }, [])
+
+  useEffect(() => {
+    if (!quickOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setQuickOpen(false)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [quickOpen])
 
   async function submit(customPrompt = prompt) {
     const nextPrompt = customPrompt.trim()
@@ -116,16 +132,12 @@ export function HomePage() {
 
   return (
     <main className={homeClasses.root}>
+      <div className={homeClasses.landscape} aria-hidden="true" />
       <section className={homeClasses.launchPad} aria-label="创建计划">
         <div className={homeClasses.launchCopy}>
-          <h1 className={homeClasses.launchTitle}>
-            <span>今天想安排什么？</span>
-            <span className={homeClasses.launchSparkles} aria-hidden="true">
-              <Sparkle className={homeClasses.launchSparkleLarge} size={30} weight="fill" />
-              <Sparkle className={homeClasses.launchSparkleSmall} size={16} weight="fill" />
-            </span>
-          </h1>
-          <p className={homeClasses.launchText}>把时间、人数和偏好告诉我</p>
+          <span className={homeClasses.heroMascot} aria-hidden="true">:D</span>
+          <h1 className={homeClasses.launchTitle}>今天想安排什么？</h1>
+          <p className={homeClasses.launchText}>说说时间、人数和偏好，我来把它安排好。</p>
         </div>
         <div className={homeClasses.heroMain}>
           <div className={homeClasses.inputStack}>
@@ -136,7 +148,7 @@ export function HomePage() {
                   aria-label="计划开局要求"
                   className={homeClasses.textarea}
                   value={prompt}
-                  placeholder="描述你的计划"
+                  placeholder="告诉我想安排什么，或者点快速计划补齐信息…"
                   onChange={(event) => setPrompt(event.target.value)}
                 />
                 <div className={homeClasses.promptActions}>
@@ -145,15 +157,18 @@ export function HomePage() {
                       className={homeClasses.quickToggleState}
                       type="button"
                       aria-expanded={quickOpen}
-                      onClick={() => setQuickOpen((open) => !open)}
+                      onClick={() => setQuickOpen(true)}
                     >
                       <SlidersHorizontal aria-hidden="true" size={18} weight="bold" />
-                      {quickOpen ? '收起条件' : '按条件填写'}
+                      快速计划
                     </button>
                   </div>
+                  <span className={homeClasses.connectionMeta}>
+                    {config ? '模型已就绪' : '连接模型后即可开始'}
+                  </span>
                   <button className={homeClasses.primaryButton} type="button" onClick={() => void submit()} disabled={isSubmitting || !prompt.trim() || !config}>
                     <Sparkle aria-hidden="true" size={18} weight="fill" />
-                    {isSubmitting ? '创建中' : '生成计划'}
+                    {isSubmitting ? '安排中' : '开始'}
                   </button>
                 </div>
               </section>
@@ -163,94 +178,15 @@ export function HomePage() {
                   <button
                     className={homeClasses.promptSuggestionButton}
                     key={preset.title}
+                    title={preset.prompt}
                     type="button"
                     onClick={() => setPrompt(preset.prompt)}
                   >
-                    <ChatCircleDots aria-hidden="true" className={homeClasses.promptSuggestionIcon} size={17} weight="bold" />
-                    {preset.title}
+                    {preset.summary}
                   </button>
                 ))}
               </div>
             </div>
-
-            {quickOpen && (
-              <div className={homeClasses.quickBody}>
-                <section className={homeClasses.controlStrip} aria-label="快速补充">
-                  <label className={homeClasses.range}>
-                    <span>开始 {formatHourLabel(quickPlan.startHour)}</span>
-                    <input
-                      max={23}
-                      min={0}
-                      step={0.5}
-                      type="range"
-                      value={quickPlan.startHour}
-                      onChange={(event) => updateQuickPlan('startHour', Math.min(Number(event.target.value), quickPlan.endHour - 0.5))}
-                    />
-                  </label>
-                  <label className={homeClasses.range}>
-                    <span>结束 {formatHourLabel(quickPlan.endHour)}</span>
-                    <input
-                      max={24}
-                      min={1}
-                      step={0.5}
-                      type="range"
-                      value={quickPlan.endHour}
-                      onChange={(event) => updateQuickPlan('endHour', Math.max(Number(event.target.value), quickPlan.startHour + 0.5))}
-                    />
-                  </label>
-                  <QuickOptionGroup
-                    label="人数"
-                    value={quickPlan.headcount}
-                    options={[
-                      ['1', '1 人'],
-                      ['2', '2 人'],
-                      ['3', '3 人'],
-                      ['4', '4 人'],
-                    ]}
-                    onChange={(value) => updateQuickPlan('headcount', value)}
-                  />
-                  <QuickOptionGroup
-                    label="范围"
-                    value={quickPlan.locationScope}
-                    options={[
-                      ['nearby', '就近'],
-                      ['business', '商圈'],
-                      ['flexible', '放宽'],
-                    ]}
-                    onChange={(value) => updateQuickPlan('locationScope', value as QuickPlanState['locationScope'])}
-                  />
-                  <QuickOptionGroup
-                    label="节奏"
-                    value={quickPlan.pace}
-                    options={[
-                      ['relaxed', '轻松'],
-                      ['normal', '正常'],
-                      ['compact', '多安排'],
-                    ]}
-                    onChange={(value) => updateQuickPlan('pace', value as QuickPlanState['pace'])}
-                  />
-                  <input
-                    className={homeClasses.inlineInput(true)}
-                    value={quickPlan.topic}
-                    placeholder="想做什么"
-                    onChange={(event) => updateQuickPlan('topic', event.target.value)}
-                  />
-                  <input
-                    className={homeClasses.inlineInput()}
-                    value={quickPlan.extra}
-                    placeholder="补充：室内优先、别太贵..."
-                    onChange={(event) => updateQuickPlan('extra', event.target.value)}
-                  />
-                </section>
-                <button
-                  type="button"
-                  className={homeClasses.quickSubmit}
-                  onClick={applyQuickPlan}
-                >
-                  填入描述
-                </button>
-              </div>
-            )}
           </div>
           {(isSubmitting || creationEvents.length > 0) && (
             <CreationProgress events={creationEvents} />
@@ -318,10 +254,150 @@ export function HomePage() {
           )}
         </section>
       )}
-      {recentPlansQuery.isError && (
-        <p className={homeClasses.note}>最近计划暂时不可用；仍然可以直接创建新计划。</p>
+      {quickOpen && (
+        <QuickPlanDialog
+          value={quickPlan}
+          onApply={applyQuickPlan}
+          onClose={() => setQuickOpen(false)}
+          onChange={updateQuickPlan}
+        />
       )}
     </main>
+  )
+}
+
+function QuickPlanDialog({
+  onApply,
+  onChange,
+  onClose,
+  value,
+}: {
+  onApply: () => void
+  onChange: <T extends keyof QuickPlanState>(field: T, value: QuickPlanState[T]) => void
+  onClose: () => void
+  value: QuickPlanState
+}) {
+  const startPercent = (value.startHour / 24) * 100
+  const endPercent = (value.endHour / 24) * 100
+  const bubblePercent = Math.max(12, Math.min(88, (startPercent + endPercent) / 2))
+
+  return (
+    <div
+      className={homeClasses.quickBackdrop}
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose()
+      }}
+    >
+      <section
+        aria-describedby="quick-plan-description"
+        aria-labelledby="quick-plan-title"
+        aria-modal="true"
+        className={homeClasses.quickDialog}
+        role="dialog"
+      >
+        <header className={homeClasses.quickHeader}>
+          <span className={homeClasses.quickBadge}>补充信息</span>
+          <h2 className={homeClasses.quickTitle} id="quick-plan-title">补充出行信息</h2>
+          <p className={homeClasses.quickDescription} id="quick-plan-description">
+            填好后会整理成一段完整描述，你还可以继续修改。
+          </p>
+          <button aria-label="关闭快速计划" className={homeClasses.quickClose} type="button" onClick={onClose}>
+            <X aria-hidden="true" size={19} weight="bold" />
+          </button>
+        </header>
+
+        <div className={homeClasses.quickBody}>
+          <div className={homeClasses.controlStrip}>
+            <div className={homeClasses.range}>
+              <span className={homeClasses.segmentedLabel}>出行时间段</span>
+              <div className={homeClasses.timeControl}>
+                <output
+                  className={homeClasses.timeBubble}
+                  style={{ left: `${bubblePercent}%` }}
+                >
+                  {formatHourLabel(value.startHour)} <span aria-hidden="true">到</span> {formatHourLabel(value.endHour)}
+                </output>
+                <div className={homeClasses.timeRail}>
+                  <span
+                    className={homeClasses.timeSelection}
+                    style={{ left: `${startPercent}%`, right: `${100 - endPercent}%` }}
+                  />
+                  <input
+                    aria-label="开始时间"
+                    className={homeClasses.timeSlider}
+                    max={23.5}
+                    min={0}
+                    step={0.5}
+                    type="range"
+                    value={value.startHour}
+                    onChange={(event) => onChange('startHour', Math.min(Number(event.target.value), value.endHour - 0.5))}
+                  />
+                  <input
+                    aria-label="结束时间"
+                    className={homeClasses.timeSlider}
+                    max={24}
+                    min={0.5}
+                    step={0.5}
+                    type="range"
+                    value={value.endHour}
+                    onChange={(event) => onChange('endHour', Math.max(Number(event.target.value), value.startHour + 0.5))}
+                  />
+                </div>
+                <div className={homeClasses.timeTicks} aria-hidden="true">
+                  {[0, 6, 12, 18, 24].map((hour) => (
+                    <span className={homeClasses.timeTick} key={hour}>{hour}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <QuickOptionGroup
+              label="出行人数"
+              value={value.headcount}
+              options={[
+                ['1', '1 人'],
+                ['2', '2 人'],
+                ['3', '3 人'],
+                ['4', '4+ 人'],
+              ]}
+              onChange={(nextValue) => onChange('headcount', nextValue)}
+            />
+            <QuickOptionGroup
+              label="地点范围"
+              value={value.locationScope}
+              options={[
+                ['nearby', '就近安排'],
+                ['business', '指定商圈'],
+                ['flexible', '范围放宽'],
+              ]}
+              onChange={(nextValue) => onChange('locationScope', nextValue as QuickPlanState['locationScope'])}
+            />
+            <QuickOptionGroup
+              label="活动节奏"
+              value={value.pace}
+              options={[
+                ['relaxed', '轻松一点'],
+                ['normal', '正常安排'],
+                ['compact', '多安排一点'],
+              ]}
+              onChange={(nextValue) => onChange('pace', nextValue as QuickPlanState['pace'])}
+            />
+            <label className={homeClasses.segmentedGroup}>
+              <span className={homeClasses.segmentedLabel}>其它偏好</span>
+              <input
+                className={homeClasses.inlineInput()}
+                value={value.extra}
+                placeholder="室内、少排队、带孩子、不能吃辣、预算低一点…"
+                onChange={(event) => onChange('extra', event.target.value)}
+              />
+            </label>
+          </div>
+          <button className={homeClasses.quickSubmit} type="button" onClick={onApply}>
+            填入计划描述
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -339,7 +415,10 @@ function QuickOptionGroup({
   return (
     <div className={homeClasses.segmentedGroup}>
       <span className={homeClasses.segmentedLabel}>{label}</span>
-      <div className={homeClasses.segmentedOptions}>
+      <div
+        className={homeClasses.segmentedOptions}
+        style={{ '--option-count': options.length } as CSSProperties}
+      >
         {options.map(([optionValue, optionLabel]) => (
           <button
             className={homeClasses.segmentedButton(value === optionValue)}

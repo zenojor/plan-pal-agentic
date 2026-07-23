@@ -64,13 +64,34 @@ declare module '@tanstack/react-router' {
 }
 
 function RootLayout() {
-  const isWorkspaceRoute = useRouterState({
-    select: (state) => state.location.pathname.startsWith('/plans/'),
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
   })
+  const isWorkspaceRoute = pathname.startsWith('/plans/')
+  const isHomeRoute = pathname === '/'
 
   return (
-    <div className={appClasses.shell(isWorkspaceRoute)}>
-      {!isWorkspaceRoute && (
+    <div className={appClasses.shell(isWorkspaceRoute, isHomeRoute)}>
+      {isHomeRoute && (
+        <header className={appClasses.homeTopbar}>
+          <div className={appClasses.homeTopbarInner}>
+            <Link to="/" className={appClasses.homeBrand}>
+              <strong>PlanPal</strong>
+              <span className={appClasses.homeBrandDivider} aria-hidden="true" />
+              <span className={appClasses.homeBrandTag}>智能规划</span>
+            </Link>
+            <Link
+              to="/settings/model"
+              aria-label="模型设置"
+              className={appClasses.homeSettings}
+            >
+              <GearSix aria-hidden="true" size={18} weight="bold" />
+              <span>模型设置</span>
+            </Link>
+          </div>
+        </header>
+      )}
+      {!isWorkspaceRoute && !isHomeRoute && (
         <header className={appClasses.topbar}>
           <div className={appClasses.topbarInner}>
             <Link to="/" className={appClasses.brand}>
