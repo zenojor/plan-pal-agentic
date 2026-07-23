@@ -543,6 +543,33 @@ describe('PlanCommand deterministic handler', () => {
     expect(chooseResult.plan.pendingAction).toBeUndefined()
   })
 
+  it('treats a null add-after anchor as insertion before the first segment', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const originalFirst = plan.segments[0]!
+    const actionResult = applyPlanCommand(plan, {
+      type: 'REFRESH_CANDIDATES',
+      source: 'puzzle',
+      mode: 'add-after',
+      afterSegmentId: null,
+      searchQuery: '在最前面添加一个活动',
+    })
+    if (actionResult.plan.pendingAction?.kind !== 'candidate-selection') throw new Error('missing candidates')
+    expect(actionResult.plan.pendingAction.afterSegmentId).toBeNull()
+
+    const candidate = actionResult.plan.pendingAction.candidates[0]!
+    const chooseResult = applyPlanCommand(actionResult.plan, {
+      type: 'CHOOSE_CANDIDATE',
+      source: 'action-card',
+      actionId: actionResult.plan.pendingAction.id,
+      candidateId: candidate.id,
+    })
+
+    expect(chooseResult.plan.segments[0]?.title).toBe(candidate.segment.title)
+    expect(chooseResult.plan.segments[1]?.id).toBe(originalFirst.id)
+    expect(chooseResult.plan.segments[0]?.endTime).toBe(chooseResult.plan.segments[1]?.startTime)
+    expect(chooseResult.plan.segments[1]?.startTime).not.toBe(originalFirst.startTime)
+  })
+
   it('refreshes candidates while excluding already shown options', () => {
     const plan = createPlanFromPrompt('晚上想吃近一点')
     const dining = plan.segments.find((segment) => segment.phase === 'dining')!

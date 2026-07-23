@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T11:22:23.447Z",
+  "generatedAt": "2026-07-23T00:18:12.547Z",
   "results": [
     {
       "id": "golden-replace-nearby",
@@ -38,7 +38,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztd5e_pogqa3",
+        "planId": "plan_mrwrj3gl_1eh4kv",
         "runStatus": "completed",
         "steps": [
           {
@@ -326,8 +326,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztd5e_pogqa3\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvztd5j_43l75a\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztd5j_43l75a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztd5j_43l75a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3gl_1eh4kv\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrwrj3gn_vo33e2\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3gn_vo33e2\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3gn_vo33e2\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
           }
         ],
         "commandWrites": [
@@ -409,7 +409,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdbe_t5g2cy",
+        "planId": "plan_mrwrj3jc_8st5oy",
         "runStatus": "completed",
         "steps": [
           {
@@ -697,8 +697,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdbe_t5g2cy\",\"mode\":\"replace\",\"query\":\"晚上想吃火锅啊\",\"segmentId\":\"seg_mrvztdbf_3lfevu\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdbf_3lfevu\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdbf_3lfevu\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"火锅\",\"夜间\"]}},\"intent\":{\"targ..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3jc_8st5oy\",\"mode\":\"replace\",\"query\":\"晚上想吃火锅啊\",\"segmentId\":\"seg_mrwrj3jc_k45efn\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3jc_k45efn\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3jc_k45efn\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚上想吃火锅啊\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"火锅\",\"夜间\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -780,7 +780,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztddf_shc3y1",
+        "planId": "plan_mrwrj3ka_3zlyis",
         "runStatus": "completed",
         "steps": [
           {
@@ -1068,8 +1068,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztddf_shc3y1\",\"mode\":\"replace\",\"query\":\"想吃辣的\",\"segmentId\":\"seg_mrvztddf_ott6bq\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztddf_ott6bq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"lock...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztddf_ott6bq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\"]}},\"intent\":{\"targetPhase\"..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3ka_3zlyis\",\"mode\":\"replace\",\"query\":\"想吃辣的\",\"segmentId\":\"seg_mrwrj3ka_x6w4l1\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3ka_x6w4l1\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"lock...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3ka_x6w4l1\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃辣的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\"]}},\"intent\":{\"targetPhase\"..."
           }
         ],
         "commandWrites": [
@@ -1151,7 +1151,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdfe_htb1bh",
+        "planId": "plan_mrwrj3l6_ru5vfs",
         "runStatus": "completed",
         "steps": [
           {
@@ -1439,8 +1439,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdfe_htb1bh\",\"mode\":\"replace\",\"query\":\"不吃辣\",\"segmentId\":\"seg_mrvztdff_91xizh\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdff_91xizh\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdff_91xizh\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"不辣\",\"清淡\"]}},\"intent\":{\"targetPh..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3l6_ru5vfs\",\"mode\":\"replace\",\"query\":\"不吃辣\",\"segmentId\":\"seg_mrwrj3l6_l3ypnq\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3l6_l3ypnq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3l6_l3ypnq\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"不吃辣\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"不辣\",\"清淡\"]}},\"intent\":{\"targetPh..."
           }
         ],
         "commandWrites": [
@@ -1522,7 +1522,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdht_p7pwki",
+        "planId": "plan_mrwrj3mb_09393v",
         "runStatus": "completed",
         "steps": [
           {
@@ -1810,8 +1810,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdht_p7pwki\",\"mode\":\"replace\",\"query\":\"想吃川湘但带孩子\",\"segmentId\":\"seg_mrvztdht_71y4le\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdht_71y4le\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdht_71y4le\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"川湘\",\"亲子\"]}},\"intent\":..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3mb_09393v\",\"mode\":\"replace\",\"query\":\"想吃川湘但带孩子\",\"segmentId\":\"seg_mrwrj3mc_aipvq0\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3mc_aipvq0\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3mc_aipvq0\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"想吃川湘但带孩子\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"川湘\",\"亲子\"]}},\"intent\":..."
           }
         ],
         "commandWrites": [
@@ -1893,7 +1893,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdja_upr1aj",
+        "planId": "plan_mrwrj3nr_lv5ea0",
         "runStatus": "completed",
         "steps": [
           {
@@ -2181,8 +2181,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdja_upr1aj\",\"mode\":\"replace\",\"query\":\"换个能聊天的辣味餐厅\",\"segmentId\":\"seg_mrvztdja_momkh5\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdja_momkh5\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdja_momkh5\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"安静\"]}},\"intent\":{\"t..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3nr_lv5ea0\",\"mode\":\"replace\",\"query\":\"换个能聊天的辣味餐厅\",\"segmentId\":\"seg_mrwrj3nr_35a62g\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3nr_35a62g\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3nr_35a62g\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个能聊天的辣味餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"辣味\",\"安静\"]}},\"intent\":{\"t..."
           }
         ],
         "commandWrites": [
@@ -2264,7 +2264,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdl0_46cro4",
+        "planId": "plan_mrwrj3og_iwzbgz",
         "runStatus": "completed",
         "steps": [
           {
@@ -2552,8 +2552,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdl0_46cro4\",\"mode\":\"replace\",\"query\":\"换个安静点的餐厅\",\"segmentId\":\"seg_mrvztdl1_p19ng4\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdl1_p19ng4\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdl1_p19ng4\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"安静\"]}},\"intent\":{\"targetPh..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3og_iwzbgz\",\"mode\":\"replace\",\"query\":\"换个安静点的餐厅\",\"segmentId\":\"seg_mrwrj3og_ou5zzw\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3og_ou5zzw\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:2...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3og_ou5zzw\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"换个安静点的餐厅\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"安静\"]}},\"intent\":{\"targetPh..."
           }
         ],
         "commandWrites": [
@@ -2635,7 +2635,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdmf_bou7bx",
+        "planId": "plan_mrwrj3pa_e04yyu",
         "runStatus": "completed",
         "steps": [
           {
@@ -2923,8 +2923,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdmf_bou7bx\",\"mode\":\"replace\",\"query\":\"晚饭换个预算友好的\",\"segmentId\":\"seg_mrvztdmf_ken92s\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdmf_ken92s\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdmf_ken92s\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\",\"预算可控\"]}},\"intent\":{\"..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3pa_e04yyu\",\"mode\":\"replace\",\"query\":\"晚饭换个预算友好的\",\"segmentId\":\"seg_mrwrj3pa_jeoo8a\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3pa_jeoo8a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3pa_jeoo8a\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"晚饭换个预算友好的\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\",\"预算可控\"]}},\"intent\":{\"..."
           }
         ],
         "commandWrites": [
@@ -3006,7 +3006,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdnp_moxane",
+        "planId": "plan_mrwrj3px_jm9uvh",
         "runStatus": "completed",
         "steps": [
           {
@@ -3294,7 +3294,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdnp_moxane\",\"mode\":\"add-after\",\"query\":\"换一个适合拍照的点\",\"afterSegmentId\":\"seg_mrvztdnq_96t38s\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3px_jm9uvh\",\"mode\":\"add-after\",\"query\":\"换一个适合拍照的点\",\"afterSegmentId\":\"seg_mrwrj3px_tg6sn7\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 拍照\",\"rankingSignals\":[\"mode:add-after\",\"boost:拍照\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适合生日、纪念日或临时惊喜。\",\"score\":0.97,\"reasons\":[\"匹配拍照..."
           }
         ],
@@ -3377,7 +3377,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdp8_9n5s6u",
+        "planId": "plan_mrwrj3qk_n2p1za",
         "runStatus": "completed",
         "steps": [
           {
@@ -3665,8 +3665,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdp8_9n5s6u\",\"mode\":\"replace\",\"query\":\"换一个亲子友好一点的\",\"segmentId\":\"seg_mrvztdp8_8i3oo3\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdp8_8i3oo3\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdp8_8i3oo3\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"亲子\"]}},\"intent\":{\"targ..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3qk_n2p1za\",\"mode\":\"replace\",\"query\":\"换一个亲子友好一点的\",\"segmentId\":\"seg_mrwrj3qk_i2ks1n\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3qk_i2ks1n\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3qk_i2ks1n\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个亲子友好一点的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"亲子\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -3748,7 +3748,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdqw_c2y2xw",
+        "planId": "plan_mrwrj3r9_kusrww",
         "runStatus": "completed",
         "steps": [
           {
@@ -4036,8 +4036,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdqw_c2y2xw\",\"mode\":\"replace\",\"query\":\"换一个适合商务聊天的\",\"segmentId\":\"seg_mrvztdqw_bvci6g\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdqw_bvci6g\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztdqw_bvci6g\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"商务\",\"安静\"]}},\"intent\":{..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3r9_kusrww\",\"mode\":\"replace\",\"query\":\"换一个适合商务聊天的\",\"segmentId\":\"seg_mrwrj3r9_qgmef9\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3r9_qgmef9\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3r9_qgmef9\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个适合商务聊天的\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"商务\",\"安静\"]}},\"intent\":{..."
           }
         ],
         "commandWrites": [
@@ -4119,7 +4119,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztds8_cfv6pt",
+        "planId": "plan_mrwrj3s8_j3a82d",
         "runStatus": "completed",
         "steps": [
           {
@@ -4407,8 +4407,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztds8_cfv6pt\",\"mode\":\"replace\",\"query\":\"换一个夜间还开的地方\",\"segmentId\":\"seg_mrvztds8_l03qet\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztds8_l03qet\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvztds8_l03qet\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targ..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3s8_j3a82d\",\"mode\":\"replace\",\"query\":\"换一个夜间还开的地方\",\"segmentId\":\"seg_mrwrj3s9_d0p7eg\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3s9_d0p7eg\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj3s9_d0p7eg\",\"desiredPhases\":[\"activity\"],\"excludedPhases\":[],\"query\":\"换一个夜间还开的地方\",\"hardConstraints\":{\"startTime\":\"18:00\",\"endTime\":\"20:00\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targ..."
           }
         ],
         "commandWrites": [
@@ -4490,7 +4490,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdts_vo42m8",
+        "planId": "plan_mrwrj3t0_dj3q1i",
         "runStatus": "completed",
         "steps": [
           {
@@ -4778,7 +4778,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdts_vo42m8\",\"mode\":\"add-after\",\"query\":\"中间再加个咖啡休息\",\"afterSegmentId\":\"seg_mrvztdtt_md44xx\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3t0_dj3q1i\",\"mode\":\"add-after\",\"query\":\"中间再加个咖啡休息\",\"afterSegmentId\":\"seg_mrwrj3t0_noh5lb\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 咖啡\",\"rankingSignals\":[\"mode:add-after\",\"boost:咖啡\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_maple_quiet_cafe\",\"label\":\"枫糖静咖\",\"description\":\"低噪音、座位间距较大，适合认真聊天。\",\"score\":0.97,\"reasons\":[\"匹配咖啡/休息需求\",..."
           }
         ],
@@ -4861,7 +4861,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztduz_nez220",
+        "planId": "plan_mrwrj3tl_bsgoov",
         "runStatus": "completed",
         "steps": [
           {
@@ -5149,7 +5149,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztduz_nez220\",\"mode\":\"add-after\",\"query\":\"饭后加个甜品\",\"afterSegmentId\":\"seg_mrvztduz_cjc8gf\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3tl_bsgoov\",\"mode\":\"add-after\",\"query\":\"饭后加个甜品\",\"afterSegmentId\":\"seg_mrwrj3tl_69862s\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.67,\"summary\":\"目标 dining；偏好 甜品\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"boost:甜品\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_sesame_family_table\",\"label\":\"芝麻家宴桌\",\"description\":\"菜量友好、儿童椅充足..."
           }
         ],
@@ -5232,7 +5232,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdw7_nzkpez",
+        "planId": "plan_mrwrj3u3_s42j9j",
         "runStatus": "completed",
         "steps": [
           {
@@ -5520,7 +5520,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdw7_nzkpez\",\"mode\":\"add-after\",\"query\":\"中间加一个拍照点\",\"afterSegmentId\":\"seg_mrvztdw7_w1ms3n\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3u3_s42j9j\",\"mode\":\"add-after\",\"query\":\"中间加一个拍照点\",\"afterSegmentId\":\"seg_mrwrj3u3_i9e7ce\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 拍照\",\"rankingSignals\":[\"mode:add-after\",\"boost:拍照\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适合生日、纪念日或临时惊喜。\",\"score\":0.97,\"reasons\":[\"匹配拍照..."
           }
         ],
@@ -5603,7 +5603,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdxc_0ozm0b",
+        "planId": "plan_mrwrj3ul_5zxph9",
         "runStatus": "completed",
         "steps": [
           {
@@ -5891,7 +5891,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdxc_0ozm0b\",\"mode\":\"add-after\",\"query\":\"最后加个散步\",\"afterSegmentId\":\"seg_mrvztdxc_et162m\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3ul_5zxph9\",\"mode\":\"add-after\",\"query\":\"最后加个散步\",\"afterSegmentId\":\"seg_mrwrj3ul_jt7bta\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.52,\"summary\":\"目标待推断\",\"rankingSignals\":[\"mode:add-after\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_cake_slice_bar\",\"label\":\"一片蛋糕吧\",\"description\":\"生日或饭后甜点都能接上，停留时间可控。\",\"score\":0.97,\"reasons\":[\"距离当前节点较近\",\"生日或饭后甜点都能接上，停留时间可..."
           }
         ],
@@ -5974,7 +5974,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdyl_333hs0",
+        "planId": "plan_mrwrj3v5_mcqn9b",
         "runStatus": "completed",
         "steps": [
           {
@@ -6262,7 +6262,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdyl_333hs0\",\"mode\":\"add-after\",\"query\":\"帮我加个安静双床酒店\",\"afterSegmentId\":\"seg_mrvztdyl_9ckjjr\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3v5_mcqn9b\",\"mode\":\"add-after\",\"query\":\"帮我加个安静双床酒店\",\"afterSegmentId\":\"seg_mrwrj3v6_kgtfpb\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"drinks\",\"serviceCategory\":\"hotel\",\"positiveTags\":[\"安静\"],\"negativeTags\":[],\"hardConstraints\":[\"控制噪音\"],\"softPreferences\":[\"适合聊天\"],\"confidence\":0.95,\"summary\":\"目标 drinks；偏好 安静/酒店/双床；约束 控制噪音\",\"rankingSignals\":[\"mode:add-after\",\"phase:drinks\",\"service:hotel\",\"boost:安静\",\"boost:酒店\",\"boost:双床\",\"hard:控制噪音\"]..."
           }
         ],
@@ -6345,7 +6345,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztdzr_a33k5t",
+        "planId": "plan_mrwrj3vn_dzvct5",
         "runStatus": "completed",
         "steps": [
           {
@@ -6633,7 +6633,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztdzr_a33k5t\",\"mode\":\"add-after\",\"query\":\"饭后看个 IMAX 电影\",\"afterSegmentId\":\"seg_mrvztdzr_li5zmt\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3vn_dzvct5\",\"mode\":\"add-after\",\"query\":\"饭后看个 IMAX 电影\",\"afterSegmentId\":\"seg_mrwrj3vn_dlhhs1\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.74,\"summary\":\"目标 dining；偏好 电影/IMAX\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"service:movie\",\"boost:电影\",\"boost:IMAX\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_co..."
           }
         ],
@@ -6716,7 +6716,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte10_tcpu95",
+        "planId": "plan_mrwrj3w5_9gm9mf",
         "runStatus": "completed",
         "steps": [
           {
@@ -7004,7 +7004,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte10_tcpu95\",\"mode\":\"add-after\",\"query\":\"饭后想看电影\",\"afterSegmentId\":\"seg_mrvzte10_6hmx9t\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3w5_9gm9mf\",\"mode\":\"add-after\",\"query\":\"饭后想看电影\",\"afterSegmentId\":\"seg_mrwrj3w5_g0vsbx\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.67,\"summary\":\"目标 dining；偏好 电影\",\"rankingSignals\":[\"mode:add-after\",\"phase:dining\",\"service:movie\",\"boost:电影\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_copper_star_cinema\",..."
           }
         ],
@@ -7087,7 +7087,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte29_b9o1hu",
+        "planId": "plan_mrwrj3wv_sti6uz",
         "runStatus": "completed",
         "steps": [
           {
@@ -7375,7 +7375,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte29_b9o1hu\",\"mode\":\"add-after\",\"query\":\"下雨了再加个室内备选\",\"afterSegmentId\":\"seg_mrvzte29_qydy0k\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3wv_sti6uz\",\"mode\":\"add-after\",\"query\":\"下雨了再加个室内备选\",\"afterSegmentId\":\"seg_mrwrj3wv_lcu6st\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[\"室内\"],\"negativeTags\":[],\"hardConstraints\":[\"室内/天气稳定\"],\"softPreferences\":[],\"confidence\":0.66,\"summary\":\"目标待推断；偏好 室内；约束 室内/天气稳定\",\"rankingSignals\":[\"mode:add-after\",\"boost:室内\",\"hard:室内/天气稳定\"],\"constraints\":{\"indoorOnly\":true}},\"candidates\":[{\"id\":\"poi_rainproof_mall_lounge\",\"label\":\"雨棚广场休息廊\",\"descri..."
           }
         ],
@@ -7458,7 +7458,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte3f_7zerwd",
+        "planId": "plan_mrwrj3xb_3b6wug",
         "runStatus": "completed",
         "steps": [
           {
@@ -7746,7 +7746,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte3f_7zerwd\",\"mode\":\"add-after\",\"query\":\"中间加个买礼物的地方\",\"afterSegmentId\":\"seg_mrvzte3f_wb3on3\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3xb_3b6wug\",\"mode\":\"add-after\",\"query\":\"中间加个买礼物的地方\",\"afterSegmentId\":\"seg_mrwrj3xb_2ruey8\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"serviceCategory\":\"retail\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 花礼\",\"rankingSignals\":[\"mode:add-after\",\"service:retail\",\"boost:花礼\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_petal_letter_florist\",\"label\":\"花笺礼物铺\",\"description\":\"虚构花礼店，适..."
           }
         ],
@@ -7830,7 +7830,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte4m_jgetx1",
+        "planId": "plan_mrwrj3xr_2lawxh",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -8037,8 +8037,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte4m_jgetx1\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrvzte4m_mww3bd\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte4m_mww3bd\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte4m_mww3bd\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3xr_2lawxh\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrwrj3xr_fp3nba\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrwrj3xr_fp3nba\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrwrj3xr_fp3nba\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
           }
         ],
         "commandWrites": [
@@ -8109,7 +8109,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte5p_n1dqkk",
+        "planId": "plan_mrwrj3y4_jyixkb",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -8316,8 +8316,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte5p_n1dqkk\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrvzte5p_unexu7\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte5p_unexu7\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvzte5p_unexu7\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3y4_jyixkb\",\"mode\":\"replace\",\"query\":\"还是不吃饭了去玩点其他的\",\"segmentId\":\"seg_mrwrj3y4_4qdqil\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrwrj3y4_4qdqil\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"start...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrwrj3y4_4qdqil\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}..."
           }
         ],
         "commandWrites": [
@@ -8392,7 +8392,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte6q_51lz74",
+        "planId": "plan_mrwrj3yi_egqbuu",
         "runStatus": "completed",
         "steps": [
           {
@@ -8680,7 +8680,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte6q_51lz74\",\"segmentId\":\"seg_mrvzte6r_kxpfhf\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3yi_egqbuu\",\"segmentId\":\"seg_mrwrj3yi_y5dtfd\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_orbit_cinema\",\"name\":\"轨道影厅\",\"phase\":\"activity\",\"serviceCategory\":\"movie\"},\"offering\":{\"id\":\"poi_orbit_cinema_show_1\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"title\":\"《雾灯星球》 15:20\",\"description\":\"轨道影厅 的 mock 电影场次，片名、座位和库存均为虚构。\",\"priceCny\":60,\"unit\":\"张\",\"durationMinutes\":118,\"av..."
           }
         ],
@@ -8768,7 +8768,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte7v_zsr30b",
+        "planId": "plan_mrwrj3z0_gd1iob",
         "runStatus": "completed",
         "steps": [
           {
@@ -9056,7 +9056,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte7v_zsr30b\",\"segmentId\":\"seg_mrvzte7v_at15k3\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3z0_gd1iob\",\"segmentId\":\"seg_mrwrj3z0_p63q2a\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_linen_clock_hotel\",\"name\":\"亚麻时钟旅店\",\"phase\":\"leisure\",\"serviceCategory\":\"hotel\"},\"offering\":{\"id\":\"poi_linen_clock_hotel_room_queen\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"title\":\"舒睡大床房\",\"description\":\"亚麻时钟旅店 的 mock 大床房，适合两人安静入住。\",\"priceCny\":720,\"unit\":\"晚\",\"durationMinut..."
           }
         ],
@@ -9139,7 +9139,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte8v_q3r69q",
+        "planId": "plan_mrwrj3zf_w0r61d",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -9346,7 +9346,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte8v_q3r69q\",\"segmentId\":\"seg_mrvzte8w_n4p0cv\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"query\":\"双人套餐\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj3zf_w0r61d\",\"segmentId\":\"seg_mrwrj3zf_jum5lu\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"query\":\"双人套餐\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_laurel_roundtable\",\"name\":\"月桂圆桌小馆\",\"phase\":\"dining\",\"serviceCategory\":\"dining\"},\"offering\":{\"id\":\"poi_laurel_roundtable_seat\",\"merchantId\":\"poi_laurel_roundtable\",\"category\":\"dining\",\"title\":\"模拟留座\",\"description\":\"仅生成 sandbox 留座项目，不联系商户。\",\"priceCny\":0,\"unit\":\"次\",\"availabilitySlots\":[\"17:3..."
           }
         ],
@@ -9422,7 +9422,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzte9i_wkd3u4",
+        "planId": "plan_mrwrj3zp_h5x6ke",
         "runStatus": "completed",
         "steps": [
           {
@@ -9717,8 +9717,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzte9i_wkd3u4\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvzte9i_wkd3u4_v1\",\"planId\":\"plan_mrvzte9i_wkd3u4\",\"createdAt\":\"2026-07-22T11:22:22.710Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvzte9i_pexmhm\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj3zp_h5x6ke\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrwrj3zp_h5x6ke_v1\",\"planId\":\"plan_mrwrj3zp_h5x6ke\",\"createdAt\":\"2026-07-23T00:18:12.085Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrwrj3zp_apz2lz\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -9810,7 +9810,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteao_0rupck",
+        "planId": "plan_mrwrj406_ndeszd",
         "runStatus": "completed",
         "steps": [
           {
@@ -10105,8 +10105,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzteao_0rupck\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvzteao_0rupck_v1\",\"planId\":\"plan_mrvzteao_0rupck\",\"createdAt\":\"2026-07-22T11:22:22.752Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvzteao_9z1ufn\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"14:00-16:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj406_ndeszd\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrwrj406_ndeszd_v1\",\"planId\":\"plan_mrwrj406_ndeszd\",\"createdAt\":\"2026-07-23T00:18:12.102Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrwrj406_9qglxm\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"14:00-16:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -10188,7 +10188,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztebq_mfikpz",
+        "planId": "plan_mrwrj40p_x8u4xa",
         "runStatus": "completed",
         "steps": [
           {
@@ -10530,7 +10530,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztect_zrk37z",
+        "planId": "plan_mrwrj412_7p7p7p",
         "runStatus": "completed",
         "steps": [
           {
@@ -10871,7 +10871,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztedo_hqgmuc",
+        "planId": "plan_mrwrj41d_dxhti3",
         "runStatus": "completed",
         "steps": [
           {
@@ -11208,7 +11208,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteeh_fjysxj",
+        "planId": "plan_mrwrj41q_7zhhui",
         "runStatus": "completed",
         "steps": [
           {
@@ -11389,7 +11389,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteev_axb1za",
+        "planId": "plan_mrwrj41x_v5x667",
         "runStatus": "completed",
         "steps": [
           {
@@ -11677,8 +11677,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzteev_axb1za\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrvzteev_7fvpzd\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvzteev_7fvpzd\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrvzteev_7fvpzd\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj41x_v5x667\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrwrj41x_vjluut\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj41x_vjluut\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrj41x_vjluut\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[\"夜间\"]}},\"intent\":{\"targetPha..."
           }
         ],
         "commandWrites": [
@@ -11750,7 +11750,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteg0_yquvzp",
+        "planId": "plan_mrwrj42g_36vxaa",
         "runStatus": "failed",
         "steps": [
           {
@@ -11899,7 +11899,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztega_lyogmc",
+        "planId": "plan_mrwrj42m_azwtb3",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -12303,7 +12303,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteh7_jgpuam",
+        "planId": "plan_mrwrj434_xplps5",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -12510,7 +12510,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzteh7_jgpuam\",\"mode\":\"add-after\",\"query\":\"订个酒店住一晚\",\"afterSegmentId\":\"seg_mrvzteh7_sfw145\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj434_xplps5\",\"mode\":\"add-after\",\"query\":\"订个酒店住一晚\",\"afterSegmentId\":\"seg_mrwrj434_26434p\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"drinks\",\"serviceCategory\":\"hotel\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.81,\"summary\":\"目标 drinks；偏好 夜间/酒店\",\"rankingSignals\":[\"mode:add-after\",\"phase:drinks\",\"service:hotel\",\"boost:夜间\",\"boost:酒店\"],\"constraints\":{}},\"candidates\":[{\"id\"..."
           }
         ],
@@ -12581,7 +12581,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztehq_4232zy",
+        "planId": "plan_mrwrj43j_k8jxek",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -12788,7 +12788,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztehq_4232zy\",\"mode\":\"add-after\",\"query\":\"看电影\",\"afterSegmentId\":\"seg_mrvztehq_ugpqui\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj43j_k8jxek\",\"mode\":\"add-after\",\"query\":\"看电影\",\"afterSegmentId\":\"seg_mrwrj43j_7f9lkx\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"serviceCategory\":\"movie\",\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 电影\",\"rankingSignals\":[\"mode:add-after\",\"service:movie\",\"boost:电影\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_sunroom_cinema\",\"label\":\"日光厅微影院\",\"description\":\"虚构微影院，厅小人少，适合安..."
           }
         ],
@@ -12848,7 +12848,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteie_0bes96",
+        "planId": "plan_mrwrj43v_0ops13",
         "runStatus": "completed",
         "steps": [
           {
@@ -13031,7 +13031,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteit_gcza8o",
+        "planId": "plan_mrwrj442_719sjs",
         "runStatus": "completed",
         "steps": [
           {
@@ -13378,7 +13378,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztejf_6jlm3a",
+        "planId": "plan_mrwrj44e_5qv8k5",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -13585,7 +13585,7 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztejf_6jlm3a\",\"mode\":\"add-after\",\"query\":\"咖啡休息点\",\"afterSegmentId\":\"seg_mrvztejf_ffciax\",\"excludeCandidateIds\":[]}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj44e_5qv8k5\",\"mode\":\"add-after\",\"query\":\"咖啡休息点\",\"afterSegmentId\":\"seg_mrwrj44e_ze4e2k\",\"excludeCandidateIds\":[]}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 咖啡\",\"rankingSignals\":[\"mode:add-after\",\"boost:咖啡\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_maple_quiet_cafe\",\"label\":\"枫糖静咖\",\"description\":\"低噪音、座位间距较大，适合认真聊天。\",\"score\":0.97,\"reasons\":[\"匹配咖啡/休息需求\",..."
           }
         ],
@@ -13661,7 +13661,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztek1_hiw8do",
+        "planId": "plan_mrwrj44p_ggcy8h",
         "runStatus": "completed",
         "steps": [
           {
@@ -13956,8 +13956,8 @@
             "toolName": "order.preview",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvztek1_hiw8do\"}",
-            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrvztek1_hiw8do_v1\",\"planId\":\"plan_mrvztek1_hiw8do\",\"createdAt\":\"2026-07-22T11:22:23.089Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrvztek1_d9kvxd\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
+            "argsSummary": "{\"planId\":\"plan_mrwrj44p_ggcy8h\"}",
+            "resultSummary": "{\"receipt\":{\"receiptId\":\"sandbox_plan_mrwrj44p_ggcy8h_v1\",\"planId\":\"plan_mrwrj44p_ggcy8h\",\"createdAt\":\"2026-07-23T00:18:12.265Z\",\"merchantRefs\":[{\"segmentId\":\"seg_mrwrj44p_h8s1c1\",\"poiId\":\"poi_mint_studio\",\"merchantName\":\"薄荷巷手作局\",\"phase\":\"activity\",\"time\":\"18:00-20:00\",\"reservationMode\":\"recommended\",\"source\":\"fictional-local-mock-v2\",\"serviceCategory\":\"acti..."
           }
         ],
         "commandWrites": [
@@ -14045,7 +14045,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteku_t6ayac",
+        "planId": "plan_mrwrj45c_e3u68b",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -14252,7 +14252,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzteku_t6ayac\",\"segmentId\":\"seg_mrvzteku_0tvnvk\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj45c_e3u68b\",\"segmentId\":\"seg_mrwrj45d_0gm58q\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"query\":\"买两张电影票\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_orbit_cinema\",\"name\":\"轨道影厅\",\"phase\":\"activity\",\"serviceCategory\":\"movie\"},\"offering\":{\"id\":\"poi_orbit_cinema_show_1\",\"merchantId\":\"poi_orbit_cinema\",\"category\":\"movie\",\"title\":\"《雾灯星球》 15:20\",\"description\":\"轨道影厅 的 mock 电影场次，片名、座位和库存均为虚构。\",\"priceCny\":60,\"unit\":\"张\",\"durationMinutes\":118,\"av..."
           }
         ],
@@ -14323,7 +14323,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvzteli_rfw7c4",
+        "planId": "plan_mrwrj45n_z8ik6o",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -14530,7 +14530,7 @@
             "toolName": "offering.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrvzteli_rfw7c4\",\"segmentId\":\"seg_mrvzteli_6l3n4k\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
+            "argsSummary": "{\"planId\":\"plan_mrwrj45n_z8ik6o\",\"segmentId\":\"seg_mrwrj45n_w5yonx\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"query\":\"订双床房\",\"limit\":6}",
             "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"offerings\":[{\"merchant\":{\"id\":\"poi_linen_clock_hotel\",\"name\":\"亚麻时钟旅店\",\"phase\":\"leisure\",\"serviceCategory\":\"hotel\"},\"offering\":{\"id\":\"poi_linen_clock_hotel_room_queen\",\"merchantId\":\"poi_linen_clock_hotel\",\"category\":\"hotel\",\"title\":\"舒睡大床房\",\"description\":\"亚麻时钟旅店 的 mock 大床房，适合两人安静入住。\",\"priceCny\":720,\"unit\":\"晚\",\"durationMinut..."
           }
         ],
@@ -14596,7 +14596,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrvztem0_t2nf0s",
+        "planId": "plan_mrwrj46a_omfh0e",
         "runStatus": "completed",
         "steps": [
           {
@@ -15000,7 +15000,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvzten4_hqud3c\",\"decision\":\"retry\"}"
+          "detail": "{\"actionId\":\"action_mrwrj46x_2b1sl8\",\"decision\":\"retry\"}"
         },
         {
           "label": "run_status",
@@ -15027,7 +15027,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvzteoe_db5r5r\",\"decision\":\"selected\",\"candidateId\":\"poi_lantern_late_diner\"}"
+          "detail": "{\"actionId\":\"action_mrwrj47n_f2ojuz\",\"decision\":\"selected\",\"candidateId\":\"poi_lantern_late_diner\"}"
         },
         {
           "label": "run_status",
@@ -15054,7 +15054,7 @@
         {
           "label": "resume_decision",
           "passed": true,
-          "detail": "{\"actionId\":\"action_mrvztep1_woh5jd\",\"decision\":\"rejected\"}"
+          "detail": "{\"actionId\":\"action_mrwrj484_9rzij7\",\"decision\":\"rejected\"}"
         },
         {
           "label": "run_status",
@@ -15108,7 +15108,7 @@
         {
           "label": "same_run",
           "passed": true,
-          "detail": "run_mrvzterj_j1bcxv -> run_mrvzterj_j1bcxv"
+          "detail": "run_mrwrj4af_xiubqy -> run_mrwrj4af_xiubqy"
         },
         {
           "label": "completed",
@@ -15616,7 +15616,7 @@
         {
           "label": "cross_type_intent",
           "passed": true,
-          "detail": "{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrvztetu_pmootz\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}}"
+          "detail": "{\"operation\":\"replace\",\"replacementScope\":\"cross-type\",\"targetSegmentId\":\"seg_mrwrj4cf_2ywh55\",\"desiredPhases\":[\"activity\",\"leisure\"],\"excludedPhases\":[\"dining\"],\"query\":\"还是不吃饭了去玩点其他的\",\"hardConstraints\":{\"startTime\":\"17:00\",\"endTime\":\"18:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"tags\":[]}}"
         },
         {
           "label": "activity_leisure_mix",
@@ -15654,7 +15654,7 @@
         {
           "label": "same_action_session",
           "passed": true,
-          "detail": "action_mrvztetx_su05df -> action_mrvztetx_su05df"
+          "detail": "action_mrwrj4ch_xq2vru -> action_mrwrj4ch_xq2vru"
         },
         {
           "label": "seen_candidates_retained",

@@ -218,8 +218,17 @@ export function createAddSegmentCandidates(
   query = '',
   excludeCandidateIds: string[] = [],
 ): CandidateOption[] {
-  const after = afterSegmentId ? plan.segments.find((segmentItem) => segmentItem.id === afterSegmentId) : undefined
-  const next = after ? plan.segments[plan.segments.findIndex((segmentItem) => segmentItem.id === after.id) + 1] : undefined
+  const after = afterSegmentId
+    ? plan.segments.find((segmentItem) => segmentItem.id === afterSegmentId)
+    : afterSegmentId === undefined
+      ? plan.segments.filter((segmentItem) => !segmentItem.isTransit).at(-1)
+      : undefined
+  const next = afterSegmentId === null
+    ? plan.segments.find((segmentItem) => !segmentItem.isTransit)
+    : after
+      ? plan.segments.slice(plan.segments.findIndex((segmentItem) => segmentItem.id === after.id) + 1)
+          .find((segmentItem) => !segmentItem.isTransit)
+      : undefined
   const normalized = query.toLowerCase()
   const serviceCategory = inferServiceCategoryFromQuery(query)
   const phase: SegmentPhase = serviceCategory === 'hotel'

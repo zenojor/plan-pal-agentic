@@ -287,6 +287,47 @@ describe('agent runtime model transparency', () => {
     expect(afterConfirm?.pendingAction).toBeUndefined()
   })
 
+  it('shows confirmation and deletes one selected node after approval', async () => {
+    const { plan, runtime, stores } = await createRuntime({
+      generateAssistantReply: async () => '{invalid structured output',
+    })
+    const target = plan.segments[0]!
+    const events: AgentEvent[] = []
+
+    const run = await runtime.run({
+      planId: plan.id,
+      message: '删除这个节点',
+      selectedSegmentId: target.id,
+      modelConfig: config,
+    }, (event) => {
+      events.push(event)
+    })
+
+    expect(run.status).toBe('waiting_for_user')
+    const action = commandActionFromEvent(events.find((event) => event.type === 'action.required'))
+    expect(action).toMatchObject({
+      kind: 'command-confirmation',
+      title: '确认删除节点',
+      severity: 'destructive',
+      commands: [{ type: 'DELETE_SEGMENT', segmentId: target.id }],
+    })
+    expect((await stores.plans.getPlan(plan.id))?.segments.some((segment) => segment.id === target.id)).toBe(true)
+
+    const resumed = await runtime.resume({
+      planId: plan.id,
+      runId: run.runId,
+      actionId: action.id,
+      payload: { confirmed: true },
+      modelConfig: config,
+    }, () => undefined)
+
+    expect(resumed.status).toBe('completed')
+    const afterConfirm = await stores.plans.getPlan(plan.id)
+    expect(afterConfirm?.segments.some((segment) => segment.id === target.id)).toBe(false)
+    expect(afterConfirm?.segments).toHaveLength(plan.segments.length - 1)
+    expect(afterConfirm?.pendingAction).toBeUndefined()
+  })
+
   it('resumes candidate selection and persists the chosen segment through commands', async () => {
     const { plan, runtime, stores } = await createRuntime({
       generateAssistantReply: async () => JSON.stringify({

@@ -32,7 +32,7 @@ PlanPal Agentic 是一个 **BYOK（Bring Your Own Key）Agent 行程规划工作
 - Trace 列展示 Agent / model / tool / command 事件、版本历史、run 级 trace replay 和安全检查。
 - Agent API 真实执行 12 节点 LangGraph `StateGraph`，支持条件边、多轮 messages、原生 tool calling 和 graph stream。
 - command approval、候选、服务和 clarification 共用 typed `interrupt()` / `Command({ resume })` 模型；plan variant 目前只保留 typed schema，首页仍通过 `CHOOSE_PLAN_VARIANT` command 选择方案。
-- `packages/eval` 提供 64 项离线 Agent/retrieval eval 与 3 项 DeepSeek live smoke；其中 12 项检索评测覆盖约束违规、Catalog grounding、precision@k 和多样性；默认不读取真实 key、不发外部网络请求。
+- `packages/eval` 提供 69 项离线 Agent/retrieval eval 与 4 项 DeepSeek live smoke；其中 12 项检索评测覆盖约束违规、Catalog grounding、precision@k 和多样性；默认不读取真实 key、不发外部网络请求。
 - 本地 demo 默认使用文件 Plan store + SQLite LangGraph checkpoint，测试环境使用内存存储和 `MemorySaver`。
 
 ## 技术栈
@@ -177,7 +177,7 @@ $env:PLANPAL_STORE_MODE="memory"
 
 测试环境会使用 memory store。
 
-Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-build.mjs` 会把 API store wiring 替换为 `scripts/sites-worker-store.ts`，当前使用进程内 Plan store 和默认 `MemorySaver`，因此不保证跨 Worker isolate 重启恢复。该构建目前还存在 LangGraph `interrupt()` 的 `AsyncLocalStorage` 兼容问题，详见 `docs/product-review-issues.md` 的 ISSUE-002。
+Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-build.mjs` 会把 API store wiring 替换为 `scripts/sites-worker-store.ts`，当前使用进程内 Plan store 和默认 `MemorySaver`，因此不保证跨 Worker isolate 重启恢复。构建脚本会强制选择 LangGraph 的 Node 入口，并在产物缺少 `node:async_hooks` 初始化时直接失败，避免审批类 `interrupt()` 静默退化为浏览器 mock 上下文。
 
 ## 产品流程
 
@@ -270,13 +270,13 @@ Sites 托管构建不是上述本地持久化模式。`scripts/prepare-sites-bui
 
 ## Agent Eval
 
-默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 64 个 golden/architecture/retrieval 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、locked-segment recovery、PlanCommand 写边界、trace correctness，以及 POI 检索 precision@k、硬约束违规和结果多样性：
+默认 suite 使用 fake model、MemorySaver、临时 SQLite checkpoint 和本地 mock 数据，共 69 个 golden/architecture/retrieval 场景。它覆盖 intent/negation routing、原生 tool calling、tool grounding、structured output、graph path、interrupt/resume、checkpoint recovery、多轮上下文、locked-segment recovery、PlanCommand 写边界、trace correctness，以及 POI 检索 precision@k、硬约束违规和结果多样性：
 
 ```powershell
 pnpm eval:agent -- --suite golden
 ```
 
-DeepSeek live smoke 包含 3 个真实模型场景。只有显式设置环境变量时才会联网调用；key 不进入 graph state、checkpoint、store 或报告：
+DeepSeek live smoke 包含 4 个真实模型场景。只有显式设置环境变量时才会联网调用；key 不进入 graph state、checkpoint、store 或报告：
 
 ```powershell
 $env:PLANPAL_EVAL_API_KEY="<your temporary key>"

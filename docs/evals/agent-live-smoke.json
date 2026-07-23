@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T21:23:02.477Z",
+  "generatedAt": "2026-07-23T00:17:18.335Z",
   "provider": "deepseek",
   "results": [
     {
@@ -28,7 +28,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrtqdzlx_tp1zpk",
+        "planId": "plan_mrwrhuyt_yesi13",
         "runStatus": "completed",
         "steps": [
           {
@@ -146,42 +146,28 @@
             "label": "回答流片段",
             "status": "done",
             "node": "qaAgent",
-            "summary": "协助"
+            "summary": "帮你"
           },
           {
             "kind": "agent.message.delta",
             "label": "回答流片段",
             "status": "done",
             "node": "qaAgent",
-            "summary": "用户"
+            "summary": "规划"
           },
           {
             "kind": "agent.message.delta",
             "label": "回答流片段",
             "status": "done",
             "node": "qaAgent",
-            "summary": "制定"
+            "summary": "日程"
           },
           {
             "kind": "agent.message.delta",
             "label": "回答流片段",
             "status": "done",
             "node": "qaAgent",
-            "summary": "和"
-          },
-          {
-            "kind": "agent.message.delta",
-            "label": "回答流片段",
-            "status": "done",
-            "node": "qaAgent",
-            "summary": "调整"
-          },
-          {
-            "kind": "agent.message.delta",
-            "label": "回答流片段",
-            "status": "done",
-            "node": "qaAgent",
-            "summary": "计划的"
+            "summary": "的"
           },
           {
             "kind": "agent.message.delta",
@@ -236,7 +222,7 @@
             "kind": "agent.finished",
             "label": "Agent 完成",
             "status": "done",
-            "summary": "我是PlanPal，一个专注于协助用户制定和调整计划的AI助手。"
+            "summary": "我是PlanPal，一个专注于帮你规划日程的AI助手。"
           },
           {
             "kind": "run.status",
@@ -300,7 +286,7 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrtqe0jw_cz35gf",
+        "planId": "plan_mrwrhvt6_sqi101",
         "runStatus": "waiting_for_user",
         "steps": [
           {
@@ -445,7 +431,7 @@
             "kind": "plan.patch.proposed",
             "label": "计划补丁准备",
             "status": "done",
-            "summary": "用户要求将晚餐地点换到更近的位置，需要搜索更近的餐厅候选"
+            "summary": "用户要求将晚餐替换为距离更近的选项"
           },
           {
             "kind": "graph.node.finished",
@@ -507,8 +493,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrtqe0jw_cz35gf\",\"mode\":\"replace\",\"segmentId\":\"seg_mrtqe0jw_72cm0y\",\"query\":\"晚餐 近\"}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"targetPhase\":\"dining\",\"serviceCategory\":\"dining\",\"positiveTags\":[\"夜间\"],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[\"适配夜间时段\"],\"confidence\":0.74,\"summary\":\"目标 dining；偏好 夜间\",\"rankingSignals\":[\"mode:replace\",\"phase:dining\",\"service:dining\",\"boost:夜间\"]},\"candidates\":[{\"id\":\"poi_lantern_late_diner\",\"labe..."
+            "argsSummary": "{\"planId\":\"plan_mrwrhvt6_sqi101\",\"mode\":\"replace\",\"query\":\"把晚饭换近一点\",\"segmentId\":\"seg_mrwrhvt6_de9m1u\",\"excludeCandidateIds\":[],\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrhvt6_de9m1u\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\"...",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"candidateIntent\":{\"operation\":\"replace\",\"replacementScope\":\"same-type\",\"targetSegmentId\":\"seg_mrwrhvt6_de9m1u\",\"desiredPhases\":[\"dining\"],\"excludedPhases\":[],\"query\":\"把晚饭换近一点\",\"hardConstraints\":{\"startTime\":\"21:00\",\"endTime\":\"22:20\",\"locked\":false,\"catalogOnly\":true},\"softPreferences\":{\"distance\":\"near\",\"tags\":[\"夜间\"]}},\"i..."
           }
         ],
         "commandWrites": [
@@ -542,8 +528,8 @@
       }
     },
     {
-      "id": "live-deepseek-add-coffee",
-      "title": "DeepSeek interprets add-after request",
+      "id": "live-deepseek-add-at-start",
+      "title": "DeepSeek preserves explicit before-first placement",
       "tags": [
         "live",
         "intent",
@@ -559,17 +545,27 @@
         {
           "label": "run_status",
           "passed": true,
-          "detail": "expected waiting_for_user, got waiting_for_user"
+          "detail": "expected completed, got completed"
         },
         {
-          "label": "pending_action",
+          "label": "candidate_placement",
           "passed": true,
-          "detail": "expected candidate-selection, got candidate-selection"
+          "detail": "expected afterSegmentId null, got null"
+        },
+        {
+          "label": "before_first_write",
+          "passed": true,
+          "detail": "expected a new first node before seg_mrwrhwut_8qtdxa, got seg_mrwrhxvg_nmzv7h, seg_mrwrhwut_8qtdxa"
         },
         {
           "label": "tool_selection:poi.search",
           "passed": true,
           "detail": "tools: poi.search"
+        },
+        {
+          "label": "command_gate:CHOOSE_CANDIDATE",
+          "passed": true,
+          "detail": "commands: REFRESH_CANDIDATES, CHOOSE_CANDIDATE"
         },
         {
           "label": "safety_no_external_write",
@@ -578,8 +574,8 @@
         }
       ],
       "trace": {
-        "planId": "plan_mrtqe33z_bpv5pu",
-        "runStatus": "waiting_for_user",
+        "planId": "plan_mrwrhwut_9dl89i",
+        "runStatus": "completed",
         "steps": [
           {
             "kind": "agent.started",
@@ -664,11 +660,11 @@
             "summary": "Model phase planningAgent started"
           },
           {
-            "kind": "agent.model.error",
-            "label": "模型调用失败",
-            "status": "error",
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
             "node": "planningAgent",
-            "summary": "模型调用失败：tool-selection:model-did-not-call-poi_search"
+            "summary": "Model phase planningAgent finished"
           },
           {
             "kind": "tool.called",
@@ -723,7 +719,7 @@
             "kind": "plan.patch.proposed",
             "label": "计划补丁准备",
             "status": "done",
-            "summary": "用户要求在计划中间插入一个咖啡休息环节"
+            "summary": "用户要求在计划最前面添加一个活动，当前计划第一个段是活动，但用户希望在最前面，所以新增一个活动段并插入到开头。"
           },
           {
             "kind": "graph.node.finished",
@@ -778,6 +774,87 @@
             "label": "Run 状态",
             "status": "done",
             "summary": "Run is waiting for user"
+          },
+          {
+            "kind": "interrupt.resumed",
+            "label": "LangGraph Resume",
+            "status": "done",
+            "summary": "Graph interrupt resumed"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run resumed"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · requestApproval",
+            "status": "active",
+            "node": "requestApproval",
+            "summary": "Node requestApproval started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · requestApproval",
+            "status": "done",
+            "node": "requestApproval",
+            "summary": "Node requestApproval finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · applyCommand",
+            "status": "active",
+            "node": "applyCommand",
+            "summary": "Node applyCommand started"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "CHOOSE_CANDIDATE",
+            "summary": "Applied CHOOSE_CANDIDATE"
+          },
+          {
+            "kind": "plan.updated",
+            "label": "计划写入",
+            "status": "done",
+            "commandType": "CHOOSE_CANDIDATE",
+            "version": 3,
+            "summary": "已应用候选"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · applyCommand",
+            "status": "done",
+            "node": "applyCommand",
+            "summary": "Node applyCommand finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · finalize",
+            "status": "active",
+            "node": "finalize",
+            "summary": "Node finalize started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · finalize",
+            "status": "done",
+            "node": "finalize",
+            "summary": "Node finalize finished"
+          },
+          {
+            "kind": "agent.finished",
+            "label": "Agent 完成",
+            "status": "done",
+            "summary": "候选已应用，可通过版本撤销。"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run completed"
           }
         ],
         "toolCalls": [
@@ -785,8 +862,8 @@
             "toolName": "poi.search",
             "effect": "read-only",
             "status": "success",
-            "argsSummary": "{\"planId\":\"plan_mrtqe33z_bpv5pu\",\"mode\":\"add-after\",\"query\":\"中间再加个咖啡休息\",\"afterSegmentId\":\"seg_mrtqe33z_tkd1tl\",\"excludeCandidateIds\":[]}",
-            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.59,\"summary\":\"目标待推断；偏好 咖啡\",\"rankingSignals\":[\"mode:add-after\",\"boost:咖啡\"]},\"candidates\":[{\"id\":\"poi_clockwork_arcade_cafe\",\"label\":\"发条咖啡机\",\"description\":\"有少量小游戏和插座，适合等人或复盘。\",\"score\":0.9542857142857142,\"reasons\":[\"匹配咖啡/休息需..."
+            "argsSummary": "{\"planId\":\"plan_mrwrhwut_9dl89i\",\"mode\":\"add-after\",\"query\":\"在最前面再添加一个活动吧\",\"afterSegmentId\":null,\"excludeCandidateIds\":[]}",
+            "resultSummary": "{\"source\":\"fictional-local-mock-v2\",\"intent\":{\"positiveTags\":[],\"negativeTags\":[],\"hardConstraints\":[],\"softPreferences\":[],\"confidence\":0.52,\"summary\":\"目标待推断\",\"rankingSignals\":[\"mode:add-after\"],\"constraints\":{}},\"candidates\":[{\"id\":\"poi_willow_tea_bench\",\"label\":\"柳荫茶座\",\"description\":\"比咖啡更低刺激，适合聊天和恢复体力。\",\"score\":0.8260714285714286,\"reasons\":[\"营业时段匹配 14:00-1..."
           }
         ],
         "commandWrites": [
@@ -801,6 +878,361 @@
             "source": "agent",
             "version": 2,
             "patchSummary": "已刷新候选"
+          },
+          {
+            "commandType": "CHOOSE_CANDIDATE",
+            "source": "action-card",
+            "version": 3,
+            "patchSummary": "已应用候选"
+          },
+          {
+            "commandType": "CHOOSE_CANDIDATE",
+            "source": "action-card",
+            "version": 3,
+            "patchSummary": "已应用候选"
+          }
+        ],
+        "safetyFindings": [
+          {
+            "id": "secret-redaction",
+            "status": "pass"
+          },
+          {
+            "id": "external-write",
+            "status": "pass"
+          },
+          {
+            "id": "command-gate",
+            "status": "pass"
+          }
+        ]
+      }
+    },
+    {
+      "id": "live-deepseek-delete-node",
+      "title": "DeepSeek requests confirmation and deletes one node after approval",
+      "tags": [
+        "live",
+        "intent",
+        "command",
+        "destructive"
+      ],
+      "passed": true,
+      "checks": [
+        {
+          "label": "secret_redaction",
+          "passed": true,
+          "detail": "events, plan, trace, and errors must not expose API keys"
+        },
+        {
+          "label": "run_status",
+          "passed": true,
+          "detail": "expected completed, got completed"
+        },
+        {
+          "label": "command_gate:DELETE_SEGMENT",
+          "passed": true,
+          "detail": "commands: REQUEST_COMMAND_CONFIRMATION, DELETE_SEGMENT, CONFIRM_COMMAND_ACTION"
+        },
+        {
+          "label": "safety_no_external_write",
+          "passed": true,
+          "detail": "external-write tools must not succeed"
+        }
+      ],
+      "trace": {
+        "planId": "plan_mrwrhxvk_r4nble",
+        "runStatus": "completed",
+        "steps": [
+          {
+            "kind": "agent.started",
+            "label": "接收请求",
+            "status": "done",
+            "summary": "Agent run started"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is running"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · loadContext",
+            "status": "active",
+            "node": "loadContext",
+            "summary": "Node loadContext started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · loadContext",
+            "status": "done",
+            "node": "loadContext",
+            "summary": "Node loadContext finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · understandIntent",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Node understandIntent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "understandIntent",
+            "summary": "Model phase understandIntent started"
+          },
+          {
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
+            "node": "understandIntent",
+            "summary": "Model phase understandIntent finished"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · understandIntent",
+            "status": "done",
+            "node": "understandIntent",
+            "summary": "Node understandIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · routeIntent",
+            "status": "active",
+            "node": "routeIntent",
+            "summary": "Node routeIntent started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · routeIntent",
+            "status": "done",
+            "node": "routeIntent",
+            "summary": "Node routeIntent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · planningAgent",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Node planningAgent started"
+          },
+          {
+            "kind": "agent.model.started",
+            "label": "模型调用开始",
+            "status": "active",
+            "node": "planningAgent",
+            "summary": "Model phase planningAgent started"
+          },
+          {
+            "kind": "agent.model.finished",
+            "label": "模型调用完成",
+            "status": "done",
+            "node": "planningAgent",
+            "summary": "Model phase planningAgent finished"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · planningAgent",
+            "status": "done",
+            "node": "planningAgent",
+            "summary": "Node planningAgent finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · buildCommandProposal",
+            "status": "active",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal started"
+          },
+          {
+            "kind": "command.proposed",
+            "label": "PlanCommand 提案",
+            "status": "done",
+            "summary": "PlanCommand proposal validated by Zod"
+          },
+          {
+            "kind": "plan.patch.proposed",
+            "label": "计划补丁准备",
+            "status": "done",
+            "summary": "用户要求删除第一个活动节点，即手作体验段。"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · buildCommandProposal",
+            "status": "done",
+            "node": "buildCommandProposal",
+            "summary": "Node buildCommandProposal finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · validateProposal",
+            "status": "active",
+            "node": "validateProposal",
+            "summary": "Node validateProposal started"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "REQUEST_COMMAND_CONFIRMATION",
+            "summary": "Applied REQUEST_COMMAND_CONFIRMATION"
+          },
+          {
+            "kind": "plan.updated",
+            "label": "计划写入",
+            "status": "done",
+            "commandType": "REQUEST_COMMAND_CONFIRMATION",
+            "version": 2,
+            "summary": "等待用户确认修改"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · validateProposal",
+            "status": "done",
+            "node": "validateProposal",
+            "summary": "Node validateProposal finished"
+          },
+          {
+            "kind": "interrupt.requested",
+            "label": "LangGraph Interrupt",
+            "status": "blocked",
+            "summary": "Graph execution interrupted for user input"
+          },
+          {
+            "kind": "action.required",
+            "label": "等待用户确认",
+            "status": "blocked",
+            "summary": "确认删除节点"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run is waiting for user"
+          },
+          {
+            "kind": "interrupt.resumed",
+            "label": "LangGraph Resume",
+            "status": "done",
+            "summary": "Graph interrupt resumed"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run resumed"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · requestApproval",
+            "status": "active",
+            "node": "requestApproval",
+            "summary": "Node requestApproval started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · requestApproval",
+            "status": "done",
+            "node": "requestApproval",
+            "summary": "Node requestApproval finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · applyCommand",
+            "status": "active",
+            "node": "applyCommand",
+            "summary": "Node applyCommand started"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "CONFIRM_COMMAND_ACTION",
+            "summary": "Applied CONFIRM_COMMAND_ACTION"
+          },
+          {
+            "kind": "command.applied",
+            "label": "PlanCommand 执行",
+            "status": "done",
+            "commandType": "DELETE_SEGMENT",
+            "summary": "Applied DELETE_SEGMENT"
+          },
+          {
+            "kind": "plan.updated",
+            "label": "计划写入",
+            "status": "done",
+            "commandType": "DELETE_SEGMENT",
+            "version": 3,
+            "summary": "已应用确认修改"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · applyCommand",
+            "status": "done",
+            "node": "applyCommand",
+            "summary": "Node applyCommand finished"
+          },
+          {
+            "kind": "graph.node.started",
+            "label": "Graph 节点开始 · finalize",
+            "status": "active",
+            "node": "finalize",
+            "summary": "Node finalize started"
+          },
+          {
+            "kind": "graph.node.finished",
+            "label": "Graph 节点完成 · finalize",
+            "status": "done",
+            "node": "finalize",
+            "summary": "Node finalize finished"
+          },
+          {
+            "kind": "agent.finished",
+            "label": "Agent 完成",
+            "status": "done",
+            "summary": "已应用修改，可撤销"
+          },
+          {
+            "kind": "run.status",
+            "label": "Run 状态",
+            "status": "done",
+            "summary": "Run completed"
+          }
+        ],
+        "toolCalls": [],
+        "commandWrites": [
+          {
+            "commandType": "REQUEST_COMMAND_CONFIRMATION",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "等待用户确认修改"
+          },
+          {
+            "commandType": "REQUEST_COMMAND_CONFIRMATION",
+            "source": "agent",
+            "version": 2,
+            "patchSummary": "等待用户确认修改"
+          },
+          {
+            "commandType": "DELETE_SEGMENT",
+            "source": "action-card",
+            "version": 3,
+            "patchSummary": "已应用确认修改"
+          },
+          {
+            "commandType": "CONFIRM_COMMAND_ACTION",
+            "source": "action-card",
+            "version": 3,
+            "patchSummary": "已应用确认修改"
+          },
+          {
+            "commandType": "DELETE_SEGMENT",
+            "source": "action-card",
+            "version": 3,
+            "patchSummary": "已应用确认修改"
           }
         ],
         "safetyFindings": [
@@ -823,7 +1255,7 @@
   "suite": "live-smoke",
   "summary": {
     "failed": 0,
-    "passed": 3,
-    "total": 3
+    "passed": 4,
+    "total": 4
   }
 }

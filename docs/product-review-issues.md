@@ -14,7 +14,7 @@
 
 ## ISSUE-002：线上正常对话进入审批节点时 Agent 运行失败
 
-- 状态：根因已定位，待修复
+- 状态：代码已修复并通过构建与真实模型回归，待重新部署后线上确认
 - 严重度：阻断
 - 回归输入：`孩子不能吃辣`
 - 用户可见错误：`Called interrupt() outside the context of a graph.`
@@ -23,7 +23,7 @@
 - 根因：Sites 打包配置显式选择 `browser` 条件，`@langchain/langgraph` 因而使用不初始化 Node `AsyncLocalStorage` 的 Web 入口。Cloudflare Worker 虽启用了 `nodejs_compat`，打包结果仍使用 `MockAsyncLocalStorage`，导致 `interrupt()` 读取不到 Graph runnable config。
 - 放大因素：`validateProposal` 在 `requestApproval` 成功中断之前就保存了 PendingAction；中断基础设施失败时没有回滚或清理预览状态。
 - 影响：所有需要 command approval、candidate selection、clarification 或 service selection 的线上对话 Graph 路径都可能失败，不局限于该句输入。首页 plan variant 当前走直接 `CHOOSE_PLAN_VARIANT` command，不经过该 interrupt 路径。
-- 待修方向：让 Sites Worker 使用真实 `AsyncLocalStorage` 上下文；增加打包产物级 interrupt/resume 测试；调整 PendingAction 落盘边界或增加失败补偿，避免半完成状态。
+- 修复结果：Sites Worker 构建不再选择 `browser` 条件，改用 Node 入口和 `node:async_hooks`；构建阶段会检查 LangGraph Node initializer 与异步上下文依赖是否进入产物。DeepSeek live smoke 已验证单节点删除会先产生“确认删除节点”票据，确认后执行 `DELETE_SEGMENT`。
 
 ## ISSUE-003：聊天输入框聚焦时出现双层高亮框
 

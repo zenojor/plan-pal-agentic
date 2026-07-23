@@ -292,7 +292,13 @@ function refreshCandidates(plan: Plan, command: Extract<PlanCommand, { type: 'RE
   }
   const mode = command.mode ?? (existing?.kind === 'candidate-selection' ? existing.mode : 'replace')
   const targetSegmentId = command.targetSegmentId ?? (existing?.kind === 'candidate-selection' ? existing.targetSegmentId : undefined)
-  const afterSegmentId = command.afterSegmentId ?? (existing?.kind === 'candidate-selection' ? existing.afterSegmentId : null)
+  // `null` is an intentional before-first anchor, while `undefined` means the
+  // caller did not provide a new anchor. Preserve that distinction on refresh.
+  const afterSegmentId = command.afterSegmentId !== undefined
+    ? command.afterSegmentId
+    : existing?.kind === 'candidate-selection'
+      ? existing.afterSegmentId
+      : undefined
   const explicitSearchQuery = command.searchQuery?.trim()
   const searchQuery = explicitSearchQuery || (existing?.kind === 'candidate-selection' ? existing.searchQuery : undefined)
   const resetSession = command.resetSession || isCandidateSessionResetRequest(explicitSearchQuery)
@@ -601,8 +607,22 @@ function addSegment(segments: PlanSegment[], segment: PlanSegment, afterSegmentI
   if (afterSegmentId && !next.some((item) => item.id === afterSegmentId)) {
     throw new Error('Anchor segment not found')
   }
-  const insertIndex = afterSegmentId ? next.findIndex((item) => item.id === afterSegmentId) + 1 : next.length
-  next.splice(insertIndex > 0 ? insertIndex : next.length, 0, normalizeSegment(segment))
+  const normalized = normalizeSegment(segment)
+  if (afterSegmentId === null) {
+    const shiftMinutes = Math.max(30, normalized.durationMinutes)
+    return [
+      normalized,
+      ...next.map((item) => normalizeSegment({
+        ...item,
+        startTime: addMinutes(item.startTime, shiftMinutes),
+        endTime: addMinutes(item.endTime, shiftMinutes),
+      }, item)),
+    ]
+  }
+  const insertIndex = afterSegmentId
+    ? next.findIndex((item) => item.id === afterSegmentId) + 1
+    : next.length
+  next.splice(insertIndex, 0, normalized)
   return next
 }
 

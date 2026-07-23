@@ -392,6 +392,18 @@ describe('workspace model helpers', () => {
     expect(addDisplay.placementLabel).toBe(`插入在「${after.title}」之后、「${dining.title}」之前`)
     expect(addDisplay.badges).toContain('16:00-17:00')
     expect(addDisplay.writeLabel).toBe('选中后新增到这个空档')
+
+    const prependAction = applyPlanCommand(plan, {
+      type: 'REFRESH_CANDIDATES',
+      source: 'puzzle',
+      mode: 'add-after',
+      afterSegmentId: null,
+      searchQuery: '在最前面加一个活动',
+    }).plan.pendingAction
+    if (prependAction?.kind !== 'candidate-selection') throw new Error('expected before-first candidate action')
+    const prependDisplay = deriveCandidateCardDisplay(prependAction, prependAction.candidates[0]!, plan)
+
+    expect(prependDisplay.placementLabel).toBe('插入到计划最前面')
   })
   it('derives readable progress items from the latest agent run only', () => {
     const baseEvent = {
@@ -573,6 +585,22 @@ describe('workspace model helpers', () => {
 
     expect(pendingActionFromAgentEvent(actionEvent)).toBe(action)
     expect(shouldOpenChatForAgentEvent(actionEvent)).toBe(true)
+
+    const deleteAction = applyPlanCommand(plan, {
+      type: 'REQUEST_COMMAND_CONFIRMATION',
+      source: 'agent',
+      title: '确认删除节点',
+      description: `将删除“${plan.segments[0]!.title}”。`,
+      severity: 'destructive',
+      confirmLabel: '确定删除',
+      cancelLabel: '取消',
+      commands: [{ type: 'DELETE_SEGMENT', source: 'agent', segmentId: plan.segments[0]!.id }],
+    }).plan.pendingAction
+    if (deleteAction?.kind !== 'command-confirmation') throw new Error('expected delete confirmation action')
+    const deleteEvent = { ...actionEvent, payload: { action: deleteAction } }
+    expect(pendingActionFromAgentEvent(deleteEvent)).toBe(deleteAction)
+    expect(shouldOpenChatForAgentEvent(deleteEvent)).toBe(true)
+
     expect(pendingActionFromAgentEvent({
       ...eventBase,
       type: 'action.required',

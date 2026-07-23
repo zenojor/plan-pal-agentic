@@ -28,9 +28,11 @@ type SetupKind = 'default' | 'movie' | 'hotel' | 'locked-dining'
 type ResumeMode = 'candidate-first' | 'service-first' | 'confirm-command'
 
 type EvalExpectation = {
+  addedBeforeOriginalFirst?: boolean
   commandTypes?: string[]
   errorIncludes?: string
   finalStatus?: Plan['status']
+  pendingAfterSegmentId?: string | null
   pendingKind?: PendingAction['kind']
   planHasServiceSelection?: boolean
   runStatus?: 'completed' | 'failed' | 'waiting_for_user'
@@ -173,13 +175,31 @@ async function runLiveSmoke(provider: EvalProvider): Promise<EvalReport> {
       expect: { pendingKind: 'candidate-selection', runStatus: 'waiting_for_user', toolNames: ['poi.search'] },
     },
     {
-      id: 'live-deepseek-add-coffee',
-      title: 'DeepSeek interprets add-after request',
+      id: 'live-deepseek-add-at-start',
+      title: 'DeepSeek preserves explicit before-first placement',
       tags: ['live', 'intent', 'candidate'],
       initialPrompt: '下午两个人附近轻松玩',
-      message: '中间再加个咖啡休息',
+      message: '在最前面再添加一个活动吧',
       useModel: true,
-      expect: { pendingKind: 'candidate-selection', runStatus: 'waiting_for_user', toolNames: ['poi.search'] },
+      resume: 'candidate-first',
+      expect: {
+        addedBeforeOriginalFirst: true,
+        commandTypes: ['CHOOSE_CANDIDATE'],
+        pendingAfterSegmentId: null,
+        runStatus: 'completed',
+        toolNames: ['poi.search'],
+      },
+    },
+    {
+      id: 'live-deepseek-delete-node',
+      title: 'DeepSeek requests confirmation and deletes one node after approval',
+      tags: ['live', 'intent', 'command', 'destructive'],
+      initialPrompt: '下午两个人附近轻松玩',
+      message: '删除第一个活动节点',
+      selectedPhase: 'activity',
+      useModel: true,
+      resume: 'confirm-command',
+      expect: { commandTypes: ['DELETE_SEGMENT'], runStatus: 'completed' },
     },
   ]
   const results: EvalCaseResult[] = []
@@ -210,6 +230,7 @@ async function runScenario(scenario: EvalScenario, liveModelConfig?: ClientModel
   const selectedSegmentId = findSelectedSegmentId(plan, scenario.selectedPhase)
   let runStatus = ''
   let thrownError = ''
+  let pendingAfterInitialRun: PendingAction | undefined
   let pendingAfterRun: PendingAction | undefined
 
   try {
@@ -223,6 +244,7 @@ async function runScenario(scenario: EvalScenario, liveModelConfig?: ClientModel
     })
     runStatus = result.status
     pendingAfterRun = (await stores.plans.getPlan(plan.id))?.pendingAction
+    pendingAfterInitialRun = pendingAfterRun
     if (scenario.resume && result.status === 'waiting_for_user' && pendingAfterRun) {
       const resumed = await runtime.resume({
         planId: plan.id,
@@ -255,6 +277,8 @@ async function runScenario(scenario: EvalScenario, liveModelConfig?: ClientModel
   const checks = evaluateScenario({
     events,
     finalPlan,
+    initialPlan,
+    pendingAfterInitialRun,
     pendingAfterRun,
     runStatus,
     scenario,
@@ -291,6 +315,8 @@ function createScenarioGateway(scenario: EvalScenario): AgentModelGateway {
 function evaluateScenario(input: {
   events: AgentEvent[]
   finalPlan: Plan | null
+  initialPlan: Plan
+  pendingAfterInitialRun?: PendingAction
   pendingAfterRun?: PendingAction
   runStatus: string
   scenario: EvalScenario
@@ -329,6 +355,27 @@ function evaluateScenario(input: {
       label: 'pending_action',
       passed: input.pendingAfterRun?.kind === input.scenario.expect.pendingKind,
       detail: `expected ${input.scenario.expect.pendingKind}, got ${input.pendingAfterRun?.kind ?? 'none'}`,
+    })
+  }
+  if ('pendingAfterSegmentId' in input.scenario.expect) {
+    const actual = input.pendingAfterInitialRun?.kind === 'candidate-selection'
+      ? input.pendingAfterInitialRun.afterSegmentId
+      : undefined
+    checks.push({
+      label: 'candidate_placement',
+      passed: actual === input.scenario.expect.pendingAfterSegmentId,
+      detail: `expected afterSegmentId ${String(input.scenario.expect.pendingAfterSegmentId)}, got ${String(actual)}`,
+    })
+  }
+  if (input.scenario.expect.addedBeforeOriginalFirst) {
+    const originalFirstId = input.initialPlan.segments.find((segment) => !segment.isTransit)?.id
+    const finalExecutable = input.finalPlan?.segments.filter((segment) => !segment.isTransit) ?? []
+    checks.push({
+      label: 'before_first_write',
+      passed: Boolean(originalFirstId
+        && finalExecutable[0]?.id !== originalFirstId
+        && finalExecutable[1]?.id === originalFirstId),
+      detail: `expected a new first node before ${originalFirstId ?? 'missing'}, got ${finalExecutable.slice(0, 2).map((segment) => segment.id).join(', ') || 'none'}`,
     })
   }
   if (input.scenario.expect.toolNames?.length) {

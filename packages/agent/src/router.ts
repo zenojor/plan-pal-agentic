@@ -447,6 +447,11 @@ function findInsertionAnchor(
   selectedSegmentId?: string,
   intent?: Pick<ModelTurnIntent, 'targetPhase' | 'targetSegmentId'>,
 ): PlanSegment | undefined {
+  // Absolute placement must win over the selected node and a model-provided
+  // target. The route converts this missing anchor to `afterSegmentId: null`,
+  // which represents insertion before the first executable node.
+  if (isPrependRequest(normalized)) return undefined
+
   const selected = selectedSegmentId ? plan.segments.find((segment) => segment.id === selectedSegmentId) : undefined
   if (selected && !selected.isTransit) return selected
 
@@ -477,6 +482,22 @@ function findInsertionAnchor(
     }
   }
   return best ?? executable.at(-1)
+}
+
+function isPrependRequest(value: string) {
+  return containsAny(value, [
+    '最前面',
+    '最前边',
+    '最开始',
+    '一开始',
+    '开头',
+    '第一个前面',
+    '第一项前面',
+    '第一站前面',
+    'before the first',
+    'at the beginning',
+    'at the start',
+  ])
 }
 
 function containsAny(value: string, needles: string[]) {

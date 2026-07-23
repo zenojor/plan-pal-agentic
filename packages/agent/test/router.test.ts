@@ -92,6 +92,30 @@ describe('agent natural language router', () => {
     }
   })
 
+  it('keeps an explicit before-first placement even when a node is selected', () => {
+    const plan = createPlanFromPrompt('下午两个人附近轻松玩')
+    const selected = plan.segments[1]!
+
+    const deterministicRoute = routeNaturalLanguageTurn(plan, '在最前面再添加一个活动吧', selected.id)
+    expect(deterministicRoute).toMatchObject({
+      kind: 'candidate-search',
+      mode: 'add-after',
+      afterSegmentId: null,
+    })
+
+    const modelRoute = routeModelTurnIntent(plan, '在最前面再添加一个活动吧', {
+      action: 'add',
+      targetSegmentId: selected.id,
+      query: '添加一个活动',
+      reason: 'user wants another activity',
+    }, selected.id)
+    expect(modelRoute).toMatchObject({
+      kind: 'candidate-search',
+      mode: 'add-after',
+      afterSegmentId: null,
+    })
+  })
+
   it('routes confirmation to deterministic command', () => {
     const plan = createPlanFromPrompt('下午两个人逛逛')
     const route = routeNaturalLanguageTurn(plan, '确认这个计划')

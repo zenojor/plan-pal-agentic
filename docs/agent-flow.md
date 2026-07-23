@@ -176,7 +176,7 @@ LangGraph 从 checkpoint 恢复并重新进入 interrupt 节点，然后继续 `
 
 SQLite 集成测试会关闭第一个 saver、创建新的 runtime/saver，再从同一数据库 resume；测试同时验证 interrupt 前节点没有重跑，事件 sequence 从原 run 最大值继续递增。
 
-当前 Sites bundle 还显式选择 `browser` 条件，导致 LangGraph 使用 `MockAsyncLocalStorage`，线上审批类路径的 `interrupt()` 会失败。该部署缺口记录在 `docs/product-review-issues.md` 的 ISSUE-002；它不影响本地 Node + SQLite recovery 测试，但意味着托管演示尚不能宣称具备同等恢复能力。
+Sites bundle 会显式排除 `browser` 条件并选择 LangGraph Node 入口，通过 Cloudflare `nodejs_compat` 使用 `node:async_hooks`。构建脚本同时检查 Node initializer 与异步上下文依赖是否进入产物，避免审批类路径退化为 `MockAsyncLocalStorage`。托管版本仍使用进程内 `MemorySaver`，所以它不具备本地 SQLite 相同的跨 isolate 恢复保证。
 
 故障策略：
 

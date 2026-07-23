@@ -972,6 +972,7 @@ function deriveCandidatePlacementLabel(
     const target = action.targetSegmentId ? plan?.segments.find((segment) => segment.id === action.targetSegmentId) : undefined
     return target ? `替换「${target.title}」` : '替换当前节点'
   }
+  if (action.afterSegmentId === null) return '插入到计划最前面'
   const after = action.afterSegmentId ? plan?.segments.find((segment) => segment.id === action.afterSegmentId) : undefined
   if (!after || !plan) return '插入到当前空档'
   const afterIndex = plan.segments.findIndex((segment) => segment.id === after.id)
